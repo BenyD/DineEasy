@@ -1,103 +1,256 @@
-import Image from "next/image";
+"use client"
 
-export default function Home() {
+import { ArrowRight, CheckCircle, QrCode, Timer, Smartphone } from "lucide-react"
+import { motion } from "framer-motion"
+import { Button } from "@/components/ui/button"
+import { PageWrapper } from "@/components/layout/PageWrapper"
+import { HeroSection } from "@/components/elements/HeroSection"
+import { FeatureCard } from "@/components/elements/FeatureCard"
+import { CTASection } from "@/components/elements/CTASection"
+import { GradientBlob } from "@/components/elements/GradientBlob"
+import { AnimatedSection } from "@/components/elements/AnimatedSection"
+
+export default function LandingPage() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <PageWrapper>
+      <HeroSection>
+        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12 xl:gap-16 items-center max-w-7xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, x: -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8, ease: [0.21, 0.47, 0.32, 0.98] }}
+            className="flex flex-col justify-center space-y-6 sm:space-y-8"
+          >
+            <div className="space-y-4 sm:space-y-6">
+              <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl lg:text-6xl">
+                Modern Restaurant Management Made Simple
+              </h1>
+              <p className="max-w-[600px] text-base text-gray-500 sm:text-lg md:text-xl">
+                Transform your restaurant with QR-based ordering, real-time dashboards, and seamless payments. Accept
+                Stripe, TWINT, and cash payments with automatic thermal printing.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  size="lg"
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 sm:w-auto"
+                  onClick={() => (window.location.href = "/signup")}
+                >
+                  Start 14-Day Free Trial
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => (window.location.href = "/features")}
+                >
+                  See Features
+                </Button>
+              </motion.div>
+            </div>
+            <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:gap-6">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                className="flex items-center gap-2"
+              >
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span>14-day free trial</span>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.7 }}
+                className="flex items-center gap-2"
+              >
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span>No credit card required</span>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+                className="flex items-center gap-2"
+              >
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span>2% commission only</span>
+              </motion.div>
+            </div>
+          </motion.div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          <motion.div
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8, delay: 0.2, ease: [0.21, 0.47, 0.32, 0.98] }}
+            className="relative mx-auto w-full max-w-[500px]"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <div className="relative z-10 overflow-hidden rounded-2xl border bg-white shadow-xl">
+              <img
+                src="/placeholder.svg?height=600&width=400"
+                alt="DineEasy Dashboard"
+                className="w-full object-cover"
+              />
+            </div>
+            <GradientBlob size="md" position="bottom-left" />
+          </motion.div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+      </HeroSection>
+
+      <AnimatedSection className="container py-12 sm:py-20">
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="text-2xl font-bold tracking-tighter sm:text-3xl md:text-4xl lg:text-5xl">How It Works</h2>
+          <p className="mt-3 text-gray-500 sm:mt-4">
+            DineEasy simplifies restaurant operations in just three easy steps
+          </p>
+        </div>
+        <div className="mt-12 grid gap-6 sm:mt-16 sm:gap-8 md:grid-cols-3">
+          {[
+            {
+              icon: <QrCode className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />,
+              title: "Scan QR Code",
+              description: "Customers scan a unique QR code at their table to access your digital menu instantly",
+            },
+            {
+              icon: <Timer className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />,
+              title: "Place Orders",
+              description: "Orders are sent directly to your real-time dashboard and auto-printed on thermal printers",
+            },
+            {
+              icon: <Smartphone className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />,
+              title: "Pay Seamlessly",
+              description: "Customers pay via Stripe, TWINT, or cash with funds going directly to your account",
+            },
+          ].map((step, index) => (
+            <FeatureCard key={index} {...step} index={index} />
+          ))}
+        </div>
+      </AnimatedSection>
+
+      <AnimatedSection className="container py-12 sm:py-20">
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="text-2xl font-bold tracking-tighter sm:text-3xl md:text-4xl lg:text-5xl">Key Features</h2>
+          <p className="mt-3 text-gray-500 sm:mt-4">Everything you need to modernize your restaurant operations</p>
+        </div>
+        <div className="mt-12 grid gap-6 sm:mt-16 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            {
+              title: "QR Menu System",
+              description: "Digital menus with AI OCR upload and real-time updates",
+            },
+            {
+              title: "Multi-Payment Support",
+              description: "Accept Stripe, TWINT, and cash payments seamlessly",
+            },
+            {
+              title: "Auto Thermal Printing",
+              description: "Automatic receipt and kitchen ticket printing",
+            },
+            {
+              title: "Real-time Dashboard",
+              description: "Live order tracking and analytics for your team",
+            },
+          ].map((feature, index) => (
+            <FeatureCard
+              key={index}
+              icon={
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  className="h-6 w-6 text-green-600"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              }
+              {...feature}
+              index={index}
+            />
+          ))}
+        </div>
+      </AnimatedSection>
+
+      <section className="bg-gray-50 py-12 sm:py-20">
+        <div className="container">
+          <AnimatedSection>
+            <div className="mx-auto max-w-4xl text-center">
+              <h2 className="text-2xl font-bold tracking-tighter sm:text-3xl md:text-4xl lg:text-5xl">
+                Trusted by 1000+ Restaurants Worldwide
+              </h2>
+              <p className="mt-3 text-gray-500 sm:mt-4">See what restaurant owners are saying about DineEasy</p>
+            </div>
+          </AnimatedSection>
+          <div className="mt-12 grid gap-6 sm:mt-16 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                quote:
+                  "DineEasy transformed our operations completely. The 2% commission is fair, and the automatic printing saves us hours daily. Our customers love the TWINT integration!",
+                author: "Maria Rodriguez",
+                role: "Owner, Bella Cucina",
+              },
+              {
+                quote:
+                  "The real-time dashboard reduced our order errors by 90%. The 14-day trial convinced us immediately - we upgraded to Pro after just 3 days.",
+                author: "James Chen",
+                role: "Manager, Urban Plate",
+              },
+              {
+                quote:
+                  "Staff management on the Elite plan is incredible. Our team can access orders from anywhere, and the analytics help us optimize our menu pricing.",
+                author: "Sarah Johnson",
+                role: "Owner, Harvest Table",
+              },
+            ].map((testimonial, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{
+                  duration: 0.5,
+                  delay: index * 0.1,
+                  ease: [0.21, 0.47, 0.32, 0.98],
+                }}
+                whileHover={{ y: -5 }}
+                className="rounded-lg border bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-6"
+              >
+                <div className="mb-3 text-green-500 sm:mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <span key={i} className="inline-block">
+                      ★
+                    </span>
+                  ))}
+                </div>
+                <blockquote className="mb-3 text-sm sm:mb-4 sm:text-base">"{testimonial.quote}"</blockquote>
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="h-10 w-10 rounded-full bg-gray-200 sm:h-12 sm:w-12">
+                    <img
+                      src={`/placeholder.svg?height=48&width=48&query=portrait%20${index}`}
+                      alt={testimonial.author}
+                      className="h-10 w-10 rounded-full object-cover sm:h-12 sm:w-12"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium sm:text-base">{testimonial.author}</div>
+                    <div className="text-xs text-gray-500 sm:text-sm">{testimonial.role}</div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <CTASection
+        title="Ready to transform your restaurant?"
+        subtitle="Start your 14-day free trial today. No credit card required. Only 2% commission on payments."
+        buttonHref="/signup"
+      />
+    </PageWrapper>
+  )
 }
