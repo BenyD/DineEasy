@@ -9,10 +9,13 @@ import {
   ShoppingCart,
   Users,
   X,
+  Clock,
+  ArrowRight,
 } from "lucide-react";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { DashboardAlert } from "@/components/dashboard/DashboardAlert";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export default function DashboardPage() {
   const [showTrialBanner, setShowTrialBanner] = useState(true);
@@ -22,6 +25,45 @@ export default function DashboardPage() {
   // Mock data - in a real app, this would come from the backend
   const trialDaysRemaining = 12;
   const [isStripeConnected, setIsStripeConnected] = useState(false);
+
+  // Mock recent activities data
+  const recentActivities = [
+    {
+      id: 1,
+      type: "order",
+      description: "New order received from Table 5",
+      time: "5 minutes ago",
+      status: "new",
+    },
+    {
+      id: 2,
+      type: "menu",
+      description: "Menu item 'Margherita Pizza' updated",
+      time: "15 minutes ago",
+      status: "update",
+    },
+    {
+      id: 3,
+      type: "payment",
+      description: "Payment received for Order #1234",
+      time: "30 minutes ago",
+      status: "success",
+    },
+    {
+      id: 4,
+      type: "table",
+      description: "Table 3 marked as available",
+      time: "1 hour ago",
+      status: "info",
+    },
+    {
+      id: 5,
+      type: "staff",
+      description: "New staff member added: John Doe",
+      time: "2 hours ago",
+      status: "new",
+    },
+  ];
 
   useEffect(() => {
     // Check if user just connected Stripe (from URL parameter)
@@ -206,6 +248,71 @@ export default function DashboardPage() {
                 <span className="text-sm text-gray-500">
                   {item.orders} orders
                 </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <div className="rounded-lg border bg-white p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold">Recent Activities</h3>
+              <p className="text-sm text-gray-500">
+                Latest actions and updates in your restaurant
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-sm"
+              onClick={() => (window.location.href = "/dashboard/activity")}
+            >
+              View All
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-4">
+            {recentActivities.map((activity) => (
+              <div
+                key={activity.id}
+                className="flex items-center justify-between border-b pb-4 last:border-0"
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      activity.status === "new"
+                        ? "bg-blue-100 text-blue-600"
+                        : activity.status === "update"
+                        ? "bg-amber-100 text-amber-600"
+                        : activity.status === "success"
+                        ? "bg-green-100 text-green-600"
+                        : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    <Clock className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {activity.description}
+                    </p>
+                    <p className="text-sm text-gray-500">{activity.time}</p>
+                  </div>
+                </div>
+                <Badge
+                  className={`${
+                    activity.status === "new"
+                      ? "bg-blue-100 text-blue-600"
+                      : activity.status === "update"
+                      ? "bg-amber-100 text-amber-600"
+                      : activity.status === "success"
+                      ? "bg-green-100 text-green-600"
+                      : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {activity.type}
+                </Badge>
               </div>
             ))}
           </div>
