@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { useRouter } from "next/navigation"
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import {
   Clock,
   CheckCircle,
@@ -16,13 +16,25 @@ import {
   RefreshCcw,
   MoreHorizontal,
   ChefHat,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,11 +42,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Separator } from "@/components/ui/separator"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+} from "@/components/ui/dropdown-menu";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 // Mock orders data
 const mockOrders = [
@@ -42,7 +54,13 @@ const mockOrders = [
     id: "ORD-001",
     tableNumber: "3",
     items: [
-      { id: "1", name: "Margherita Pizza", quantity: 1, price: 22.0, notes: "Extra cheese" },
+      {
+        id: "1",
+        name: "Margherita Pizza",
+        quantity: 1,
+        price: 22.0,
+        notes: "Extra cheese",
+      },
       { id: "2", name: "Caesar Salad", quantity: 1, price: 16.5, notes: "" },
       { id: "3", name: "Sparkling Water", quantity: 2, price: 4.5, notes: "" },
     ],
@@ -70,7 +88,15 @@ const mockOrders = [
   {
     id: "ORD-003",
     tableNumber: "2",
-    items: [{ id: "6", name: "Spaghetti Carbonara", quantity: 1, price: 24.5, notes: "No pepper" }],
+    items: [
+      {
+        id: "6",
+        name: "Spaghetti Carbonara",
+        quantity: 1,
+        price: 24.5,
+        notes: "No pepper",
+      },
+    ],
     total: 24.5,
     status: "ready",
     orderTime: new Date(Date.now() - 1000 * 60 * 25).toISOString(), // 25 minutes ago
@@ -82,8 +108,20 @@ const mockOrders = [
     id: "ORD-004",
     tableNumber: "5",
     items: [
-      { id: "7", name: "Beef Burger", quantity: 2, price: 18.0, notes: "Medium well" },
-      { id: "8", name: "French Fries", quantity: 1, price: 6.5, notes: "Extra salt" },
+      {
+        id: "7",
+        name: "Beef Burger",
+        quantity: 2,
+        price: 18.0,
+        notes: "Medium well",
+      },
+      {
+        id: "8",
+        name: "French Fries",
+        quantity: 1,
+        price: 6.5,
+        notes: "Extra salt",
+      },
       { id: "9", name: "Cola", quantity: 2, price: 4.0, notes: "" },
     ],
     total: 50.5,
@@ -97,7 +135,13 @@ const mockOrders = [
     id: "ORD-005",
     tableNumber: "10",
     items: [
-      { id: "10", name: "Vegetable Risotto", quantity: 1, price: 19.5, notes: "" },
+      {
+        id: "10",
+        name: "Vegetable Risotto",
+        quantity: 1,
+        price: 19.5,
+        notes: "",
+      },
       { id: "11", name: "Garlic Bread", quantity: 1, price: 5.5, notes: "" },
     ],
     total: 25.0,
@@ -107,100 +151,110 @@ const mockOrders = [
     paymentStatus: "paid",
     customerNotes: "",
   },
-]
+];
 
 const orderStatuses = [
   { id: "all", name: "All Orders", count: mockOrders.length },
-  { id: "new", name: "New", count: mockOrders.filter((o) => o.status === "new").length },
-  { id: "preparing", name: "Preparing", count: mockOrders.filter((o) => o.status === "preparing").length },
-  { id: "ready", name: "Ready", count: mockOrders.filter((o) => o.status === "ready").length },
-  { id: "completed", name: "Completed", count: mockOrders.filter((o) => o.status === "completed").length },
-]
+  {
+    id: "new",
+    name: "New",
+    count: mockOrders.filter((o) => o.status === "new").length,
+  },
+  {
+    id: "preparing",
+    name: "Preparing",
+    count: mockOrders.filter((o) => o.status === "preparing").length,
+  },
+  {
+    id: "ready",
+    name: "Ready",
+    count: mockOrders.filter((o) => o.status === "ready").length,
+  },
+  {
+    id: "completed",
+    name: "Completed",
+    count: mockOrders.filter((o) => o.status === "completed").length,
+  },
+];
 
 export default function OrdersPage() {
-  const router = useRouter()
-  const [activeStatus, setActiveStatus] = useState("all")
-  const [selectedOrder, setSelectedOrder] = useState<any>(null)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [isKitchenMode, setIsKitchenMode] = useState(false)
-  const [isAutoRefresh, setIsAutoRefresh] = useState(true)
+  const router = useRouter();
+  const [activeStatus, setActiveStatus] = useState("all");
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isAutoRefresh, setIsAutoRefresh] = useState(true);
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "new":
-        return "bg-blue-100 text-blue-800"
+        return "bg-blue-100 text-blue-800";
       case "preparing":
-        return "bg-yellow-100 text-yellow-800"
+        return "bg-yellow-100 text-yellow-800";
       case "ready":
-        return "bg-green-100 text-green-800"
+        return "bg-green-100 text-green-800";
       case "completed":
-        return "bg-gray-100 text-gray-800"
+        return "bg-gray-100 text-gray-800";
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-gray-100 text-gray-800";
     }
-  }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "new":
-        return <AlertCircle className="w-4 h-4" />
+        return <AlertCircle className="w-4 h-4" />;
       case "preparing":
-        return <Clock className="w-4 h-4" />
+        return <Clock className="w-4 h-4" />;
       case "ready":
-        return <CheckCircle className="w-4 h-4" />
+        return <CheckCircle className="w-4 h-4" />;
       case "completed":
-        return <CheckCircle className="w-4 h-4" />
+        return <CheckCircle className="w-4 h-4" />;
       default:
-        return <Clock className="w-4 h-4" />
+        return <Clock className="w-4 h-4" />;
     }
-  }
+  };
 
   const getTimeAgo = (timestamp: string) => {
-    const now = new Date()
-    const orderTime = new Date(timestamp)
-    const diffInMinutes = Math.floor((now.getTime() - orderTime.getTime()) / (1000 * 60))
+    const now = new Date();
+    const orderTime = new Date(timestamp);
+    const diffInMinutes = Math.floor(
+      (now.getTime() - orderTime.getTime()) / (1000 * 60)
+    );
 
-    if (diffInMinutes < 1) return "Just now"
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`
-    const hours = Math.floor(diffInMinutes / 60)
-    return `${hours}h ${diffInMinutes % 60}m ago`
-  }
+    if (diffInMinutes < 1) return "Just now";
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    const hours = Math.floor(diffInMinutes / 60);
+    return `${hours}h ${diffInMinutes % 60}m ago`;
+  };
 
   const filteredOrders = mockOrders
     .filter((order) => {
       // Filter by status
-      if (activeStatus !== "all" && order.status !== activeStatus) return false
+      if (activeStatus !== "all" && order.status !== activeStatus) return false;
 
       // Filter by search term
       if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase()
+        const searchLower = searchTerm.toLowerCase();
         return (
           order.id.toLowerCase().includes(searchLower) ||
           order.tableNumber.toLowerCase().includes(searchLower) ||
-          order.items.some((item) => item.name.toLowerCase().includes(searchLower))
+          order.items.some((item) =>
+            item.name.toLowerCase().includes(searchLower)
         )
+        );
       }
 
-      return true
+      return true;
     })
     .sort((a, b) => {
       // Sort by newest first
-      return new Date(b.orderTime).getTime() - new Date(a.orderTime).getTime()
-    })
+      return new Date(b.orderTime).getTime() - new Date(a.orderTime).getTime();
+    });
 
   const updateOrderStatus = (orderId: string, newStatus: string) => {
-    console.log(`Updating order ${orderId} to ${newStatus}`)
+    console.log(`Updating order ${orderId} to ${newStatus}`);
     // In real app, this would update the order status
-  }
-
-  const handleKitchenModeToggle = () => {
-    if (isKitchenMode) {
-      setIsKitchenMode(false)
-    } else {
-      setIsKitchenMode(true)
-      setActiveStatus("all") // Reset to all orders when entering kitchen mode
-    }
-  }
+  };
 
   const OrderDetailsDialog = ({ order }: { order: any }) => (
     <DialogContent className="max-w-md">
@@ -226,8 +280,17 @@ export default function OrdersPage() {
           <div>
             <p className="text-sm text-gray-500">Payment</p>
             <div className="flex items-center gap-1">
-              <span className="font-semibold capitalize">{order.paymentMethod}</span>
-              <Badge variant="outline" className={order.paymentStatus === "paid" ? "text-green-600" : "text-amber-600"}>
+              <span className="font-semibold capitalize">
+                {order.paymentMethod}
+              </span>
+              <Badge
+                variant="outline"
+                className={
+                  order.paymentStatus === "paid"
+                    ? "text-green-600"
+                    : "text-amber-600"
+                }
+              >
                 {order.paymentStatus}
               </Badge>
             </div>
@@ -247,7 +310,9 @@ export default function OrdersPage() {
                       {item.quantity}x {item.name}
                     </span>
                   </div>
-                  {item.notes && <p className="text-xs text-gray-500 mt-0.5">{item.notes}</p>}
+                  {item.notes && (
+                    <p className="text-xs text-gray-500 mt-0.5">{item.notes}</p>
+                  )}
                 </div>
                 <span>CHF {(item.price * item.quantity).toFixed(2)}</span>
               </div>
@@ -264,7 +329,9 @@ export default function OrdersPage() {
             <Separator />
             <div>
               <h4 className="font-semibold mb-2">Customer Notes</h4>
-              <p className="text-sm bg-gray-50 p-2 rounded">{order.customerNotes}</p>
+              <p className="text-sm bg-gray-50 p-2 rounded">
+                {order.customerNotes}
+              </p>
             </div>
           </>
         )}
@@ -279,12 +346,18 @@ export default function OrdersPage() {
             </Button>
           )}
           {order.status === "preparing" && (
-            <Button onClick={() => updateOrderStatus(order.id, "ready")} className="bg-green-500 hover:bg-green-600">
+            <Button
+              onClick={() => updateOrderStatus(order.id, "ready")}
+              className="bg-green-500 hover:bg-green-600"
+            >
               Mark Ready
             </Button>
           )}
           {order.status === "ready" && (
-            <Button onClick={() => updateOrderStatus(order.id, "completed")} className="bg-gray-500 hover:bg-gray-600">
+            <Button
+              onClick={() => updateOrderStatus(order.id, "completed")}
+              className="bg-gray-500 hover:bg-gray-600"
+            >
               Complete
             </Button>
           )}
@@ -294,309 +367,75 @@ export default function OrdersPage() {
         </div>
       </div>
     </DialogContent>
-  )
+  );
 
-  // Kitchen Mode View
-  if (isKitchenMode) {
-    const newOrders = filteredOrders.filter((o) => o.status === "new")
-    const preparingOrders = filteredOrders.filter((o) => o.status === "preparing")
-    const readyOrders = filteredOrders.filter((o) => o.status === "ready")
-
-    return (
-      <div className="p-4 h-screen flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold">Kitchen Display</h1>
-            <p className="text-gray-500">Real-time order management</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Switch id="auto-refresh" checked={isAutoRefresh} onCheckedChange={setIsAutoRefresh} />
-              <Label htmlFor="auto-refresh">Auto Refresh</Label>
-            </div>
-            <Button variant="outline" onClick={handleKitchenModeToggle}>
-              Exit Kitchen Mode
-            </Button>
-            <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
-              <RefreshCcw className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1 overflow-hidden">
-          {/* New Orders Column */}
-          <div className="flex flex-col h-full">
-            <div className="bg-blue-50 p-3 rounded-t-lg border border-blue-100">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <AlertCircle className="w-5 h-5 text-blue-600 mr-2" />
-                  <h2 className="font-bold text-blue-800">New Orders</h2>
-                </div>
-                <Badge className="bg-blue-100 text-blue-800">{newOrders.length}</Badge>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto bg-blue-50/30 p-2 space-y-3 border border-t-0 border-blue-100 rounded-b-lg">
-              <AnimatePresence>
-                {newOrders.map((order) => (
-                  <motion.div
-                    key={order.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white rounded-lg shadow-xs border border-blue-100"
-                  >
-                    <CardHeader className="p-3 pb-0">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg font-bold flex items-center">
-                          Table {order.tableNumber}
-                          <Badge className="ml-2 bg-blue-100 text-blue-800">{order.id}</Badge>
-                        </CardTitle>
-                        <Badge variant="outline" className="text-xs">
-                          {getTimeAgo(order.orderTime)}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-2">
-                      <ul className="space-y-1 text-sm">
-                        {order.items.map((item) => (
-                          <li key={item.id} className="flex justify-between">
-                            <span>
-                              <span className="font-semibold">{item.quantity}x</span> {item.name}
-                              {item.notes && <span className="text-xs text-gray-500 block">{item.notes}</span>}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                      {order.customerNotes && (
-                        <div className="mt-2 p-1.5 bg-blue-50 rounded text-xs">
-                          <span className="font-medium">Note: </span>
-                          {order.customerNotes}
-                        </div>
-                      )}
-                    </CardContent>
-                    <CardFooter className="p-3 pt-0 flex justify-end">
-                      <Button
-                        className="bg-yellow-500 hover:bg-yellow-600 w-full"
-                        onClick={() => updateOrderStatus(order.id, "preparing")}
-                      >
-                        Start Preparing
-                      </Button>
-                    </CardFooter>
-                  </motion.div>
-                ))}
-                {newOrders.length === 0 && (
-                  <div className="flex items-center justify-center h-32 text-gray-400 text-sm">No new orders</div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* Preparing Orders Column */}
-          <div className="flex flex-col h-full">
-            <div className="bg-yellow-50 p-3 rounded-t-lg border border-yellow-100">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Clock className="w-5 h-5 text-yellow-600 mr-2" />
-                  <h2 className="font-bold text-yellow-800">Preparing</h2>
-                </div>
-                <Badge className="bg-yellow-100 text-yellow-800">{preparingOrders.length}</Badge>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto bg-yellow-50/30 p-2 space-y-3 border border-t-0 border-yellow-100 rounded-b-lg">
-              <AnimatePresence>
-                {preparingOrders.map((order) => (
-                  <motion.div
-                    key={order.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white rounded-lg shadow-xs border border-yellow-100"
-                  >
-                    <CardHeader className="p-3 pb-0">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg font-bold flex items-center">
-                          Table {order.tableNumber}
-                          <Badge className="ml-2 bg-yellow-100 text-yellow-800">{order.id}</Badge>
-                        </CardTitle>
-                        <Badge variant="outline" className="text-xs">
-                          {getTimeAgo(order.orderTime)}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-2">
-                      <ul className="space-y-1 text-sm">
-                        {order.items.map((item) => (
-                          <li key={item.id} className="flex justify-between">
-                            <span>
-                              <span className="font-semibold">{item.quantity}x</span> {item.name}
-                              {item.notes && <span className="text-xs text-gray-500 block">{item.notes}</span>}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                      {order.customerNotes && (
-                        <div className="mt-2 p-1.5 bg-yellow-50 rounded text-xs">
-                          <span className="font-medium">Note: </span>
-                          {order.customerNotes}
-                        </div>
-                      )}
-                    </CardContent>
-                    <CardFooter className="p-3 pt-0 flex justify-end">
-                      <Button
-                        className="bg-green-500 hover:bg-green-600 w-full"
-                        onClick={() => updateOrderStatus(order.id, "ready")}
-                      >
-                        Mark Ready
-                      </Button>
-                    </CardFooter>
-                  </motion.div>
-                ))}
-                {preparingOrders.length === 0 && (
-                  <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
-                    No orders in preparation
-                  </div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* Ready Orders Column */}
-          <div className="flex flex-col h-full">
-            <div className="bg-green-50 p-3 rounded-t-lg border border-green-100">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-                  <h2 className="font-bold text-green-800">Ready to Serve</h2>
-                </div>
-                <Badge className="bg-green-100 text-green-800">{readyOrders.length}</Badge>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto bg-green-50/30 p-2 space-y-3 border border-t-0 border-green-100 rounded-b-lg">
-              <AnimatePresence>
-                {readyOrders.map((order) => (
-                  <motion.div
-                    key={order.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white rounded-lg shadow-xs border border-green-100"
-                  >
-                    <CardHeader className="p-3 pb-0">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg font-bold flex items-center">
-                          Table {order.tableNumber}
-                          <Badge className="ml-2 bg-green-100 text-green-800">{order.id}</Badge>
-                        </CardTitle>
-                        <Badge variant="outline" className="text-xs">
-                          {getTimeAgo(order.orderTime)}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-2">
-                      <ul className="space-y-1 text-sm">
-                        {order.items.map((item) => (
-                          <li key={item.id} className="flex justify-between">
-                            <span>
-                              <span className="font-semibold">{item.quantity}x</span> {item.name}
-                              {item.notes && <span className="text-xs text-gray-500 block">{item.notes}</span>}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                    <CardFooter className="p-3 pt-0 flex justify-end">
-                      <Button
-                        className="bg-gray-500 hover:bg-gray-600 w-full"
-                        onClick={() => updateOrderStatus(order.id, "completed")}
-                      >
-                        Complete Order
-                      </Button>
-                    </CardFooter>
-                  </motion.div>
-                ))}
-                {readyOrders.length === 0 && (
-                  <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
-                    No orders ready to serve
-                  </div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Regular Orders View
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
-          <p className="text-gray-500">Manage incoming orders and kitchen workflow</p>
+          <h1 className="text-2xl font-bold">Orders Management</h1>
+          <p className="text-gray-500">
+            Track and manage all restaurant orders
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => router.push("/dashboard/orders/history")}>
-            <Clock className="w-4 h-4 mr-2" />
-            View History
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            className="flex items-center gap-2"
+            onClick={() => router.push("/dashboard/kitchen")}
+          >
+            <ChefHat className="h-4 w-4" />
+            Kitchen Display
           </Button>
-          <Button variant="outline" onClick={handleKitchenModeToggle}>
-            <ChefHat className="w-4 h-4 mr-2" />
-            Kitchen View
-          </Button>
-          <Button variant="outline">
-            <Printer className="w-4 h-4 mr-2" />
-            Print
-          </Button>
-          <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
-            <RefreshCcw className="w-4 h-4 mr-2" />
-            Refresh
+          <Button
+            variant="outline"
+            className="flex items-center gap-2"
+            onClick={() => router.push("/dashboard/orders/history")}
+          >
+            <Clock className="h-4 w-4" />
+            Order History
           </Button>
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+      {/* Controls */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4 flex-1">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
               <Input
-                placeholder="Search orders by ID, table, or items..."
+              type="search"
+              placeholder="Search orders..."
+              className="pl-8"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
               />
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filters
-                  <ChevronDown className="w-4 h-4 ml-2" />
+          <Button variant="outline" className="flex items-center gap-2">
+            <Filter className="h-4 w-4" />
+            Filter
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Filter Orders</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>Today Only</DropdownMenuItem>
-                <DropdownMenuItem>Paid Orders</DropdownMenuItem>
-                <DropdownMenuItem>Unpaid Orders</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>Clear Filters</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="auto-refresh"
+            checked={isAutoRefresh}
+            onCheckedChange={setIsAutoRefresh}
+          />
+          <Label htmlFor="auto-refresh">Auto-refresh</Label>
+        </div>
           </div>
-        </CardContent>
-      </Card>
 
       {/* Status Tabs */}
       <Tabs value={activeStatus} onValueChange={setActiveStatus}>
         <TabsList className="grid w-full grid-cols-5">
           {orderStatuses.map((status) => (
-            <TabsTrigger key={status.id} value={status.id} className="text-xs sm:text-sm">
+            <TabsTrigger
+              key={status.id}
+              value={status.id}
+              className="text-xs sm:text-sm"
+            >
               {status.name}
               <Badge variant="secondary" className="ml-2 text-xs">
                 {status.count}
@@ -622,10 +461,14 @@ export default function OrdersPage() {
                         {/* Order Info */}
                         <div className="flex-1">
                           <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <h3 className="font-semibold text-lg">{order.id}</h3>
+                            <h3 className="font-semibold text-lg">
+                              {order.id}
+                            </h3>
                             <Badge className={getStatusColor(order.status)}>
                               {getStatusIcon(order.status)}
-                              <span className="ml-1 capitalize">{order.status}</span>
+                              <span className="ml-1 capitalize">
+                                {order.status}
+                              </span>
                             </Badge>
                             <div className="flex items-center">
                               <Avatar className="h-6 w-6 mr-1">
@@ -633,9 +476,13 @@ export default function OrdersPage() {
                                   {order.tableNumber}
                                 </AvatarFallback>
                               </Avatar>
-                              <span className="text-sm text-gray-500">Table {order.tableNumber}</span>
+                              <span className="text-sm text-gray-500">
+                                Table {order.tableNumber}
+                              </span>
                             </div>
-                            <span className="text-sm text-gray-500">{getTimeAgo(order.orderTime)}</span>
+                            <span className="text-sm text-gray-500">
+                              {getTimeAgo(order.orderTime)}
+                            </span>
                           </div>
 
                           <div className="text-sm text-gray-600 mb-2">
@@ -648,10 +495,16 @@ export default function OrdersPage() {
                           </div>
 
                           <div className="flex items-center gap-4">
-                            <span className="font-bold text-lg">CHF {order.total.toFixed(2)}</span>
+                            <span className="font-bold text-lg">
+                              CHF {order.total.toFixed(2)}
+                            </span>
                             <Badge
                               variant="outline"
-                              className={order.paymentStatus === "paid" ? "text-green-600" : "text-amber-600"}
+                              className={
+                                order.paymentStatus === "paid"
+                                  ? "text-green-600"
+                                  : "text-amber-600"
+                              }
                             >
                               {order.paymentStatus.toUpperCase()}
                             </Badge>
@@ -665,15 +518,23 @@ export default function OrdersPage() {
                         <div className="flex items-center gap-2">
                           <Dialog
                             open={selectedOrder?.id === order.id}
-                            onOpenChange={(open) => !open && setSelectedOrder(null)}
+                            onOpenChange={(open) =>
+                              !open && setSelectedOrder(null)
+                            }
                           >
                             <DialogTrigger asChild>
-                              <Button variant="outline" size="sm" onClick={() => setSelectedOrder(order)}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedOrder(order)}
+                              >
                                 <Eye className="w-4 h-4 mr-2" />
                                 Details
                               </Button>
                             </DialogTrigger>
-                            {selectedOrder?.id === order.id && <OrderDetailsDialog order={selectedOrder} />}
+                            {selectedOrder?.id === order.id && (
+                              <OrderDetailsDialog order={selectedOrder} />
+                            )}
                           </Dialog>
 
                           <DropdownMenu>
@@ -683,23 +544,31 @@ export default function OrdersPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => console.log("Print receipt")}>
+                              <DropdownMenuItem
+                                onClick={() => console.log("Print receipt")}
+                              >
                                 <Printer className="mr-2 h-4 w-4" />
                                 Print Receipt
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => console.log("Send notification")}>
+                              <DropdownMenuItem
+                                onClick={() => console.log("Send notification")}
+                              >
                                 <Bell className="mr-2 h-4 w-4" />
                                 Notify Customer
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-red-600">Cancel Order</DropdownMenuItem>
+                              <DropdownMenuItem className="text-red-600">
+                                Cancel Order
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
 
                           {order.status === "new" && (
                             <Button
                               size="sm"
-                              onClick={() => updateOrderStatus(order.id, "preparing")}
+                              onClick={() =>
+                                updateOrderStatus(order.id, "preparing")
+                              }
                               className="bg-yellow-500 hover:bg-yellow-600"
                             >
                               Start Preparing
@@ -709,7 +578,9 @@ export default function OrdersPage() {
                           {order.status === "preparing" && (
                             <Button
                               size="sm"
-                              onClick={() => updateOrderStatus(order.id, "ready")}
+                              onClick={() =>
+                                updateOrderStatus(order.id, "ready")
+                              }
                               className="bg-green-500 hover:bg-green-600"
                             >
                               Mark Ready
@@ -719,7 +590,9 @@ export default function OrdersPage() {
                           {order.status === "ready" && (
                             <Button
                               size="sm"
-                              onClick={() => updateOrderStatus(order.id, "completed")}
+                              onClick={() =>
+                                updateOrderStatus(order.id, "completed")
+                              }
                               className="bg-gray-500 hover:bg-gray-600"
                             >
                               Complete
@@ -730,8 +603,12 @@ export default function OrdersPage() {
 
                       {order.customerNotes && (
                         <div className="mt-3 p-2 bg-blue-50 rounded text-sm">
-                          <span className="font-medium text-blue-800">Note: </span>
-                          <span className="text-blue-700">{order.customerNotes}</span>
+                          <span className="font-medium text-blue-800">
+                            Note:{" "}
+                          </span>
+                          <span className="text-blue-700">
+                            {order.customerNotes}
+                          </span>
                         </div>
                       )}
                     </CardContent>
@@ -744,7 +621,9 @@ export default function OrdersPage() {
               <div className="text-center py-12">
                 <div className="text-gray-400 mb-2">No orders found</div>
                 <p className="text-sm text-gray-500">
-                  {activeStatus === "all" ? "No orders match your search" : `No ${activeStatus} orders`}
+                  {activeStatus === "all"
+                    ? "No orders match your search"
+                    : `No ${activeStatus} orders`}
                 </p>
               </div>
             )}
@@ -752,5 +631,5 @@ export default function OrdersPage() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

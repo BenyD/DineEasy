@@ -23,6 +23,7 @@ import {
   Activity,
   Menu,
   Cog,
+  Clock,
 } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -73,8 +74,21 @@ const navigationData = {
       name: "Orders",
       url: "/dashboard/orders",
       icon: ShoppingCart,
-      badge: "3",
       description: "Manage customer orders",
+      subItems: [
+        {
+          name: "Kitchen Display",
+          url: "/dashboard/kitchen",
+          icon: ChefHat,
+          description: "Kitchen display system",
+        },
+        {
+          name: "Order History",
+          url: "/dashboard/orders/history",
+          icon: Clock,
+          description: "View past orders",
+        },
+      ],
     },
     {
       name: "Menu",
@@ -87,12 +101,6 @@ const navigationData = {
       url: "/dashboard/tables",
       icon: QrCode,
       description: "Manage tables and QR codes",
-    },
-    {
-      name: "Kitchen",
-      url: "/dashboard/kitchen",
-      icon: ChefHat,
-      description: "Kitchen display system",
     },
   ],
   management: [
@@ -186,44 +194,101 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Render simple menu item
   const renderMenuItem = (item: any) => {
     const active = isActive(item.url);
+    const hasSubItems = item.subItems && item.subItems.length > 0;
+
+    const menuItemContent = (
+      <div className="flex items-center w-full">
+        <div className="flex items-center flex-1 min-w-0">
+          <item.icon className="h-5 w-5 shrink-0" />
+          <span className="ml-2 truncate">{item.name}</span>
+        </div>
+        <div className="flex items-center gap-2 ml-2">
+          {item.badge && <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>}
+          {hasSubItems && (
+            <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 collapsible-trigger-icon" />
+          )}
+        </div>
+      </div>
+    );
+
+    if (!hasSubItems) {
+      return (
+        <SidebarMenuItem key={item.name}>
+          <SidebarMenuButton
+            asChild
+            isActive={active}
+            tooltip={item.description}
+            className="group-data-[collapsible=icon]:justify-center w-full"
+          >
+            <Link
+              href={item.url}
+              className={`transition-all duration-200 hover:bg-slate-200/40 rounded-md relative ${
+                active ? "text-green-600" : "text-gray-600"
+              }`}
+            >
+              {menuItemContent}
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      );
+    }
 
     return (
-      <SidebarMenuItem key={item.name}>
-        <SidebarMenuButton
-          asChild
-          isActive={active}
-          tooltip={item.description}
-          className="group-data-[collapsible=icon]:justify-center"
-        >
-          <Link
-            href={item.url}
-            className={`transition-all duration-200 hover:bg-slate-200/40 rounded-md relative ${
-              active
-                ? "bg-primary/10 text-primary font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4/6 before:w-0.5 before:bg-primary before:rounded-full"
-                : ""
-            }`}
-          >
-            {item.icon && <item.icon className="h-4 w-4 shrink-0" />}
-            <span className="truncate group-data-[collapsible=icon]:hidden">
-              {item.name}
-            </span>
-            {item.badge && (
-              <SidebarMenuBadge
-                className={
-                  item.badge === "Pro" || item.badge === "Elite"
-                    ? "bg-purple-100 text-purple-700"
-                    : item.badge.endsWith("d")
-                    ? "bg-amber-100 text-amber-700"
-                    : "bg-green-100 text-green-700"
-                }
+      <Collapsible
+        key={item.name}
+        defaultOpen={active || hasActiveSubItem(item.subItems)}
+      >
+        <SidebarMenuItem>
+          <CollapsibleTrigger asChild>
+            <div className="w-full">
+              <SidebarMenuButton
+                tooltip={item.description}
+                className={`group-data-[collapsible=icon]:justify-center w-full ${
+                  active ? "text-green-600" : "text-gray-600"
+                }`}
               >
-                {item.badge}
-              </SidebarMenuBadge>
-            )}
-          </Link>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
+                {menuItemContent}
+              </SidebarMenuButton>
+            </div>
+          </CollapsibleTrigger>
+        </SidebarMenuItem>
+        <CollapsibleContent className="pl-4 space-y-1">
+          {item.subItems.map((subItem: any) => (
+            <SidebarMenuItem key={subItem.name}>
+              <SidebarMenuButton
+                asChild
+                isActive={isActive(subItem.url)}
+                tooltip={subItem.description}
+                className="group-data-[collapsible=icon]:justify-center w-full"
+              >
+                <Link
+                  href={subItem.url}
+                  className={`transition-all duration-200 hover:bg-slate-200/40 rounded-md relative ${
+                    isActive(subItem.url) ? "text-green-600" : "text-gray-600"
+                  }`}
+                >
+                  <div className="flex items-center w-full">
+                    <div className="flex items-center flex-1 min-w-0">
+                      <subItem.icon className="h-5 w-5 shrink-0" />
+                      <span className="ml-2 truncate">{subItem.name}</span>
+                    </div>
+                    {subItem.badge && (
+                      <SidebarMenuBadge className="ml-2">
+                        {subItem.badge}
+                      </SidebarMenuBadge>
+                    )}
+                  </div>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
     );
+  };
+
+  const hasActiveSubItem = (subItems: any[]) => {
+    return subItems.some((item) => isActive(item.url));
   };
 
   // Render collapsible sidebar group

@@ -1,13 +1,21 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { Clock, CheckCircle, AlertCircle, ChefHat, Timer, Bell } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  ChefHat,
+  Timer,
+  Bell,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useRouter } from "next/navigation";
 
 // Mock orders data
 const mockOrders = [
@@ -16,7 +24,11 @@ const mockOrders = [
     tableNumber: 5,
     customerName: "John D.",
     items: [
-      { name: "Margherita Pizza", quantity: 1, modifiers: ["Extra cheese", "Thin crust"] },
+      {
+        name: "Margherita Pizza",
+        quantity: 1,
+        modifiers: ["Extra cheese", "Thin crust"],
+      },
       { name: "Caesar Salad", quantity: 1, modifiers: ["No croutons"] },
       { name: "House Wine", quantity: 2, modifiers: [] },
     ],
@@ -31,7 +43,11 @@ const mockOrders = [
     tableNumber: 3,
     customerName: "Sarah M.",
     items: [
-      { name: "Grilled Salmon", quantity: 1, modifiers: ["Medium rare", "No vegetables"] },
+      {
+        name: "Grilled Salmon",
+        quantity: 1,
+        modifiers: ["Medium rare", "No vegetables"],
+      },
       { name: "Risotto", quantity: 1, modifiers: ["Extra parmesan"] },
     ],
     status: "preparing",
@@ -45,7 +61,11 @@ const mockOrders = [
     tableNumber: 8,
     customerName: "Mike R.",
     items: [
-      { name: "Beef Burger", quantity: 2, modifiers: ["Medium", "Extra bacon"] },
+      {
+        name: "Beef Burger",
+        quantity: 2,
+        modifiers: ["Medium", "Extra bacon"],
+      },
       { name: "French Fries", quantity: 2, modifiers: ["Extra crispy"] },
       { name: "Coca Cola", quantity: 2, modifiers: [] },
     ],
@@ -69,57 +89,66 @@ const mockOrders = [
     notes: "Customer has allergies - please be careful",
     priority: "normal",
   },
-]
+];
 
 export default function KitchenPage() {
-  const [orders, setOrders] = useState(mockOrders)
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [orders, setOrders] = useState(mockOrders);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const router = useRouter();
 
   // Update current time every minute
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 60000)
+      setCurrentTime(new Date());
+    }, 60000);
 
-    return () => clearInterval(timer)
-  }, [])
+    return () => clearInterval(timer);
+  }, []);
 
   const updateOrderStatus = (orderId: string, newStatus: string) => {
-    setOrders(orders.map((order) => (order.id === orderId ? { ...order, status: newStatus } : order)))
-  }
+    setOrders(
+      orders.map((order) =>
+        order.id === orderId ? { ...order, status: newStatus } : order
+      )
+    );
+  };
 
   const getTimeSinceOrder = (orderTime: Date) => {
-    const diffInMinutes = Math.floor((currentTime.getTime() - orderTime.getTime()) / (1000 * 60))
-    return diffInMinutes
-  }
+    const diffInMinutes = Math.floor(
+      (currentTime.getTime() - orderTime.getTime()) / (1000 * 60)
+    );
+    return diffInMinutes;
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "new":
-        return "bg-red-100 text-red-800 border-red-200"
+        return "bg-red-100 text-red-800 border-red-200";
       case "preparing":
-        return "bg-amber-100 text-amber-800 border-amber-200"
+        return "bg-amber-100 text-amber-800 border-amber-200";
       case "ready":
-        return "bg-green-100 text-green-800 border-green-200"
+        return "bg-green-100 text-green-800 border-green-200";
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200"
+        return "bg-gray-100 text-gray-800 border-gray-200";
     }
-  }
+  };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "high":
-        return "bg-red-500"
+        return "bg-red-500";
       case "normal":
-        return "bg-blue-500"
+        return "bg-blue-500";
       default:
-        return "bg-gray-500"
+        return "bg-gray-500";
     }
-  }
+  };
 
-  const newOrders = orders.filter((order) => order.status === "new")
-  const preparingOrders = orders.filter((order) => order.status === "preparing")
-  const readyOrders = orders.filter((order) => order.status === "ready")
+  const newOrders = orders.filter((order) => order.status === "new");
+  const preparingOrders = orders.filter(
+    (order) => order.status === "preparing"
+  );
+  const readyOrders = orders.filter((order) => order.status === "ready");
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
@@ -130,15 +159,32 @@ export default function KitchenPage() {
             <ChefHat className="h-6 w-6 text-green-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Kitchen Display</h1>
-            <p className="text-gray-500">Real-time order management for kitchen staff</p>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Kitchen Display
+            </h1>
+            <p className="text-gray-500">
+              Real-time order management for kitchen staff
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Bell className="h-5 w-5 text-gray-400" />
-          <span className="text-sm text-gray-500">
-            {currentTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Bell className="h-5 w-5 text-gray-400" />
+            <span className="text-sm text-gray-500">
+              {currentTime.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+          <Button
+            variant="outline"
+            className="flex items-center gap-2"
+            onClick={() => router.push("/dashboard/orders")}
+          >
+            <Clock className="h-4 w-4" />
+            Orders View
+          </Button>
         </div>
       </div>
 
@@ -149,7 +195,9 @@ export default function KitchenPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-red-800">New Orders</p>
-                <p className="text-2xl font-bold text-red-900">{newOrders.length}</p>
+                <p className="text-2xl font-bold text-red-900">
+                  {newOrders.length}
+                </p>
               </div>
               <AlertCircle className="h-8 w-8 text-red-600" />
             </div>
@@ -161,7 +209,9 @@ export default function KitchenPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-amber-800">Preparing</p>
-                <p className="text-2xl font-bold text-amber-900">{preparingOrders.length}</p>
+                <p className="text-2xl font-bold text-amber-900">
+                  {preparingOrders.length}
+                </p>
               </div>
               <Timer className="h-8 w-8 text-amber-600" />
             </div>
@@ -173,7 +223,9 @@ export default function KitchenPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-green-800">Ready</p>
-                <p className="text-2xl font-bold text-green-900">{readyOrders.length}</p>
+                <p className="text-2xl font-bold text-green-900">
+                  {readyOrders.length}
+                </p>
               </div>
               <CheckCircle className="h-8 w-8 text-green-600" />
             </div>
@@ -184,8 +236,12 @@ export default function KitchenPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-800">Total Active</p>
-                <p className="text-2xl font-bold text-blue-900">{orders.length}</p>
+                <p className="text-sm font-medium text-blue-800">
+                  Total Active
+                </p>
+                <p className="text-2xl font-bold text-blue-900">
+                  {orders.length}
+                </p>
               </div>
               <Clock className="h-8 w-8 text-blue-600" />
             </div>
@@ -199,7 +255,9 @@ export default function KitchenPage() {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-red-800">New Orders</h2>
-            <Badge className="bg-red-100 text-red-800">{newOrders.length}</Badge>
+            <Badge className="bg-red-100 text-red-800">
+              {newOrders.length}
+            </Badge>
           </div>
           <AnimatePresence>
             {newOrders.map((order) => (
@@ -214,13 +272,23 @@ export default function KitchenPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${getPriorityColor(order.priority)}`} />
-                        <CardTitle className="text-lg">Table {order.tableNumber}</CardTitle>
-                        <Badge className={getStatusColor(order.status)}>{order.status.toUpperCase()}</Badge>
+                        <div
+                          className={`w-3 h-3 rounded-full ${getPriorityColor(
+                            order.priority
+                          )}`}
+                        />
+                        <CardTitle className="text-lg">
+                          Table {order.tableNumber}
+                        </CardTitle>
+                        <Badge className={getStatusColor(order.status)}>
+                          {order.status.toUpperCase()}
+                        </Badge>
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-500">{order.id}</p>
-                        <p className="text-xs text-gray-400">{getTimeSinceOrder(order.orderTime)} min ago</p>
+                        <p className="text-xs text-gray-400">
+                          {getTimeSinceOrder(order.orderTime)} min ago
+                        </p>
                       </div>
                     </div>
                   </CardHeader>
@@ -288,7 +356,9 @@ export default function KitchenPage() {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-amber-800">Preparing</h2>
-            <Badge className="bg-amber-100 text-amber-800">{preparingOrders.length}</Badge>
+            <Badge className="bg-amber-100 text-amber-800">
+              {preparingOrders.length}
+            </Badge>
           </div>
           <AnimatePresence>
             {preparingOrders.map((order) => (
@@ -303,13 +373,23 @@ export default function KitchenPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${getPriorityColor(order.priority)}`} />
-                        <CardTitle className="text-lg">Table {order.tableNumber}</CardTitle>
-                        <Badge className={getStatusColor(order.status)}>{order.status.toUpperCase()}</Badge>
+                        <div
+                          className={`w-3 h-3 rounded-full ${getPriorityColor(
+                            order.priority
+                          )}`}
+                        />
+                        <CardTitle className="text-lg">
+                          Table {order.tableNumber}
+                        </CardTitle>
+                        <Badge className={getStatusColor(order.status)}>
+                          {order.status.toUpperCase()}
+                        </Badge>
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-500">{order.id}</p>
-                        <p className="text-xs text-gray-400">{getTimeSinceOrder(order.orderTime)} min ago</p>
+                        <p className="text-xs text-gray-400">
+                          {getTimeSinceOrder(order.orderTime)} min ago
+                        </p>
                       </div>
                     </div>
                   </CardHeader>
@@ -376,8 +456,12 @@ export default function KitchenPage() {
         {/* Ready Orders */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-green-800">Ready for Pickup</h2>
-            <Badge className="bg-green-100 text-green-800">{readyOrders.length}</Badge>
+            <h2 className="text-lg font-semibold text-green-800">
+              Ready for Pickup
+            </h2>
+            <Badge className="bg-green-100 text-green-800">
+              {readyOrders.length}
+            </Badge>
           </div>
           <AnimatePresence>
             {readyOrders.map((order) => (
@@ -392,13 +476,23 @@ export default function KitchenPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${getPriorityColor(order.priority)}`} />
-                        <CardTitle className="text-lg">Table {order.tableNumber}</CardTitle>
-                        <Badge className={getStatusColor(order.status)}>{order.status.toUpperCase()}</Badge>
+                        <div
+                          className={`w-3 h-3 rounded-full ${getPriorityColor(
+                            order.priority
+                          )}`}
+                        />
+                        <CardTitle className="text-lg">
+                          Table {order.tableNumber}
+                        </CardTitle>
+                        <Badge className={getStatusColor(order.status)}>
+                          {order.status.toUpperCase()}
+                        </Badge>
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-500">{order.id}</p>
-                        <p className="text-xs text-gray-400">{getTimeSinceOrder(order.orderTime)} min ago</p>
+                        <p className="text-xs text-gray-400">
+                          {getTimeSinceOrder(order.orderTime)} min ago
+                        </p>
                       </div>
                     </div>
                   </CardHeader>
@@ -452,5 +546,5 @@ export default function KitchenPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
