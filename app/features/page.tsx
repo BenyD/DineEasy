@@ -1,12 +1,21 @@
-"use client"
-import { motion } from "framer-motion"
-import { ChefHat, CreditCard, FileText, LayoutDashboard, Printer, QrCode, Settings, Users } from "lucide-react"
-import { PageWrapper } from "@/components/layout/PageWrapper"
-import { HeroSection } from "@/components/elements/HeroSection"
-import { FeatureCard } from "@/components/elements/FeatureCard"
-import { CTASection } from "@/components/elements/CTASection"
-import { AnimatedSection } from "@/components/elements/AnimatedSection"
-import { GradientBlob } from "@/components/elements/GradientBlob"
+"use client";
+import { motion } from "framer-motion";
+import {
+  ChefHat,
+  CreditCard,
+  FileText,
+  LayoutDashboard,
+  Printer,
+  QrCode,
+  Settings,
+  Users,
+} from "lucide-react";
+import { PageWrapper } from "@/components/layout/PageWrapper";
+import { HeroSection } from "@/components/elements/HeroSection";
+import { FeatureCard } from "@/components/elements/FeatureCard";
+import { CTASection } from "@/components/elements/CTASection";
+import { AnimatedSection } from "@/components/elements/AnimatedSection";
+import { GradientBlob } from "@/components/elements/GradientBlob";
 
 export default function FeaturesPage() {
   return (
@@ -17,72 +26,95 @@ export default function FeaturesPage() {
         subtitle="Everything you need to streamline your restaurant operations and enhance the dining experience"
       />
 
-      <AnimatedSection className="container py-12 sm:py-20">
-        <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {[
-            {
-              icon: <FileText className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />,
-              title: "Menu Builder",
-              description:
-                "Create beautiful digital menus with images, descriptions, and customization options. Import existing menus with AI OCR parsing.",
-            },
-            {
-              icon: <QrCode className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />,
-              title: "Table QR Codes",
-              description:
-                "Generate unique QR codes for each table that customers can scan to access your digital menu and place orders.",
-            },
-            {
-              icon: <LayoutDashboard className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />,
-              title: "Orders Dashboard",
-              description:
-                "Manage all incoming orders in real-time with status tracking, modifications, and customer information.",
-            },
-            {
-              icon: <ChefHat className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />,
-              title: "Kitchen Display",
-              description:
-                "Auto-updating kitchen display system that shows incoming orders, preparation times, and completion status.",
-            },
-            {
-              icon: <CreditCard className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />,
-              title: "Stripe & TWINT Payments",
-              description:
-                "Accept payments directly through the app with Stripe and TWINT integration for a seamless checkout experience.",
-            },
-            {
-              icon: <Printer className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />,
-              title: "Thermal Printing",
-              description: "Automatically print receipts and kitchen tickets with our thermal printer integration.",
-            },
-            {
-              icon: <Users className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />,
-              title: "Staff Access",
-              description:
-                "Multi-user access with role-based permissions for admins, managers, servers, and kitchen staff.",
-            },
-            {
-              icon: <Settings className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />,
-              title: "Analytics & Insights",
-              description:
-                "Track sales, popular items, peak hours, and customer feedback to optimize your restaurant operations.",
-            },
-          ].map((feature, index) => (
-            <FeatureCard key={index} {...feature} index={index} />
-          ))}
+      <AnimatedSection className="py-16 sm:py-24">
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                icon: (
+                  <FileText className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />
+                ),
+                title: "Menu Builder",
+                description:
+                  "Create beautiful digital menus with images, descriptions, and customization options. Import existing menus with AI OCR parsing.",
+              },
+              {
+                icon: (
+                  <QrCode className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />
+                ),
+                title: "Table QR Codes",
+                description:
+                  "Generate unique QR codes for each table that customers can scan to access your digital menu and place orders.",
+              },
+              {
+                icon: (
+                  <LayoutDashboard className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />
+                ),
+                title: "Orders Dashboard",
+                description:
+                  "Manage all incoming orders in real-time with status tracking, modifications, and customer information.",
+              },
+              {
+                icon: (
+                  <ChefHat className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />
+                ),
+                title: "Kitchen Display",
+                description:
+                  "Auto-updating kitchen display system that shows incoming orders, preparation times, and completion status.",
+              },
+              {
+                icon: (
+                  <CreditCard className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />
+                ),
+                title: "Stripe & TWINT Payments",
+                description:
+                  "Accept payments directly through the app with Stripe and TWINT integration for a seamless checkout experience.",
+              },
+              {
+                icon: (
+                  <Printer className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />
+                ),
+                title: "Thermal Printing",
+                description:
+                  "Automatically print receipts and kitchen tickets with our thermal printer integration.",
+              },
+              {
+                icon: (
+                  <Users className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />
+                ),
+                title: "Staff Access",
+                description:
+                  "Multi-user access with role-based permissions for admins, managers, servers, and kitchen staff.",
+              },
+              {
+                icon: (
+                  <Settings className="h-8 w-8 text-green-600 sm:h-10 sm:w-10" />
+                ),
+                title: "Analytics & Insights",
+                description:
+                  "Track sales, popular items, peak hours, and customer feedback to optimize your restaurant operations.",
+              },
+            ].map((feature, index) => (
+              <FeatureCard key={index} {...feature} index={index} />
+            ))}
+          </div>
         </div>
       </AnimatedSection>
 
-      <section className="bg-gray-50 py-12 sm:py-20">
-        <div className="container">
-          <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12 max-w-7xl mx-auto">
+      <section className="bg-gray-50 py-16 sm:py-24">
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid items-center gap-12 lg:grid-cols-2">
             <AnimatedSection direction="left">
-              <h2 className="text-2xl font-bold tracking-tighter sm:text-3xl md:text-4xl">Digital Menu Builder</h2>
-              <p className="mt-3 text-gray-500 sm:mt-4">
-                Create beautiful, interactive digital menus that showcase your dishes with high-quality images and
-                detailed descriptions. Easily update prices, add seasonal items, or mark items as sold out in real-time.
+              <h2 className="text-2xl font-bold tracking-tighter sm:text-3xl md:text-4xl">
+                Digital Menu Builder
+              </h2>
+              <p className="mt-4 text-gray-500 sm:text-lg">
+                Create beautiful, interactive digital menus that showcase your
+                dishes with high-quality images and detailed descriptions.
+                Easily update prices, add seasonal items, or mark items as sold
+                out in real-time.
               </p>
-              <ul className="mt-4 space-y-2 sm:mt-6 sm:space-y-3">
+              <ul className="mt-8 space-y-4">
                 {[
                   "Drag-and-drop interface",
                   "Image upload and management",
@@ -96,11 +128,11 @@ export default function FeaturesPage() {
                     whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: index * 0.1 }}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-3"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 text-green-500 sm:h-5 sm:w-5"
+                      className="h-5 w-5 flex-shrink-0 text-green-500"
                       viewBox="0 0 20 20"
                       fill="currentColor"
                     >
@@ -110,12 +142,15 @@ export default function FeaturesPage() {
                         clipRule="evenodd"
                       />
                     </svg>
-                    <span className="text-sm sm:text-base">{item}</span>
+                    <span className="text-gray-600">{item}</span>
                   </motion.li>
                 ))}
               </ul>
             </AnimatedSection>
-            <AnimatedSection direction="right" className="relative mx-auto w-full max-w-[500px]">
+            <AnimatedSection
+              direction="right"
+              className="relative mx-auto w-full max-w-[560px]"
+            >
               <div className="overflow-hidden rounded-xl border bg-white shadow-lg">
                 <img
                   src="/placeholder.svg?height=400&width=600"
@@ -129,10 +164,13 @@ export default function FeaturesPage() {
         </div>
       </section>
 
-      <section className="py-12 sm:py-20">
-        <div className="container">
-          <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12 max-w-7xl mx-auto">
-            <AnimatedSection direction="left" className="order-2 lg:order-1 relative mx-auto w-full max-w-[500px]">
+      <section className="py-16 sm:py-24">
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid items-center gap-12 lg:grid-cols-2">
+            <AnimatedSection
+              direction="left"
+              className="order-2 lg:order-1 relative mx-auto w-full max-w-[560px]"
+            >
               <div className="overflow-hidden rounded-xl border bg-white shadow-lg">
                 <img
                   src="/placeholder.svg?height=400&width=600"
@@ -146,11 +184,12 @@ export default function FeaturesPage() {
               <h2 className="text-2xl font-bold tracking-tighter sm:text-3xl md:text-4xl">
                 Real-time Order Management
               </h2>
-              <p className="mt-3 text-gray-500 sm:mt-4">
-                Streamline your kitchen operations with our real-time order management system. Orders flow directly from
-                customers to the kitchen display, reducing errors and improving efficiency.
+              <p className="mt-4 text-gray-500 sm:text-lg">
+                Streamline your kitchen operations with our real-time order
+                management system. Orders flow directly from customers to the
+                kitchen display, reducing errors and improving efficiency.
               </p>
-              <ul className="mt-4 space-y-2 sm:mt-6 sm:space-y-3">
+              <ul className="mt-8 space-y-4">
                 {[
                   "Instant order transmission",
                   "Auto-updating kitchen display",
@@ -164,11 +203,11 @@ export default function FeaturesPage() {
                     whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: index * 0.1 }}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-3"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 text-green-500 sm:h-5 sm:w-5"
+                      className="h-5 w-5 flex-shrink-0 text-green-500"
                       viewBox="0 0 20 20"
                       fill="currentColor"
                     >
@@ -178,7 +217,7 @@ export default function FeaturesPage() {
                         clipRule="evenodd"
                       />
                     </svg>
-                    <span className="text-sm sm:text-base">{item}</span>
+                    <span className="text-gray-600">{item}</span>
                   </motion.li>
                 ))}
               </ul>
@@ -192,5 +231,5 @@ export default function FeaturesPage() {
         subtitle="Start your 14-day free trial today. No credit card required."
       />
     </PageWrapper>
-  )
+  );
 }
