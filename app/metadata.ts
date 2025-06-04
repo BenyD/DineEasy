@@ -1,6 +1,19 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://dineeasy.com";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
+  ],
+};
 
 const defaultMetadata: Metadata = {
+  metadataBase: new URL(BASE_URL),
   title: {
     default: "DineEasy - Modern Restaurant Management Made Simple",
     template: "%s | DineEasy",
@@ -51,7 +64,7 @@ const defaultMetadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://dineeasy.com",
+    url: BASE_URL,
     siteName: "DineEasy",
     title: "DineEasy - Modern Restaurant Management Made Simple",
     description:
@@ -74,11 +87,6 @@ const defaultMetadata: Metadata = {
     creator: "@dineeasy",
     site: "@dineeasy",
   },
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 5,
-  },
   verification: {
     google: "your-google-site-verification",
     other: {
@@ -88,9 +96,9 @@ const defaultMetadata: Metadata = {
     },
   },
   alternates: {
-    canonical: "https://dineeasy.com",
+    canonical: BASE_URL,
     languages: {
-      "en-US": "https://dineeasy.com",
+      "en-US": BASE_URL,
     },
   },
   category: "technology",
@@ -102,10 +110,6 @@ const defaultMetadata: Metadata = {
   formatDetection: {
     telephone: true,
   },
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
-  ],
 };
 
 export default defaultMetadata;
