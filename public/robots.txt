@@ -1,0 +1,17 @@
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://dineeasy.com/sitemap.xml
+
+# Disallow admin and private routes
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /admin/
+Disallow: /setup/
+Disallow: /connect-stripe/
+Disallow: /_next/
+
+# Crawl-delay for all bots
+Crawl-delay: 10 
