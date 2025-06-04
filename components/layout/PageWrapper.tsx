@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Navbar } from "./Navbar";
 import { Footer } from "./Footer";
 import { CookieConsent } from "../elements/CookieConsent";
+import { PageTransition } from "./PageTransition";
 
 interface PageWrapperProps {
   children: ReactNode;
@@ -17,7 +18,9 @@ export function PageWrapper({
   return (
     <div className={`min-h-screen flex flex-col ${className}`}>
       <Navbar />
-      <main className="flex-1">{children}</main>
+      <main className="flex-1">
+        <PageTransition>{children}</PageTransition>
+      </main>
       {showFooter && <Footer />}
       <CookieConsent />
     </div>
