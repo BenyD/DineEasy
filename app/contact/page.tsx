@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import { motion } from "framer-motion"
 import { useState } from "react"
 import { Mail, MapPin, Phone } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { PageWrapper } from "@/components/layout/PageWrapper"
+import { HeroSection } from "@/components/elements/HeroSection"
+import { AnimatedSection } from "@/components/elements/AnimatedSection"
 
 export default function ContactPage() {
   const [formState, setFormState] = useState({
@@ -40,59 +42,84 @@ export default function ContactPage() {
 
   return (
     <PageWrapper>
-      <main className="flex-1">
-        <section className="relative overflow-hidden py-20 md:py-32">
-          <div className="absolute inset-0 -z-10 bg-[radial-gradient(#e0f2e9_1px,transparent_1px)] bg-size-[16px_16px] mask-[radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
-          <div className="absolute -top-40 right-0 -z-10 h-[500px] w-[500px] rounded-full bg-green-200/20 blur-3xl" />
-          <div className="container relative">
-            <div className="mx-auto max-w-[800px] text-center">
-              <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl">Get in Touch</h1>
-              <p className="mt-6 text-xl text-gray-500">Have questions about DineEasy? We're here to help.</p>
-            </div>
-          </div>
-        </section>
+      <HeroSection
+        layout="centered"
+        title="Get in Touch"
+        subtitle="Have questions about DineEasy? We're here to help you transform your restaurant operations."
+      />
 
-        <section className="container pb-20">
+      <AnimatedSection className="py-16 sm:py-24">
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-12 lg:grid-cols-2">
-            <div className="space-y-6">
-              <div className="rounded-xl border bg-white p-6 shadow-xs">
-                <h2 className="text-2xl font-bold">Contact Information</h2>
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="space-y-8"
+            >
+              <div className="rounded-xl border bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
+                <h2 className="text-2xl font-bold tracking-tight">Contact Information</h2>
                 <p className="mt-2 text-gray-500">Reach out to our team for any questions or support needs.</p>
-                <div className="mt-6 space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-green-600">
-                      <Mail className="h-5 w-5" />
+                <div className="mt-8 space-y-6">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.3, delay: 0.1 }}
+                    className="flex items-start gap-4"
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600">
+                      <Mail className="h-6 w-6" />
                     </div>
                     <div>
-                      <h3 className="font-medium">Email</h3>
-                      <p className="text-sm text-gray-500">info@dineeasy.com</p>
-                      <p className="text-sm text-gray-500">support@dineeasy.com</p>
+                      <h3 className="font-medium text-lg">Email</h3>
+                      <p className="text-gray-500">info@dineeasy.com</p>
+                      <p className="text-gray-500">support@dineeasy.com</p>
                     </div>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-green-600">
-                      <Phone className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium">Phone</h3>
-                      <p className="text-sm text-gray-500">+1 (555) 123-4567</p>
-                      <p className="text-sm text-gray-500">Mon-Fri, 9am-5pm EST</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-green-600">
-                      <MapPin className="h-5 w-5" />
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.3, delay: 0.2 }}
+                    className="flex items-start gap-4"
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600">
+                      <Phone className="h-6 w-6" />
                     </div>
                     <div>
-                      <h3 className="font-medium">Office</h3>
-                      <p className="text-sm text-gray-500">123 Restaurant Row</p>
-                      <p className="text-sm text-gray-500">San Francisco, CA 94103</p>
+                      <h3 className="font-medium text-lg">Phone</h3>
+                      <p className="text-gray-500">+1 (555) 123-4567</p>
+                      <p className="text-gray-500">Mon-Fri, 9am-5pm EST</p>
                     </div>
-                  </div>
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.3, delay: 0.3 }}
+                    className="flex items-start gap-4"
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600">
+                      <MapPin className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-lg">Office</h3>
+                      <p className="text-gray-500">123 Restaurant Row</p>
+                      <p className="text-gray-500">San Francisco, CA 94103</p>
+                    </div>
+                  </motion.div>
                 </div>
               </div>
-              <div className="rounded-xl border bg-white p-6 shadow-xs">
-                <h3 className="mb-4 text-lg font-medium">Our Location</h3>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+                className="rounded-xl border bg-white p-8 shadow-sm hover:shadow-md transition-shadow"
+              >
+                <h3 className="text-xl font-medium mb-4">Our Location</h3>
                 <div className="aspect-video overflow-hidden rounded-lg">
                   <img
                     src="/placeholder.svg?height=300&width=600"
@@ -100,17 +127,23 @@ export default function ContactPage() {
                     className="h-full w-full object-cover"
                   />
                 </div>
-              </div>
-            </div>
-            <div>
-              <form onSubmit={handleSubmit} className="rounded-xl border bg-white p-6 shadow-xs">
-                <h2 className="text-2xl font-bold">Send us a message</h2>
+              </motion.div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+            >
+              <form onSubmit={handleSubmit} className="rounded-xl border bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
+                <h2 className="text-2xl font-bold tracking-tight">Send us a message</h2>
                 <p className="mt-2 text-gray-500">
                   Fill out the form below and we'll get back to you as soon as possible.
                 </p>
-                <div className="mt-6 space-y-4">
+                <div className="mt-8 space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
+                    <Label htmlFor="name" className="text-base">Name</Label>
                     <Input
                       id="name"
                       name="name"
@@ -122,7 +155,7 @@ export default function ContactPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email" className="text-base">Email</Label>
                     <Input
                       id="email"
                       name="email"
@@ -135,7 +168,7 @@ export default function ContactPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="subject">Subject</Label>
+                    <Label htmlFor="subject" className="text-base">Subject</Label>
                     <Input
                       id="subject"
                       name="subject"
@@ -147,7 +180,7 @@ export default function ContactPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="message">Message</Label>
+                    <Label htmlFor="message" className="text-base">Message</Label>
                     <Textarea
                       id="message"
                       name="message"
@@ -160,16 +193,17 @@ export default function ContactPage() {
                   </div>
                   <Button
                     type="submit"
-                    className="w-full bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                    size="lg"
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
                   >
                     Send Message
                   </Button>
                 </div>
               </form>
-            </div>
+            </motion.div>
           </div>
-        </section>
-      </main>
+        </div>
+      </AnimatedSection>
     </PageWrapper>
   )
 }
