@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import type * as React from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import type * as React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   BarChart3,
   ChefHat,
@@ -20,8 +20,8 @@ import {
   Printer,
   Building,
   Receipt,
-} from "lucide-react"
-import { TooltipProvider } from "@/components/ui/tooltip"
+} from "lucide-react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 import {
   Sidebar,
@@ -36,17 +36,26 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from "@/components/ui/sidebar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+} from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 // Mock data for the restaurant
 const restaurant = {
   name: "Bella Vista",
   plan: "Pro",
   logo: "/placeholder.svg?height=32&width=32&text=BV",
-}
+};
 
 // Navigation data structure - simplified without sub-items
 const navigationData = {
@@ -126,30 +135,41 @@ const navigationData = {
       description: "Payment processing settings",
     },
   ],
-}
+};
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const pathname = usePathname()
+  const pathname = usePathname();
 
   // Check if a path is active (exact match or starts with for parent routes)
   const isActive = (path: string) => {
     if (path === "/dashboard" && pathname === "/dashboard") {
-      return true
+      return true;
     }
-    return path !== "/dashboard" && pathname.startsWith(path)
-  }
+    return path !== "/dashboard" && pathname.startsWith(path);
+  };
 
   // Check if any item in a group is active
   const hasActiveItemInGroup = (groupItems: any[]) => {
-    return groupItems.some((item) => isActive(item.url))
-  }
+    return groupItems.some((item) => isActive(item.url));
+  };
 
   // Render simple menu item
   const renderMenuItem = (item: any) => {
     return (
       <SidebarMenuItem key={item.name}>
-        <SidebarMenuButton asChild tooltip={item.description} isActive={isActive(item.url)}>
-          <Link href={item.url}>
+        <SidebarMenuButton
+          asChild
+          tooltip={item.description}
+          isActive={isActive(item.url)}
+        >
+          <Link
+            href={item.url}
+            className={`transition-all duration-200 hover:bg-slate-200/40 rounded-md relative ${
+              isActive(item.url)
+                ? "bg-primary/10 text-primary font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4/6 before:w-0.5 before:bg-primary before:rounded-full"
+                : ""
+            }`}
+          >
             {item.icon && <item.icon />}
             <span>{item.name}</span>
             {item.badge && (
@@ -158,8 +178,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   item.badge === "Pro" || item.badge === "Elite"
                     ? "bg-purple-100 text-purple-700"
                     : item.badge.endsWith("d")
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-green-100 text-green-700"
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-green-100 text-green-700"
                 }
               >
                 {item.badge}
@@ -168,16 +188,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
-    )
-  }
+    );
+  };
 
   // Render collapsible sidebar group
-  const renderCollapsibleGroup = (title: string, items: any[], defaultOpen = true) => {
+  const renderCollapsibleGroup = (
+    title: string,
+    items: any[],
+    defaultOpen = true
+  ) => {
     return (
-      <Collapsible defaultOpen={defaultOpen || hasActiveItemInGroup(items)} className="group/collapsible">
+      <Collapsible
+        defaultOpen={defaultOpen || hasActiveItemInGroup(items)}
+        className="group/collapsible"
+      >
         <SidebarGroup>
           <SidebarGroupLabel asChild>
-            <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md px-2 py-1.5 transition-colors">
+            <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-sidebar-foreground/70 hover:bg-slate-200/40 hover:text-sidebar-accent-foreground rounded-md px-2 py-1.5 transition-all duration-200 hover:translate-x-0.5">
               {title}
               <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
             </CollapsibleTrigger>
@@ -189,8 +216,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </CollapsibleContent>
         </SidebarGroup>
       </Collapsible>
-    )
-  }
+    );
+  };
 
   return (
     <TooltipProvider>
@@ -205,14 +232,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage src={restaurant.logo || "/placeholder.svg"} alt={restaurant.name} />
+                      <AvatarImage
+                        src={restaurant.logo || "/placeholder.svg"}
+                        alt={restaurant.name}
+                      />
                       <AvatarFallback className="rounded-lg bg-green-100 text-green-700">
                         {restaurant.name.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{restaurant.name}</span>
-                      <span className="truncate text-xs text-muted-foreground">{restaurant.plan} Plan</span>
+                      <span className="truncate font-semibold">
+                        {restaurant.name}
+                      </span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {restaurant.plan} Plan
+                      </span>
                     </div>
                     <ChevronDown className="ml-auto size-4" />
                   </SidebarMenuButton>
@@ -252,7 +286,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           {renderCollapsibleGroup("Main", navigationData.main, true)}
 
           {/* Collapsible Management Section */}
-          {renderCollapsibleGroup("Management", navigationData.management, true)}
+          {renderCollapsibleGroup(
+            "Management",
+            navigationData.management,
+            true
+          )}
 
           {/* Collapsible Settings Section */}
           {renderCollapsibleGroup("Settings", navigationData.settings, true)}
@@ -284,12 +322,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage src="/placeholder.svg?height=32&width=32&text=JD" alt="John Doe" />
+                      <AvatarImage
+                        src="/placeholder.svg?height=32&width=32&text=JD"
+                        alt="John Doe"
+                      />
                       <AvatarFallback className="rounded-lg">JD</AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">John Doe</span>
-                      <span className="truncate text-xs text-muted-foreground">Owner</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        Owner
+                      </span>
                     </div>
                     <MoreHorizontal className="ml-auto size-4" />
                   </SidebarMenuButton>
@@ -331,5 +374,5 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarRail />
       </Sidebar>
     </TooltipProvider>
-  )
+  );
 }
