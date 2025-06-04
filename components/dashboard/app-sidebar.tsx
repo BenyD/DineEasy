@@ -261,26 +261,29 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center"
                   >
-                    <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage
-                        src={restaurant.logo || "/placeholder.svg"}
-                        alt={restaurant.name}
-                      />
-                      <AvatarFallback className="rounded-lg bg-green-100 text-green-700">
-                        {restaurant.name.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">
-                        {restaurant.name}
-                      </span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {restaurant.plan} Plan
-                      </span>
+                    <div className="flex items-center gap-2 group-data-[collapsible=icon]:w-8">
+                      <Avatar className="h-8 w-8 rounded-lg shrink-0">
+                        <AvatarImage
+                          src={restaurant.logo || "/placeholder.svg"}
+                          alt={restaurant.name}
+                          className="object-cover"
+                        />
+                        <AvatarFallback className="rounded-lg bg-green-100 text-green-700">
+                          {restaurant.name.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                        <span className="truncate font-semibold">
+                          {restaurant.name}
+                        </span>
+                        <span className="truncate text-xs text-muted-foreground">
+                          {restaurant.plan} Plan
+                        </span>
+                      </div>
+                      <ChevronDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
                     </div>
-                    <ChevronDown className="ml-auto size-4" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -359,22 +362,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center"
                   >
-                    <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage
-                        src="/placeholder.svg?height=32&width=32&text=JD"
-                        alt="John Doe"
-                      />
-                      <AvatarFallback className="rounded-lg">JD</AvatarFallback>
-                    </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">John Doe</span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        Owner
-                      </span>
+                    <div className="flex items-center gap-2 group-data-[collapsible=icon]:w-8">
+                      <Avatar className="h-8 w-8 rounded-lg shrink-0">
+                        <AvatarImage
+                          src="/placeholder.svg?height=32&width=32&text=JD"
+                          alt="John Doe"
+                          className="object-cover"
+                        />
+                        <AvatarFallback className="rounded-lg">
+                          JD
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                        <span className="truncate font-semibold">John Doe</span>
+                        <span className="truncate text-xs text-muted-foreground">
+                          Owner
+                        </span>
+                      </div>
+                      <MoreHorizontal className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
                     </div>
-                    <MoreHorizontal className="ml-auto size-4" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
