@@ -1,14 +1,43 @@
-"use client"
+"use client";
 
-import type React from "react"
-
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { Calendar, TrendingUp, DollarSign, ShoppingCart, Users, Star } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
+import type React from "react";
+import { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Calendar,
+  TrendingUp,
+  DollarSign,
+  ShoppingCart,
+  Users,
+  Star,
+} from "lucide-react";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ComposedChart,
+  Area,
+} from "recharts";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 // Mock analytics data
 const mockAnalytics = {
@@ -57,57 +86,73 @@ const mockAnalytics = {
     { hour: "13:00", orders: 18, revenue: 486.5 },
     { hour: "14:00", orders: 8, revenue: 215.0 },
     { hour: "15:00", orders: 2, revenue: 45.0 },
+    { hour: "16:00", orders: 6, revenue: 156.0 },
+    { hour: "17:00", orders: 15, revenue: 405.0 },
+    { hour: "18:00", orders: 25, revenue: 675.0 },
+    { hour: "19:00", orders: 30, revenue: 810.0 },
+    { hour: "20:00", orders: 28, revenue: 756.0 },
+    { hour: "21:00", orders: 20, revenue: 540.0 },
+    { hour: "22:00", orders: 10, revenue: 270.0 },
   ],
-}
+  weeklyData: [
+    { date: "Mon", revenue: 1250, orders: 45, customers: 120 },
+    { date: "Tue", revenue: 1420, orders: 52, customers: 145 },
+    { date: "Wed", revenue: 1680, orders: 61, customers: 168 },
+    { date: "Thu", revenue: 1580, orders: 58, customers: 162 },
+    { date: "Fri", revenue: 1890, orders: 70, customers: 189 },
+    { date: "Sat", revenue: 2100, orders: 78, customers: 210 },
+    { date: "Sun", revenue: 1940, orders: 72, customers: 195 },
+  ],
+};
+
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
+
+const StatCard = ({
+  title,
+  value,
+  previousValue,
+  icon,
+  formatter = (val: number) => val.toString(),
+}: {
+  title: string;
+  value: number;
+  previousValue: number;
+  icon: React.ReactNode;
+  formatter?: (val: number) => string;
+}) => {
+  const percentageChange = ((value - previousValue) / previousValue) * 100;
+  const isPositive = percentageChange > 0;
+
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between space-y-0">
+          <h3 className="text-sm font-medium tracking-tight text-gray-500">
+            {title}
+          </h3>
+          {icon}
+        </div>
+        <div className="mt-2">
+          <div className="text-2xl font-bold">{formatter(value)}</div>
+          <p className="text-xs text-gray-500">
+            vs. yesterday
+            <span
+              className={`ml-2 font-medium ${
+                isPositive ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {isPositive ? "+" : ""}
+              {percentageChange.toFixed(1)}%
+            </span>
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 export default function AnalyticsPage() {
-  const [selectedPeriod, setSelectedPeriod] = useState("today")
-
-  const getPercentageChange = (current: number, previous: number) => {
-    const change = ((current - previous) / previous) * 100
-    return {
-      value: Math.abs(change).toFixed(1),
-      isPositive: change >= 0,
-    }
-  }
-
-  const StatCard = ({
-    title,
-    value,
-    previousValue,
-    icon,
-    formatter = (val: number) => val.toString(),
-  }: {
-    title: string
-    value: number
-    previousValue: number
-    icon: React.ReactNode
-    formatter?: (val: number) => string
-  }) => {
-    const change = getPercentageChange(value, previousValue)
-
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">{title}</p>
-              <p className="text-2xl font-bold text-gray-900">{formatter(value)}</p>
-              <div className="flex items-center mt-1">
-                <TrendingUp className={`w-4 h-4 mr-1 ${change.isPositive ? "text-green-500" : "text-red-500"}`} />
-                <span className={`text-sm ${change.isPositive ? "text-green-600" : "text-red-600"}`}>
-                  {change.isPositive ? "+" : "-"}
-                  {change.value}%
-                </span>
-                <span className="text-sm text-gray-500 ml-1">vs yesterday</span>
-              </div>
-            </div>
-            <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center">{icon}</div>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
+  const [selectedPeriod, setSelectedPeriod] = useState("today");
 
   return (
     <div className="p-6 space-y-6">
@@ -115,7 +160,9 @@ export default function AnalyticsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-gray-500">Track your restaurant's performance and insights</p>
+          <p className="text-gray-500">
+            Track your restaurant's performance and insights
+          </p>
         </div>
         <div className="flex gap-2">
           <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
@@ -136,15 +183,19 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0 }}
+          transition={{ duration: 0.3 }}
         >
           <StatCard
             title="Revenue"
-            value={mockAnalytics.revenue[selectedPeriod as keyof typeof mockAnalytics.revenue]}
+            value={
+              mockAnalytics.revenue[
+                selectedPeriod as keyof typeof mockAnalytics.revenue
+              ]
+            }
             previousValue={mockAnalytics.revenue.yesterday}
             icon={<DollarSign className="w-6 h-6 text-green-600" />}
             formatter={(val) => `CHF ${val.toFixed(2)}`}
@@ -158,9 +209,13 @@ export default function AnalyticsPage() {
         >
           <StatCard
             title="Orders"
-            value={mockAnalytics.orders[selectedPeriod as keyof typeof mockAnalytics.orders]}
+            value={
+              mockAnalytics.orders[
+                selectedPeriod as keyof typeof mockAnalytics.orders
+              ]
+            }
             previousValue={mockAnalytics.orders.yesterday}
-            icon={<ShoppingCart className="w-6 h-6 text-green-600" />}
+            icon={<ShoppingCart className="w-6 h-6 text-blue-600" />}
           />
         </motion.div>
 
@@ -171,9 +226,13 @@ export default function AnalyticsPage() {
         >
           <StatCard
             title="Customers"
-            value={mockAnalytics.customers[selectedPeriod as keyof typeof mockAnalytics.customers]}
+            value={
+              mockAnalytics.customers[
+                selectedPeriod as keyof typeof mockAnalytics.customers
+              ]
+            }
             previousValue={mockAnalytics.customers.yesterday}
-            icon={<Users className="w-6 h-6 text-green-600" />}
+            icon={<Users className="w-6 h-6 text-purple-600" />}
           />
         </motion.div>
 
@@ -184,16 +243,20 @@ export default function AnalyticsPage() {
         >
           <StatCard
             title="Avg Order Value"
-            value={mockAnalytics.avgOrderValue[selectedPeriod as keyof typeof mockAnalytics.avgOrderValue]}
+            value={
+              mockAnalytics.avgOrderValue[
+                selectedPeriod as keyof typeof mockAnalytics.avgOrderValue
+              ]
+            }
             previousValue={mockAnalytics.avgOrderValue.yesterday}
-            icon={<TrendingUp className="w-6 h-6 text-green-600" />}
+            icon={<TrendingUp className="w-6 h-6 text-amber-600" />}
             formatter={(val) => `CHF ${val.toFixed(2)}`}
           />
         </motion.div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Menu Items */}
+        {/* Weekly Revenue Trend */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -201,42 +264,33 @@ export default function AnalyticsPage() {
         >
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Star className="w-5 h-5 text-yellow-500" />
-                Top Menu Items
-              </CardTitle>
+              <CardTitle>Weekly Revenue Trend</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {mockAnalytics.topItems.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-sm font-semibold text-green-700">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{item.name}</p>
-                        <p className="text-sm text-gray-500">{item.orders} orders</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-900">CHF {item.revenue.toFixed(2)}</p>
-                      <Badge variant="outline" className="text-xs">
-                        {(
-                          (item.revenue / mockAnalytics.revenue[selectedPeriod as keyof typeof mockAnalytics.revenue]) *
-                          100
-                        ).toFixed(1)}
-                        %
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={mockAnalytics.weeklyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      dot={{ fill: "#10b981" }}
+                      name="Revenue (CHF)"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
         </motion.div>
 
-        {/* Hourly Performance */}
+        {/* Hourly Orders Distribution */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -244,56 +298,116 @@ export default function AnalyticsPage() {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Today's Hourly Performance</CardTitle>
+              <CardTitle>Hourly Orders Distribution</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {mockAnalytics.hourlyData.map((hour, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-gray-600 w-12">{hour.hour}</span>
-                      <div className="flex-1">
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-linear-to-r from-green-500 to-emerald-600 h-2 rounded-full"
-                            style={{ width: `${(hour.orders / 20) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right ml-4">
-                      <p className="text-sm font-semibold text-gray-900">{hour.orders} orders</p>
-                      <p className="text-xs text-gray-500">CHF {hour.revenue.toFixed(2)}</p>
-                    </div>
-                  </div>
-                ))}
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={mockAnalytics.hourlyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="hour" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="orders" fill="#6366f1" name="Orders" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Top Menu Items */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.6 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle>Revenue by Menu Items</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={mockAnalytics.topItems}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) =>
+                        `${name} (${(percent * 100).toFixed(0)}%)`
+                      }
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="revenue"
+                    >
+                      {mockAnalytics.topItems.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Weekly Performance */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.7 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle>Weekly Performance Overview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={mockAnalytics.weeklyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Legend />
+                    <Bar
+                      yAxisId="left"
+                      dataKey="orders"
+                      fill="#6366f1"
+                      name="Orders"
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="customers"
+                      stroke="#f59e0b"
+                      strokeWidth={2}
+                      name="Customers"
+                    />
+                    <Area
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="revenue"
+                      fill="#10b981"
+                      stroke="#059669"
+                      name="Revenue (CHF)"
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
         </motion.div>
       </div>
-
-      {/* Chart Placeholder */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.6 }}
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle>Revenue Trend</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64 bg-linear-to-br from-green-50 to-emerald-50 rounded-lg flex items-center justify-center border-2 border-dashed border-green-200">
-              <div className="text-center">
-                <TrendingUp className="w-12 h-12 text-green-400 mx-auto mb-2" />
-                <p className="text-gray-500">Chart visualization coming soon</p>
-                <p className="text-sm text-gray-400">Revenue trends and analytics charts</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
     </div>
-  )
+  );
 }
