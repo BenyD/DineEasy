@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata } from "next";
 import {
   Search,
   MessageCircle,
@@ -19,23 +19,41 @@ import {
   ExternalLink,
   Star,
   Send,
-} from "lucide-react"
+} from "lucide-react";
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
-import { BreadcrumbHeader } from "@/components/dashboard/breadcrumb-header"
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { BreadcrumbHeader } from "@/components/dashboard/breadcrumb-header";
 
 export const metadata: Metadata = {
   title: "Help & Support | DineEasy Dashboard",
-  description: "Get help and support for your DineEasy restaurant management platform",
-}
+  description:
+    "Get help and support for your DineEasy restaurant management platform",
+};
 
 // Mock data for support content
 const supportStats = [
@@ -63,7 +81,7 @@ const supportStats = [
     icon: CheckCircle,
     description: "Last 30 days",
   },
-]
+];
 
 const contactMethods = [
   {
@@ -97,7 +115,7 @@ const contactMethods = [
     availability: "By appointment (Pro & Elite)",
     action: "Schedule Call",
   },
-]
+];
 
 const quickLinks = [
   {
@@ -142,7 +160,7 @@ const quickLinks = [
     category: "Kitchen",
     readTime: "7 min",
   },
-]
+];
 
 const faqData = [
   {
@@ -185,7 +203,7 @@ const faqData = [
     answer:
       "Go to Dashboard > Orders > History, find the order, and click 'Process Refund'. For Stripe payments, refunds are processed automatically. For cash orders, mark them as refunded manually.",
   },
-]
+];
 
 const videoTutorials = [
   {
@@ -212,7 +230,7 @@ const videoTutorials = [
     views: "1.2K",
     thumbnail: "/placeholder.svg?height=120&width=200&text=Kitchen+Tutorial",
   },
-]
+];
 
 export default function HelpSupportPage() {
   return (
@@ -227,10 +245,12 @@ export default function HelpSupportPage() {
       {/* Hero Section */}
       <div className="relative overflow-hidden rounded-lg bg-linear-to-r from-blue-600 to-purple-600 p-8 text-white">
         <div className="relative z-10">
-          <h1 className="text-3xl font-bold mb-2">How can we help you today?</h1>
+          <h1 className="text-3xl font-bold mb-2">
+            How can we help you today?
+          </h1>
           <p className="text-blue-100 mb-6 max-w-2xl">
-            Get instant answers, browse our knowledge base, or contact our support team. We're here to help you succeed
-            with DineEasy.
+            Get instant answers, browse our knowledge base, or contact our
+            support team. We're here to help you succeed with DineEasy.
           </p>
 
           {/* Search Bar */}
@@ -262,7 +282,9 @@ export default function HelpSupportPage() {
                   <p className="text-sm text-muted-foreground">{stat.label}</p>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">{stat.description}</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                {stat.description}
+              </p>
             </CardContent>
           </Card>
         ))}
@@ -282,21 +304,36 @@ export default function HelpSupportPage() {
         <TabsContent value="contact" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {contactMethods.map((method, index) => (
-              <Card key={index} className={method.primary ? "ring-2 ring-green-500" : ""}>
+              <Card
+                key={index}
+                className={method.primary ? "ring-2 ring-green-500" : ""}
+              >
                 <CardHeader>
                   <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${method.primary ? "bg-green-100" : "bg-gray-100"}`}>
-                      <method.icon className={`w-5 h-5 ${method.primary ? "text-green-600" : "text-gray-600"}`} />
+                    <div
+                      className={`p-2 rounded-lg ${
+                        method.primary ? "bg-green-100" : "bg-gray-100"
+                      }`}
+                    >
+                      <method.icon
+                        className={`w-5 h-5 ${
+                          method.primary ? "text-green-600" : "text-gray-600"
+                        }`}
+                      />
                     </div>
                     <div>
                       <CardTitle className="text-lg">{method.title}</CardTitle>
-                      {method.primary && <Badge className="ml-2">Recommended</Badge>}
+                      {method.primary && (
+                        <Badge className="ml-2">Recommended</Badge>
+                      )}
                     </div>
                   </div>
                   <CardDescription>{method.description}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground mb-4">{method.availability}</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {method.availability}
+                  </p>
                   {method.email && (
                     <p className="text-sm mb-4">
                       <Mail className="w-4 h-4 inline mr-2" />
@@ -311,7 +348,7 @@ export default function HelpSupportPage() {
                   )}
                   <Button
                     className={method.primary ? "w-full" : "w-full"}
-                    variant={method.primary ? "default" : "outline-solid"}
+                    variant={method.primary ? "default" : "outline"}
                   >
                     {method.action}
                     <ArrowRight className="w-4 h-4 ml-2" />
@@ -327,14 +364,20 @@ export default function HelpSupportPage() {
           <Card>
             <CardHeader>
               <CardTitle>Frequently Asked Questions</CardTitle>
-              <CardDescription>Find quick answers to the most common questions about DineEasy</CardDescription>
+              <CardDescription>
+                Find quick answers to the most common questions about DineEasy
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <Accordion type="single" collapsible className="w-full">
                 {faqData.map((faq, index) => (
                   <AccordionItem key={index} value={`item-${index}`}>
-                    <AccordionTrigger className="text-left">{faq.question}</AccordionTrigger>
-                    <AccordionContent className="text-muted-foreground">{faq.answer}</AccordionContent>
+                    <AccordionTrigger className="text-left">
+                      {faq.question}
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      {faq.answer}
+                    </AccordionContent>
                   </AccordionItem>
                 ))}
               </Accordion>
@@ -346,7 +389,10 @@ export default function HelpSupportPage() {
         <TabsContent value="guides" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {quickLinks.map((link, index) => (
-              <Card key={index} className="hover:shadow-md transition-shadow cursor-pointer">
+              <Card
+                key={index}
+                className="hover:shadow-md transition-shadow cursor-pointer"
+              >
                 <CardHeader>
                   <div className="flex items-center space-x-3">
                     <div className="p-2 bg-blue-100 rounded-lg">
@@ -358,13 +404,17 @@ export default function HelpSupportPage() {
                         <Badge variant="secondary" className="text-xs">
                           {link.category}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">{link.readTime}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {link.readTime}
+                        </span>
                       </div>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <CardDescription className="mb-4">{link.description}</CardDescription>
+                  <CardDescription className="mb-4">
+                    {link.description}
+                  </CardDescription>
                   <Button variant="outline" size="sm" className="w-full">
                     Read Guide
                     <ExternalLink className="w-3 h-3 ml-2" />
@@ -379,7 +429,10 @@ export default function HelpSupportPage() {
         <TabsContent value="videos" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {videoTutorials.map((video, index) => (
-              <Card key={index} className="hover:shadow-md transition-shadow cursor-pointer">
+              <Card
+                key={index}
+                className="hover:shadow-md transition-shadow cursor-pointer"
+              >
                 <div className="relative">
                   <img
                     src={video.thumbnail || "/placeholder.svg"}
@@ -391,11 +444,15 @@ export default function HelpSupportPage() {
                       <Video className="w-6 h-6 text-gray-700" />
                     </div>
                   </div>
-                  <Badge className="absolute top-2 right-2 bg-black/70 text-white">{video.duration}</Badge>
+                  <Badge className="absolute top-2 right-2 bg-black/70 text-white">
+                    {video.duration}
+                  </Badge>
                 </div>
                 <CardContent className="p-4">
                   <h3 className="font-semibold mb-2">{video.title}</h3>
-                  <p className="text-sm text-muted-foreground">{video.views} views</p>
+                  <p className="text-sm text-muted-foreground">
+                    {video.views} views
+                  </p>
                 </CardContent>
               </Card>
             ))}
@@ -408,14 +465,18 @@ export default function HelpSupportPage() {
             <CardHeader>
               <CardTitle>Submit a Support Ticket</CardTitle>
               <CardDescription>
-                Can't find what you're looking for? Send us a detailed message and we'll get back to you soon.
+                Can't find what you're looking for? Send us a detailed message
+                and we'll get back to you soon.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="subject">Subject</Label>
-                  <Input id="subject" placeholder="Brief description of your issue" />
+                  <Input
+                    id="subject"
+                    placeholder="Brief description of your issue"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="priority">Priority</Label>
@@ -424,10 +485,18 @@ export default function HelpSupportPage() {
                       <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Low - General question</SelectItem>
-                      <SelectItem value="medium">Medium - Feature request</SelectItem>
-                      <SelectItem value="high">High - Issue affecting operations</SelectItem>
-                      <SelectItem value="urgent">Urgent - System down</SelectItem>
+                      <SelectItem value="low">
+                        Low - General question
+                      </SelectItem>
+                      <SelectItem value="medium">
+                        Medium - Feature request
+                      </SelectItem>
+                      <SelectItem value="high">
+                        High - Issue affecting operations
+                      </SelectItem>
+                      <SelectItem value="urgent">
+                        Urgent - System down
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -461,7 +530,8 @@ export default function HelpSupportPage() {
               <div className="flex items-center space-x-2">
                 <AlertCircle className="w-4 h-4 text-amber-500" />
                 <p className="text-sm text-muted-foreground">
-                  For urgent issues, please use live chat or call our support line directly.
+                  For urgent issues, please use live chat or call our support
+                  line directly.
                 </p>
               </div>
 
@@ -478,28 +548,45 @@ export default function HelpSupportPage() {
       <Card>
         <CardHeader>
           <CardTitle>Additional Resources</CardTitle>
-          <CardDescription>More ways to get help and stay updated</CardDescription>
+          <CardDescription>
+            More ways to get help and stay updated
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button variant="outline" className="h-auto p-4 flex flex-col items-center space-y-2">
+            <Button
+              variant="outline"
+              className="h-auto p-4 flex flex-col items-center space-y-2"
+            >
               <Globe className="w-6 h-6" />
               <span className="font-medium">System Status</span>
-              <span className="text-xs text-muted-foreground">Check service health</span>
+              <span className="text-xs text-muted-foreground">
+                Check service health
+              </span>
             </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col items-center space-y-2">
+            <Button
+              variant="outline"
+              className="h-auto p-4 flex flex-col items-center space-y-2"
+            >
               <Users className="w-6 h-6" />
               <span className="font-medium">Community Forum</span>
-              <span className="text-xs text-muted-foreground">Connect with other users</span>
+              <span className="text-xs text-muted-foreground">
+                Connect with other users
+              </span>
             </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col items-center space-y-2">
+            <Button
+              variant="outline"
+              className="h-auto p-4 flex flex-col items-center space-y-2"
+            >
               <BookOpen className="w-6 h-6" />
               <span className="font-medium">API Documentation</span>
-              <span className="text-xs text-muted-foreground">For developers</span>
+              <span className="text-xs text-muted-foreground">
+                For developers
+              </span>
             </Button>
           </div>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

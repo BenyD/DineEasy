@@ -1,55 +1,93 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { CreditCard, ExternalLink, Check, AlertCircle, RefreshCw, Smartphone, Banknote } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import { Separator } from "@/components/ui/separator"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  CreditCard,
+  ExternalLink,
+  Check,
+  AlertCircle,
+  RefreshCw,
+  Smartphone,
+  Banknote,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function PaymentsPage() {
-  const [stripeConnected, setStripeConnected] = useState(true)
-  const [isConnecting, setIsConnecting] = useState(false)
+  const [stripeConnected, setStripeConnected] = useState(true);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState({
     creditCard: true,
     twint: true,
     cash: true,
-  })
-  const [payoutSchedule, setPayoutSchedule] = useState("daily")
+  });
+  const [payoutSchedule, setPayoutSchedule] = useState("daily");
 
   const handleConnectStripe = async () => {
-    setIsConnecting(true)
+    setIsConnecting(true);
     // Simulate API call to create Stripe Connect OAuth link
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setStripeConnected(true)
-    setIsConnecting(false)
-  }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    setStripeConnected(true);
+    setIsConnecting(false);
+  };
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Payment Settings</h1>
-        <p className="text-gray-500">Configure how you accept payments from customers</p>
+        <p className="text-gray-500">
+          Configure how you accept payments from customers
+        </p>
       </div>
 
       {/* Stripe Connection Status */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <Card className={stripeConnected ? "border-green-200" : "border-amber-200"}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <Card
+          className={stripeConnected ? "border-green-200" : "border-amber-200"}
+        >
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-full ${stripeConnected ? "bg-green-100" : "bg-amber-100"}`}>
-                  <CreditCard className={`h-6 w-6 ${stripeConnected ? "text-green-600" : "text-amber-600"}`} />
+                <div
+                  className={`p-3 rounded-full ${
+                    stripeConnected ? "bg-green-100" : "bg-amber-100"
+                  }`}
+                >
+                  <CreditCard
+                    className={`h-6 w-6 ${
+                      stripeConnected ? "text-green-600" : "text-amber-600"
+                    }`}
+                  />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold">
-                    {stripeConnected ? "Stripe Connected" : "Stripe Not Connected"}
+                    {stripeConnected
+                      ? "Stripe Connected"
+                      : "Stripe Not Connected"}
                   </h3>
                   <p className="text-sm text-gray-500">
                     {stripeConnected
@@ -61,7 +99,9 @@ export default function PaymentsPage() {
 
               <div>
                 {stripeConnected ? (
-                  <Badge className="bg-green-100 text-green-800">Connected</Badge>
+                  <Badge className="bg-green-100 text-green-800">
+                    Connected
+                  </Badge>
                 ) : (
                   <Button
                     onClick={handleConnectStripe}
@@ -91,12 +131,15 @@ export default function PaymentsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
-          <Alert variant="warning" className="bg-amber-50 border-amber-200">
+          <Alert variant="default" className="bg-amber-50 border-amber-200">
             <AlertCircle className="h-4 w-4 text-amber-600" />
-            <AlertTitle className="text-amber-800">Payment Processing Limited</AlertTitle>
+            <AlertTitle className="text-amber-800">
+              Payment Processing Limited
+            </AlertTitle>
             <AlertDescription className="text-amber-700">
-              Without Stripe connected, customers can only pay with cash. Connect your Stripe account to accept credit
-              cards and TWINT payments.
+              Without Stripe connected, customers can only pay with cash.
+              Connect your Stripe account to accept credit cards and TWINT
+              payments.
             </AlertDescription>
           </Alert>
         </motion.div>
@@ -111,7 +154,9 @@ export default function PaymentsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Payment Methods</CardTitle>
-            <CardDescription>Choose which payment methods to offer your customers</CardDescription>
+            <CardDescription>
+              Choose which payment methods to offer your customers
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Credit Card */}
@@ -124,13 +169,17 @@ export default function PaymentsPage() {
                   <Label htmlFor="creditCard" className="text-base font-medium">
                     Credit & Debit Cards
                   </Label>
-                  <p className="text-sm text-gray-500">Visa, Mastercard, American Express</p>
+                  <p className="text-sm text-gray-500">
+                    Visa, Mastercard, American Express
+                  </p>
                 </div>
               </div>
               <Switch
                 id="creditCard"
                 checked={paymentMethods.creditCard && stripeConnected}
-                onCheckedChange={(checked) => setPaymentMethods({ ...paymentMethods, creditCard: checked })}
+                onCheckedChange={(checked) =>
+                  setPaymentMethods({ ...paymentMethods, creditCard: checked })
+                }
                 disabled={!stripeConnected}
               />
             </div>
@@ -147,13 +196,17 @@ export default function PaymentsPage() {
                   <Label htmlFor="twint" className="text-base font-medium">
                     TWINT
                   </Label>
-                  <p className="text-sm text-gray-500">Swiss mobile payment solution</p>
+                  <p className="text-sm text-gray-500">
+                    Swiss mobile payment solution
+                  </p>
                 </div>
               </div>
               <Switch
                 id="twint"
                 checked={paymentMethods.twint && stripeConnected}
-                onCheckedChange={(checked) => setPaymentMethods({ ...paymentMethods, twint: checked })}
+                onCheckedChange={(checked) =>
+                  setPaymentMethods({ ...paymentMethods, twint: checked })
+                }
                 disabled={!stripeConnected}
               />
             </div>
@@ -170,13 +223,17 @@ export default function PaymentsPage() {
                   <Label htmlFor="cash" className="text-base font-medium">
                     Cash Payment
                   </Label>
-                  <p className="text-sm text-gray-500">Pay at the table or counter</p>
+                  <p className="text-sm text-gray-500">
+                    Pay at the table or counter
+                  </p>
                 </div>
               </div>
               <Switch
                 id="cash"
                 checked={paymentMethods.cash}
-                onCheckedChange={(checked) => setPaymentMethods({ ...paymentMethods, cash: checked })}
+                onCheckedChange={(checked) =>
+                  setPaymentMethods({ ...paymentMethods, cash: checked })
+                }
               />
             </div>
           </CardContent>
@@ -193,13 +250,18 @@ export default function PaymentsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Stripe Configuration</CardTitle>
-              <CardDescription>Manage your Stripe payment processing settings</CardDescription>
+              <CardDescription>
+                Manage your Stripe payment processing settings
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Payout Schedule */}
               <div className="space-y-2">
                 <Label htmlFor="payoutSchedule">Payout Schedule</Label>
-                <Select value={payoutSchedule} onValueChange={setPayoutSchedule}>
+                <Select
+                  value={payoutSchedule}
+                  onValueChange={setPayoutSchedule}
+                >
                   <SelectTrigger id="payoutSchedule">
                     <SelectValue placeholder="Select payout schedule" />
                   </SelectTrigger>
@@ -209,7 +271,9 @@ export default function PaymentsPage() {
                     <SelectItem value="monthly">Monthly</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-gray-500">How often you want to receive payments from Stripe</p>
+                <p className="text-sm text-gray-500">
+                  How often you want to receive payments from Stripe
+                </p>
               </div>
 
               <Separator />
@@ -220,7 +284,9 @@ export default function PaymentsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Account ID</Label>
-                    <div className="p-2 bg-gray-50 rounded border text-sm font-mono">acct_1234567890abcdef</div>
+                    <div className="p-2 bg-gray-50 rounded border text-sm font-mono">
+                      acct_1234567890abcdef
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Account Status</Label>
@@ -280,11 +346,12 @@ export default function PaymentsPage() {
           <AlertCircle className="h-4 w-4 text-blue-600" />
           <AlertTitle className="text-blue-800">Test Mode Active</AlertTitle>
           <AlertDescription className="text-blue-700">
-            Your Stripe account is currently in test mode. No real payments will be processed. Switch to live mode in
-            your Stripe dashboard when you're ready to accept real payments.
+            Your Stripe account is currently in test mode. No real payments will
+            be processed. Switch to live mode in your Stripe dashboard when
+            you're ready to accept real payments.
           </AlertDescription>
         </Alert>
       </motion.div>
     </div>
-  )
+  );
 }
