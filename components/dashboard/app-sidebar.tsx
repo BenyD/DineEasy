@@ -1,6 +1,6 @@
 "use client";
 
-import type * as React from "react";
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -21,9 +21,9 @@ import {
   Building,
   Receipt,
   Activity,
+  Menu,
 } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
 import {
   Sidebar,
   SidebarContent,
@@ -37,6 +37,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -144,8 +145,32 @@ const navigationData = {
   ],
 };
 
+// Add this new component before the AppSidebar component
+function MobileMenuButton() {
+  const { toggleSidebar } = useSidebar();
+
+  return (
+    <button
+      onClick={toggleSidebar}
+      className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition-all hover:bg-green-500 hover:scale-105 active:scale-95 md:hidden focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2"
+      aria-label="Toggle Menu"
+      style={{
+        boxShadow: "0 4px 14px 0 rgba(22, 163, 74, 0.3)",
+      }}
+    >
+      <Menu className="h-6 w-6" />
+    </button>
+  );
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const { isMobile } = useSidebar();
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Check if a path is active (exact match or starts with for parent routes)
   const isActive = (path: string) => {
@@ -204,19 +229,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     items: any[],
     defaultOpen = true
   ) => {
+    const isActive = hasActiveItemInGroup(items);
+    const shouldBeOpen = mounted ? !isMobile || defaultOpen || isActive : false;
+
     return (
-      <Collapsible
-        defaultOpen={defaultOpen || hasActiveItemInGroup(items)}
-        className="group/collapsible"
-      >
+      <Collapsible defaultOpen={shouldBeOpen} className="group/collapsible">
         <SidebarGroup>
           <SidebarGroupLabel asChild>
-            <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-sidebar-foreground/70 hover:bg-slate-200/40 hover:text-sidebar-accent-foreground rounded-md px-2 py-1.5 transition-all duration-200 hover:translate-x-0.5">
+            <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-sidebar-foreground/70 hover:bg-slate-200/40 hover:text-sidebar-accent-foreground rounded-md px-3 py-2 transition-all duration-200 active:scale-[0.98]">
               {title}
               <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
             </CollapsibleTrigger>
           </SidebarGroupLabel>
-          <CollapsibleContent>
+          <CollapsibleContent className="animate-accordion-down">
             <SidebarGroupContent>
               <SidebarMenu>{items.map(renderMenuItem)}</SidebarMenu>
             </SidebarGroupContent>
@@ -289,34 +314,42 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarHeader>
 
         <SidebarContent>
-          {/* Collapsible Main Navigation */}
-          {renderCollapsibleGroup("Main", navigationData.main, true)}
+          {mounted && (
+            <>
+              {/* Collapsible Main Navigation */}
+              {renderCollapsibleGroup("Main", navigationData.main, true)}
 
-          {/* Collapsible Management Section */}
-          {renderCollapsibleGroup(
-            "Management",
-            navigationData.management,
-            true
+              {/* Collapsible Management Section */}
+              {renderCollapsibleGroup(
+                "Management",
+                navigationData.management,
+                true
+              )}
+
+              {/* Collapsible Settings Section */}
+              {renderCollapsibleGroup(
+                "Settings",
+                navigationData.settings,
+                true
+              )}
+
+              {/* Help & Support - Non-collapsible */}
+              <SidebarGroup className="mt-auto">
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild tooltip="Get help and support">
+                        <Link href="/dashboard/help">
+                          <HelpCircle />
+                          <span>Help & Support</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </>
           )}
-
-          {/* Collapsible Settings Section */}
-          {renderCollapsibleGroup("Settings", navigationData.settings, true)}
-
-          {/* Help & Support - Non-collapsible */}
-          <SidebarGroup className="mt-auto">
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Get help and support">
-                    <Link href="/dashboard/help">
-                      <HelpCircle />
-                      <span>Help & Support</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
         </SidebarContent>
 
         <SidebarFooter>
@@ -380,6 +413,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
+      <MobileMenuButton />
     </TooltipProvider>
   );
 }
