@@ -24,6 +24,10 @@ import {
   Menu,
   Cog,
   Clock,
+  LayoutGrid,
+  Settings2,
+  Gauge,
+  LogOut,
 } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -45,6 +49,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -53,6 +58,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
 
 // Mock data for the restaurant
 const restaurant = {
@@ -76,6 +82,12 @@ const navigationData = {
       icon: ShoppingCart,
       description: "Manage customer orders",
       subItems: [
+        {
+          name: "All Orders",
+          url: "/dashboard/orders",
+          icon: ShoppingCart,
+          description: "View and manage all orders",
+        },
         {
           name: "Kitchen Display",
           url: "/dashboard/kitchen",
@@ -175,16 +187,45 @@ function MobileMenuButton() {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [mounted, setMounted] = React.useState(false);
   const { state, isMobile } = useSidebar();
+  const pathname = usePathname();
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
-  const isActive = (path: string) => {
-    return (
-      path === window.location.pathname ||
-      window.location.pathname.startsWith(path + "/")
-    );
+  const isActive = (href: string) => {
+    if (!href) return false;
+
+    // Special case for dashboard index
+    if (href === "/dashboard" && pathname === "/dashboard") {
+      return true;
+    }
+
+    // For other routes, ensure we don't match parent paths unless exact
+    if (href === "/dashboard" && pathname !== "/dashboard") {
+      return false;
+    }
+
+    // For nested routes, check if the current path starts with the href
+    // but make sure it's a complete segment match
+    if (href !== "/dashboard") {
+      const hrefSegments = href.split("/");
+      const pathSegments = pathname.split("/");
+
+      // Compare segments up to the href length
+      for (let i = 0; i < hrefSegments.length; i++) {
+        if (hrefSegments[i] !== pathSegments[i]) {
+          return false;
+        }
+      }
+
+      // If we're checking a parent route (like /dashboard/orders)
+      // don't mark it active for child routes (like /dashboard/orders/123)
+      // unless the segments match exactly
+      return pathSegments.length === hrefSegments.length;
+    }
+
+    return false;
   };
 
   const hasActiveItemInGroup = (groupItems: any[]) => {
@@ -197,15 +238,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const hasSubItems = item.subItems && item.subItems.length > 0;
 
     const menuItemContent = (
-      <div className="flex items-center w-full">
+      <div className="flex items-center w-full py-2 px-4">
         <div className="flex items-center flex-1 min-w-0">
-          <item.icon className="h-5 w-5 shrink-0" />
-          <span className="ml-2 truncate">{item.name}</span>
+          <item.icon className="h-4 w-4 shrink-0 text-muted-foreground opacity-60" />
+          <span className="ml-3 truncate text-sm">{item.name}</span>
         </div>
         <div className="flex items-center gap-2 ml-2">
-          {item.badge && <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>}
+          {item.badge && (
+            <SidebarMenuBadge className="bg-slate-100 text-slate-700">
+              {item.badge}
+            </SidebarMenuBadge>
+          )}
           {hasSubItems && (
-            <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 collapsible-trigger-icon" />
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground opacity-60 transition-transform duration-200 data-[state=open]:rotate-180" />
           )}
         </div>
       </div>
@@ -218,12 +263,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             asChild
             isActive={active}
             tooltip={item.description}
-            className="group-data-[collapsible=icon]:justify-center w-full"
+            className="w-full"
           >
             <Link
               href={item.url}
-              className={`transition-all duration-200 hover:bg-slate-200/40 rounded-md relative ${
-                active ? "text-green-600" : "text-gray-600"
+              className={`relative flex w-full transition-colors duration-200 hover:bg-slate-50 rounded-md ${
+                active
+                  ? "bg-slate-50 before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4/5 before:w-1 before:bg-gradient-to-b before:from-green-500 before:to-emerald-600 before:rounded-full"
+                  : ""
               }`}
             >
               {menuItemContent}
@@ -243,45 +290,51 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <div className="w-full">
               <SidebarMenuButton
                 tooltip={item.description}
-                className={`group-data-[collapsible=icon]:justify-center w-full ${
-                  active ? "text-green-600" : "text-gray-600"
-                }`}
+                className={`w-full ${active ? "bg-slate-50" : ""}`}
               >
                 {menuItemContent}
               </SidebarMenuButton>
             </div>
           </CollapsibleTrigger>
         </SidebarMenuItem>
-        <CollapsibleContent className="pl-4 space-y-1">
-          {item.subItems.map((subItem: any) => (
-            <SidebarMenuItem key={subItem.name}>
-              <SidebarMenuButton
-                asChild
-                isActive={isActive(subItem.url)}
-                tooltip={subItem.description}
-                className="group-data-[collapsible=icon]:justify-center w-full"
-              >
-                <Link
-                  href={subItem.url}
-                  className={`transition-all duration-200 hover:bg-slate-200/40 rounded-md relative ${
-                    isActive(subItem.url) ? "text-green-600" : "text-gray-600"
-                  }`}
-                >
-                  <div className="flex items-center w-full">
-                    <div className="flex items-center flex-1 min-w-0">
-                      <subItem.icon className="h-5 w-5 shrink-0" />
-                      <span className="ml-2 truncate">{subItem.name}</span>
-                    </div>
-                    {subItem.badge && (
-                      <SidebarMenuBadge className="ml-2">
-                        {subItem.badge}
-                      </SidebarMenuBadge>
-                    )}
-                  </div>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+        <CollapsibleContent className="transition-all duration-200 ease-in-out data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+          <SidebarGroupContent>
+            <SidebarMenu className="py-1">
+              {item.subItems.map((subItem: any) => (
+                <SidebarMenuItem key={subItem.name}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(subItem.url)}
+                    tooltip={subItem.description}
+                    className="w-full"
+                  >
+                    <Link
+                      href={subItem.url}
+                      className={`relative flex w-full transition-colors duration-200 hover:bg-slate-50 rounded-md ${
+                        isActive(subItem.url)
+                          ? "bg-slate-50 before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4/5 before:w-1 before:bg-gradient-to-b before:from-green-500 before:to-emerald-600 before:rounded-full"
+                          : ""
+                      }`}
+                    >
+                      <div className="flex items-center w-full py-2 pl-11 pr-4">
+                        <div className="flex items-center flex-1 min-w-0">
+                          <subItem.icon className="h-4 w-4 shrink-0 text-muted-foreground opacity-60" />
+                          <span className="ml-3 truncate text-sm">
+                            {subItem.name}
+                          </span>
+                        </div>
+                        {subItem.badge && (
+                          <SidebarMenuBadge className="ml-2 bg-slate-100 text-slate-700">
+                            {subItem.badge}
+                          </SidebarMenuBadge>
+                        )}
+                      </div>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
         </CollapsibleContent>
       </Collapsible>
     );
@@ -297,93 +350,107 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     items: any[],
     defaultOpen = true
   ) => {
-    const isActive = hasActiveItemInGroup(items);
-    const shouldBeOpen = mounted ? !isMobile || defaultOpen || isActive : false;
+    const icons = {
+      Main: LayoutGrid,
+      Management: Gauge,
+      Settings: Settings2,
+    };
+    const SectionIcon = icons[title as keyof typeof icons];
 
     return (
-      <Collapsible
-        defaultOpen={shouldBeOpen}
-        className="group/collapsible"
-        disabled={state === "collapsed"}
-      >
-        <SidebarGroup className="group-data-[collapsible=icon]:p-0">
+      <SidebarGroup>
+        <Collapsible defaultOpen={defaultOpen}>
           <SidebarGroupLabel asChild>
-            <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-sidebar-foreground/70 hover:bg-slate-200/40 hover:text-sidebar-accent-foreground rounded-md px-3 py-2 transition-all duration-200 active:scale-[0.98] group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3 group-data-[collapsible=icon]:pointer-events-none">
-              <span className="group-data-[collapsible=icon]:hidden">
-                {title}
-              </span>
-              <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180 group-data-[collapsible=icon]:hidden" />
+            <CollapsibleTrigger className="w-full">
+              <div className="flex items-center gap-2 py-2 px-4 text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors duration-200">
+                {SectionIcon && (
+                  <SectionIcon className="h-4 w-4 shrink-0 opacity-60" />
+                )}
+                <span className="flex-1 text-left uppercase tracking-wider">
+                  {title}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 data-[state=open]:rotate-180 ml-auto opacity-60" />
+              </div>
             </CollapsibleTrigger>
           </SidebarGroupLabel>
-          <CollapsibleContent className="animate-accordion-down">
+          <CollapsibleContent className="transition-all duration-200 ease-in-out data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
             <SidebarGroupContent>
-              <SidebarMenu className="group-data-[collapsible=icon]:px-1.5">
-                {items.map(renderMenuItem)}
+              <SidebarMenu>
+                {items.map((item) => renderMenuItem(item))}
               </SidebarMenu>
             </SidebarGroupContent>
           </CollapsibleContent>
-        </SidebarGroup>
-      </Collapsible>
+        </Collapsible>
+      </SidebarGroup>
     );
   };
 
   return (
     <TooltipProvider>
-      <Sidebar collapsible="icon" {...props}>
-        <SidebarHeader className="group-data-[collapsible=icon]:px-2">
+      <Sidebar collapsible="offcanvas" className="bg-white border-r" {...props}>
+        <SidebarHeader className="border-b">
           <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:h-auto group-data-[collapsible=icon]:py-2"
+                    className="w-full hover:bg-slate-50 transition-colors duration-200"
                   >
-                    <div className="flex items-center gap-2 group-data-[collapsible=icon]:w-8">
-                      <Avatar className="h-8 w-8 rounded-lg shrink-0">
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <Avatar className="h-9 w-9 rounded-xl shrink-0">
                         <AvatarImage
                           src={restaurant.logo || "/placeholder.svg"}
                           alt={restaurant.name}
                           className="object-cover"
                         />
-                        <AvatarFallback className="rounded-lg bg-green-100 text-green-700">
+                        <AvatarFallback className="rounded-xl bg-gradient-to-b from-green-100 to-emerald-100 text-green-700">
                           {restaurant.name.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                        <span className="truncate font-semibold">
+                      <div className="grid flex-1 text-left">
+                        <span className="font-medium truncate text-sm">
                           {restaurant.name}
                         </span>
                         <span className="truncate text-xs text-muted-foreground">
                           {restaurant.plan} Plan
                         </span>
                       </div>
-                      <ChevronDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground opacity-60" />
                     </div>
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
-                  className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                  className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[240px] rounded-lg"
                   side="bottom"
                   align="start"
-                  sideOffset={4}
+                  sideOffset={8}
                 >
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard/settings">
-                      <Settings className="mr-2 h-4 w-4" />
-                      Restaurant Settings
+                    <Link
+                      href="/dashboard/settings"
+                      className="flex items-center gap-2 py-2"
+                    >
+                      <Settings className="h-4 w-4 text-muted-foreground" />
+                      <span>Restaurant Settings</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard/billing">
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Billing & Plans
+                    <Link
+                      href="/dashboard/billing"
+                      className="flex items-center gap-2 py-2"
+                    >
+                      <CreditCard className="h-4 w-4 text-muted-foreground" />
+                      <span>Billing & Plans</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard/settings/notifications">
-                      <Bell className="mr-2 h-4 w-4" />
-                      Notifications
+                    <Link
+                      href="/dashboard/settings/notifications"
+                      className="flex items-center gap-2 py-2"
+                    >
+                      <Bell className="h-4 w-4 text-muted-foreground" />
+                      <span>Notifications</span>
                     </Link>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -392,57 +459,53 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenu>
         </SidebarHeader>
 
-        <SidebarContent>
+        <SidebarContent className="py-2">
           {mounted && (
             <>
-              {/* Collapsible Main Navigation */}
+              {/* Main Navigation */}
               {renderCollapsibleGroup("Main", navigationData.main, true)}
 
-              {/* Visual separator for collapsed state */}
-              <div className="hidden group-data-[collapsible=icon]:block py-1.5 pointer-events-none">
-                <div className="h-[1px] bg-gray-200 mx-2 opacity-80" />
-              </div>
+              <div className="my-2 mx-4 border-t border-slate-100" />
 
-              {/* Collapsible Management Section */}
+              {/* Management Section */}
               {renderCollapsibleGroup(
                 "Management",
                 navigationData.management,
                 true
               )}
 
-              {/* Visual separator for collapsed state */}
-              <div className="hidden group-data-[collapsible=icon]:block py-1.5 pointer-events-none">
-                <div className="h-[1px] bg-gray-200 mx-2 opacity-80" />
-              </div>
+              <div className="my-2 mx-4 border-t border-slate-100" />
 
-              {/* Collapsible Settings Section */}
+              {/* Settings Section */}
               {renderCollapsibleGroup(
                 "Settings",
                 navigationData.settings,
                 true
               )}
 
-              {/* Visual separator for collapsed state */}
-              <div className="hidden group-data-[collapsible=icon]:block py-1.5 pointer-events-none">
-                <div className="h-[1px] bg-gray-200 mx-2 opacity-80" />
-              </div>
+              <div className="my-2 mx-4 border-t border-slate-100" />
 
-              {/* Help & Support - Non-collapsible */}
-              <SidebarGroup className="mt-auto group-data-[collapsible=icon]:p-0">
+              {/* Help & Support */}
+              <SidebarGroup>
                 <SidebarGroupContent>
-                  <SidebarMenu className="group-data-[collapsible=icon]:px-1.5">
+                  <SidebarMenu>
                     <SidebarMenuItem>
-                      <SidebarMenuButton
-                        asChild
-                        tooltip="Get help and support"
-                        className="group-data-[collapsible=icon]:justify-center"
-                      >
-                        <Link href="/dashboard/help">
-                          <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-                            <HelpCircle className="h-4 w-4 shrink-0" />
-                            <span className="group-data-[collapsible=icon]:hidden">
-                              Help & Support
-                            </span>
+                      <SidebarMenuButton asChild tooltip="Get help and support">
+                        <Link
+                          href="/dashboard/help"
+                          className={`relative flex w-full transition-colors duration-200 hover:bg-slate-50 rounded-md ${
+                            isActive("/dashboard/help")
+                              ? "bg-slate-50 before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4/5 before:w-1 before:bg-gradient-to-b before:from-green-500 before:to-emerald-600 before:rounded-full"
+                              : ""
+                          }`}
+                        >
+                          <div className="flex items-center w-full py-2 px-4">
+                            <div className="flex items-center flex-1 min-w-0">
+                              <HelpCircle className="h-4 w-4 shrink-0 text-muted-foreground opacity-60" />
+                              <span className="ml-3 truncate text-sm">
+                                Help & Support
+                              </span>
+                            </div>
                           </div>
                         </Link>
                       </SidebarMenuButton>
@@ -454,63 +517,79 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           )}
         </SidebarContent>
 
-        <SidebarFooter className="group-data-[collapsible=icon]:px-2">
+        <SidebarFooter className="border-t">
           <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:h-auto group-data-[collapsible=icon]:py-2"
+                    className="w-full hover:bg-slate-50 transition-colors duration-200"
                   >
-                    <div className="flex items-center gap-2 group-data-[collapsible=icon]:w-8">
-                      <Avatar className="h-8 w-8 rounded-lg shrink-0">
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <Avatar className="h-9 w-9 rounded-xl shrink-0">
                         <AvatarImage
                           src="/placeholder.svg?height=32&width=32&text=JD"
                           alt="John Doe"
                           className="object-cover"
                         />
-                        <AvatarFallback className="rounded-lg">
+                        <AvatarFallback className="rounded-xl bg-gradient-to-b from-slate-100 to-slate-200">
                           JD
                         </AvatarFallback>
                       </Avatar>
-                      <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                        <span className="truncate font-semibold">John Doe</span>
+                      <div className="grid flex-1 text-left">
+                        <span className="font-medium truncate text-sm">
+                          John Doe
+                        </span>
                         <span className="truncate text-xs text-muted-foreground">
                           Owner
                         </span>
                       </div>
-                      <MoreHorizontal className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+                      <MoreHorizontal className="h-4 w-4 shrink-0 text-muted-foreground opacity-60" />
                     </div>
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
-                  className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                  className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[240px] rounded-lg"
                   side="top"
                   align="start"
-                  sideOffset={4}
+                  sideOffset={8}
                 >
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard/profile">
-                      <Users className="mr-2 h-4 w-4" />
-                      My Profile
+                    <Link
+                      href="/dashboard/profile"
+                      className="flex items-center gap-2 py-2"
+                    >
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <span>My Profile</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard/settings/notifications">
-                      <Bell className="mr-2 h-4 w-4" />
-                      Notifications
+                    <Link
+                      href="/dashboard/settings/notifications"
+                      className="flex items-center gap-2 py-2"
+                    >
+                      <Bell className="h-4 w-4 text-muted-foreground" />
+                      <span>Notifications</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard/help">
-                      <HelpCircle className="mr-2 h-4 w-4" />
-                      Support
+                    <Link
+                      href="/dashboard/help"
+                      className="flex items-center gap-2 py-2"
+                    >
+                      <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      <span>Support</span>
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link href="/logout" className="text-red-600">
-                      Sign Out
+                    <Link
+                      href="/logout"
+                      className="flex items-center gap-2 py-2 text-red-600"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Sign Out</span>
                     </Link>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
