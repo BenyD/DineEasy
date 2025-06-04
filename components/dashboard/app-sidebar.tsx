@@ -22,6 +22,7 @@ import {
   Receipt,
   Activity,
   Menu,
+  Cog,
 } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -164,46 +165,48 @@ function MobileMenuButton() {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const pathname = usePathname();
-  const { isMobile } = useSidebar();
   const [mounted, setMounted] = React.useState(false);
+  const { state, isMobile } = useSidebar();
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Check if a path is active (exact match or starts with for parent routes)
   const isActive = (path: string) => {
-    if (path === "/dashboard" && pathname === "/dashboard") {
-      return true;
-    }
-    return path !== "/dashboard" && pathname.startsWith(path);
+    return (
+      path === window.location.pathname ||
+      window.location.pathname.startsWith(path + "/")
+    );
   };
 
-  // Check if any item in a group is active
   const hasActiveItemInGroup = (groupItems: any[]) => {
-    return groupItems.some((item) => isActive(item.url));
+    return groupItems.some((item) => isActive(item.href));
   };
 
   // Render simple menu item
   const renderMenuItem = (item: any) => {
+    const active = isActive(item.url);
+
     return (
       <SidebarMenuItem key={item.name}>
         <SidebarMenuButton
           asChild
+          isActive={active}
           tooltip={item.description}
-          isActive={isActive(item.url)}
+          className="group-data-[collapsible=icon]:justify-center"
         >
           <Link
             href={item.url}
             className={`transition-all duration-200 hover:bg-slate-200/40 rounded-md relative ${
-              isActive(item.url)
+              active
                 ? "bg-primary/10 text-primary font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4/6 before:w-0.5 before:bg-primary before:rounded-full"
                 : ""
             }`}
           >
-            {item.icon && <item.icon />}
-            <span>{item.name}</span>
+            {item.icon && <item.icon className="h-4 w-4 shrink-0" />}
+            <span className="truncate group-data-[collapsible=icon]:hidden">
+              {item.name}
+            </span>
             {item.badge && (
               <SidebarMenuBadge
                 className={
@@ -233,17 +236,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const shouldBeOpen = mounted ? !isMobile || defaultOpen || isActive : false;
 
     return (
-      <Collapsible defaultOpen={shouldBeOpen} className="group/collapsible">
-        <SidebarGroup>
+      <Collapsible
+        defaultOpen={shouldBeOpen}
+        className="group/collapsible"
+        disabled={state === "collapsed"}
+      >
+        <SidebarGroup className="group-data-[collapsible=icon]:p-0">
           <SidebarGroupLabel asChild>
-            <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-sidebar-foreground/70 hover:bg-slate-200/40 hover:text-sidebar-accent-foreground rounded-md px-3 py-2 transition-all duration-200 active:scale-[0.98]">
-              {title}
-              <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+            <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-sidebar-foreground/70 hover:bg-slate-200/40 hover:text-sidebar-accent-foreground rounded-md px-3 py-2 transition-all duration-200 active:scale-[0.98] group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3 group-data-[collapsible=icon]:pointer-events-none">
+              <span className="group-data-[collapsible=icon]:hidden">
+                {title}
+              </span>
+              <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180 group-data-[collapsible=icon]:hidden" />
             </CollapsibleTrigger>
           </SidebarGroupLabel>
           <CollapsibleContent className="animate-accordion-down">
             <SidebarGroupContent>
-              <SidebarMenu>{items.map(renderMenuItem)}</SidebarMenu>
+              <SidebarMenu className="group-data-[collapsible=icon]:px-1.5">
+                {items.map(renderMenuItem)}
+              </SidebarMenu>
             </SidebarGroupContent>
           </CollapsibleContent>
         </SidebarGroup>
@@ -254,14 +265,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <TooltipProvider>
       <Sidebar collapsible="icon" {...props}>
-        <SidebarHeader>
+        <SidebarHeader className="group-data-[collapsible=icon]:px-2">
           <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center"
+                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:h-auto group-data-[collapsible=icon]:py-2"
                   >
                     <div className="flex items-center gap-2 group-data-[collapsible=icon]:w-8">
                       <Avatar className="h-8 w-8 rounded-lg shrink-0">
@@ -322,12 +333,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               {/* Collapsible Main Navigation */}
               {renderCollapsibleGroup("Main", navigationData.main, true)}
 
+              {/* Visual separator for collapsed state */}
+              <div className="hidden group-data-[collapsible=icon]:block py-1.5 pointer-events-none">
+                <div className="h-[1px] bg-gray-200 mx-2 opacity-80" />
+              </div>
+
               {/* Collapsible Management Section */}
               {renderCollapsibleGroup(
                 "Management",
                 navigationData.management,
                 true
               )}
+
+              {/* Visual separator for collapsed state */}
+              <div className="hidden group-data-[collapsible=icon]:block py-1.5 pointer-events-none">
+                <div className="h-[1px] bg-gray-200 mx-2 opacity-80" />
+              </div>
 
               {/* Collapsible Settings Section */}
               {renderCollapsibleGroup(
@@ -336,15 +357,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 true
               )}
 
+              {/* Visual separator for collapsed state */}
+              <div className="hidden group-data-[collapsible=icon]:block py-1.5 pointer-events-none">
+                <div className="h-[1px] bg-gray-200 mx-2 opacity-80" />
+              </div>
+
               {/* Help & Support - Non-collapsible */}
-              <SidebarGroup className="mt-auto">
+              <SidebarGroup className="mt-auto group-data-[collapsible=icon]:p-0">
                 <SidebarGroupContent>
-                  <SidebarMenu>
+                  <SidebarMenu className="group-data-[collapsible=icon]:px-1.5">
                     <SidebarMenuItem>
-                      <SidebarMenuButton asChild tooltip="Get help and support">
+                      <SidebarMenuButton
+                        asChild
+                        tooltip="Get help and support"
+                        className="group-data-[collapsible=icon]:justify-center"
+                      >
                         <Link href="/dashboard/help">
-                          <HelpCircle />
-                          <span>Help & Support</span>
+                          <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+                            <HelpCircle className="h-4 w-4 shrink-0" />
+                            <span className="group-data-[collapsible=icon]:hidden">
+                              Help & Support
+                            </span>
+                          </div>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -355,14 +389,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           )}
         </SidebarContent>
 
-        <SidebarFooter>
+        <SidebarFooter className="group-data-[collapsible=icon]:px-2">
           <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center"
+                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:h-auto group-data-[collapsible=icon]:py-2"
                   >
                     <div className="flex items-center gap-2 group-data-[collapsible=icon]:w-8">
                       <Avatar className="h-8 w-8 rounded-lg shrink-0">

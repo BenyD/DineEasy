@@ -235,13 +235,6 @@ const videoTutorials = [
 export default function HelpSupportPage() {
   return (
     <div className="flex-1 space-y-6 p-6">
-      <BreadcrumbHeader
-        items={[
-          { label: "Dashboard", href: "/dashboard" },
-          { label: "Help & Support", href: "/dashboard/help" },
-        ]}
-      />
-
       {/* Hero Section */}
       <div className="relative overflow-hidden rounded-lg bg-linear-to-r from-blue-600 to-purple-600 p-8 text-white">
         <div className="relative z-10">
