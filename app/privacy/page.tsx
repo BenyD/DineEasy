@@ -4,8 +4,9 @@ import { motion } from "framer-motion";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { HeroSection } from "@/components/elements/HeroSection";
 import { AnimatedSection } from "@/components/elements/AnimatedSection";
+import { CookiePreferences } from "@/components/elements/CookiePreferences";
 
-export default function PrivacyPage() {
+export default function PrivacyPolicy() {
   return (
     <PageWrapper>
       <HeroSection
@@ -15,234 +16,176 @@ export default function PrivacyPage() {
       />
 
       <AnimatedSection className="py-16 sm:py-24">
-        <div className="container mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="rounded-xl border bg-white p-8 shadow-sm"
-          >
-            <div className="mb-8 pb-8 border-b">
-              <p className="text-gray-500">Last updated: June 3, 2025</p>
-            </div>
+        <div className="container mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+          <h1 className="text-3xl font-bold mb-8">Privacy Policy</h1>
 
-            <div className="prose prose-green prose-lg max-w-none">
-              <p className="lead">
-                This Privacy Policy describes how DineEasy ("we", "us", or
-                "our") collects, uses, and discloses your personal information
-                when you visit, use our services, or make a purchase from
-                dineeasy.com (the "Site") or otherwise communicate with us
-                (collectively, the "Services").
-              </p>
+          <div className="prose prose-gray max-w-none">
+            <p className="text-sm text-gray-500 mb-8">
+              Last updated: {new Date().toLocaleDateString()}
+            </p>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">1. Introduction</h2>
               <p>
-                Please read this Privacy Policy carefully. By using our
-                Services, you agree to the practices described in this Privacy
-                Policy. If you do not agree to this Privacy Policy, please do
-                not access the Site or otherwise use our Services.
+                DineEasy ("we", "our", or "us") respects your privacy and is
+                committed to protecting your personal data. This privacy policy
+                explains how we handle your data when you visit our website or
+                use our services in accordance with the Swiss Federal Act on
+                Data Protection (FADP/DSG) and the EU General Data Protection
+                Regulation (GDPR).
               </p>
+            </section>
 
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                1. Personal Information We Collect
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                2. Data Controller
               </h2>
               <p>
-                When you use our Services, we may collect the following types of
-                personal information:
+                DineEasy is the data controller responsible for your personal
+                data. For all data protection related inquiries, please contact
+                our Data Protection Officer at:
               </p>
-              <h3 className="text-xl font-semibold mt-8 mb-4">
-                Information You Provide to Us
-              </h3>
-              <p>
-                We collect information you provide directly to us. For example,
-                we collect information when you:
-              </p>
-              <ul className="list-disc pl-6 space-y-2">
-                <li>Create an account or sign up for our Services</li>
-                <li>Make a purchase</li>
-                <li>
-                  Sign up to receive our newsletter or marketing communications
-                </li>
-                <li>Participate in a survey, contest, or promotion</li>
-                <li>
-                  Contact customer service or otherwise communicate with us
-                </li>
+              <ul className="list-disc pl-6 mt-2">
+                <li>Email: privacy@dineeasy.ch</li>
+                <li>Address: [Your Swiss Business Address]</li>
               </ul>
+            </section>
 
-              <h3 className="text-xl font-semibold mt-8 mb-4">
-                Information We Collect Automatically
-              </h3>
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                3. Data We Collect
+              </h2>
               <p>
-                When you use our Services, we automatically collect certain
-                information, including:
+                We collect and process the following categories of personal
+                data:
               </p>
-              <ul className="list-disc pl-6 space-y-4">
+              <ul className="list-disc pl-6 mt-2">
+                <li>Identity Data (name, username)</li>
+                <li>Contact Data (email address, phone number)</li>
                 <li>
-                  <strong>Device Information:</strong> We collect information
-                  about the device you use to access our Services, including the
-                  hardware model, operating system and version, unique device
-                  identifiers, and mobile network information.
+                  Technical Data (IP address, browser type, device information)
                 </li>
-                <li>
-                  <strong>Log Information:</strong> We collect log information
-                  about your use of our Services, including the type of browser
-                  you use, access times, pages viewed, your IP address, and the
-                  page you visited before navigating to our Services.
-                </li>
-                <li>
-                  <strong>Location Information:</strong> We may collect
-                  information about your location, including precise location
-                  information when you provide permission through your device
-                  settings.
-                </li>
-                <li>
-                  <strong>Cookies and Similar Technologies:</strong> We use
-                  various technologies to collect information, including cookies
-                  and web beacons. These help us improve our Services, see which
-                  areas and features are popular, and count visits.
-                </li>
+                <li>Usage Data (analytics about how you use our service)</li>
+                <li>Transaction Data (payment details, order history)</li>
+                <li>Marketing and Communications Data (your preferences)</li>
               </ul>
+            </section>
 
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                2. How We Use Your Information
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                4. Legal Basis for Processing
               </h2>
-              <p>We use the information we collect to:</p>
-              <ul className="list-disc pl-6 space-y-2">
-                <li>Provide, maintain, and improve our Services</li>
-                <li>Process transactions and send related information</li>
-                <li>Send technical notices, updates, and support messages</li>
-                <li>Respond to your comments and questions</li>
-                <li>Communicate about products, services, and promotions</li>
-                <li>Monitor and analyze trends and usage</li>
-                <li>Detect and prevent fraudulent transactions</li>
-                <li>Personalize and improve the Services</li>
+              <p>We process your personal data on the following legal bases:</p>
+              <ul className="list-disc pl-6 mt-2">
+                <li>Contract fulfillment for our services</li>
+                <li>Legal obligations under Swiss and EU law</li>
+                <li>Legitimate business interests</li>
+                <li>Your consent, where explicitly given</li>
               </ul>
+            </section>
 
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                3. Information Sharing
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                5. Data Storage and Transfer
               </h2>
-              <p>We may share your personal information as follows:</p>
-              <ul className="list-disc pl-6 space-y-4">
-                <li>
-                  <strong>Service Providers:</strong> With vendors and service
-                  providers who need access to such information to carry out
-                  work on our behalf
-                </li>
-                <li>
-                  <strong>Business Partners:</strong> With partners who offer
-                  co-branded services or engage in joint marketing activities
-                </li>
-                <li>
-                  <strong>Legal Requirements:</strong> When required by
-                  applicable law, regulation, or legal process
-                </li>
-                <li>
-                  <strong>Business Transfers:</strong> In connection with a
-                  merger, acquisition, or sale of assets
-                </li>
+              <p>
+                Your data is stored on secure servers in Switzerland. We may
+                transfer data to third countries outside Switzerland and the
+                EU/EEA only when adequate protection is ensured through:
+              </p>
+              <ul className="list-disc pl-6 mt-2">
+                <li>EU Commission adequacy decisions</li>
+                <li>Standard contractual clauses</li>
+                <li>Binding corporate rules</li>
               </ul>
+            </section>
 
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                4. Your Choices
-              </h2>
-              <h3 className="text-xl font-semibold mt-8 mb-4">
-                Account Information
-              </h3>
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">6. Your Rights</h2>
               <p>
-                You may update, correct, or delete your account information at
-                any time by logging into your online account or emailing us at{" "}
-                <a
-                  href="mailto:privacy@dineeasy.com"
-                  className="text-green-600 hover:text-green-700"
-                >
-                  privacy@dineeasy.com
-                </a>
-                .
+                Under Swiss data protection law and GDPR, you have the right to:
               </p>
-
-              <h3 className="text-xl font-semibold mt-8 mb-4">
-                Marketing Communications
-              </h3>
-              <p>
-                You may opt out of receiving promotional emails by following the
-                instructions in those emails or by emailing{" "}
-                <a
-                  href="mailto:privacy@dineeasy.com"
-                  className="text-green-600 hover:text-green-700"
-                >
-                  privacy@dineeasy.com
-                </a>
-                . Even if you opt out, we may still send you non-promotional
-                emails.
-              </p>
-
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                5. Data Security
-              </h2>
-              <p>
-                We take reasonable measures to help protect information about
-                you from loss, theft, misuse, unauthorized access, disclosure,
-                alteration, and destruction. However, no security system is
-                impenetrable and we cannot guarantee the security of our systems
-                100%.
-              </p>
-
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                6. Children's Privacy
-              </h2>
-              <p>
-                Our Services are not directed to children under 16. We do not
-                knowingly collect personal information from children under 16.
-                If you are a parent or guardian and believe your child has
-                provided us with personal information, please contact us at{" "}
-                <a
-                  href="mailto:privacy@dineeasy.com"
-                  className="text-green-600 hover:text-green-700"
-                >
-                  privacy@dineeasy.com
-                </a>
-                .
-              </p>
-
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                7. Changes to this Policy
-              </h2>
-              <p>
-                We may update this Privacy Policy from time to time. If we make
-                material changes, we will notify you by email or through the
-                Services prior to the changes becoming effective.
-              </p>
-              <p className="mt-8 text-gray-500">
-                Your continued use of our Services after any changes to this
-                Privacy Policy indicates your agreement with the terms of the
-                revised Privacy Policy.
-              </p>
-
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                8. Contact Us
-              </h2>
-              <p>
-                If you have questions about this Privacy Policy, please contact
-                us:
-              </p>
-              <ul className="list-none space-y-2 mt-4">
-                <li>
-                  Email:{" "}
-                  <a
-                    href="mailto:privacy@dineeasy.com"
-                    className="text-green-600 hover:text-green-700"
-                  >
-                    privacy@dineeasy.com
-                  </a>
-                </li>
-                <li>Phone: +1 (555) 123-4567</li>
-                <li>
-                  Address: 123 Restaurant Row
-                  <br />
-                  San Francisco, CA 94103
-                </li>
+              <ul className="list-disc pl-6 mt-2">
+                <li>Access your personal data</li>
+                <li>Rectify inaccurate data</li>
+                <li>Request erasure of your data</li>
+                <li>Restrict or object to processing</li>
+                <li>Data portability</li>
+                <li>Withdraw consent at any time</li>
               </ul>
-            </div>
-          </motion.div>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">7. Cookie Policy</h2>
+              <p className="mb-4">
+                We use cookies and similar technologies to enhance your browsing
+                experience. You can manage your cookie preferences below:
+              </p>
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <CookiePreferences />
+              </div>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">8. Data Security</h2>
+              <p>
+                We implement appropriate technical and organizational measures
+                to protect your personal data against unauthorized or unlawful
+                processing, accidental loss, destruction, or damage. These
+                measures include:
+              </p>
+              <ul className="list-disc pl-6 mt-2">
+                <li>Encryption of data in transit and at rest</li>
+                <li>Regular security assessments</li>
+                <li>Access controls and authentication</li>
+                <li>Staff training on data protection</li>
+              </ul>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">9. Data Retention</h2>
+              <p>
+                We retain your personal data only for as long as necessary to
+                fulfill the purposes for which it was collected, including
+                legal, accounting, or reporting requirements. When data is no
+                longer needed, it is securely deleted or anonymized.
+              </p>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">10. Complaints</h2>
+              <p>
+                You have the right to lodge a complaint with the Swiss Federal
+                Data Protection and Information Commissioner (FDPIC) or your
+                local data protection authority. However, we appreciate the
+                chance to address your concerns first.
+              </p>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                11. Changes to This Policy
+              </h2>
+              <p>
+                We may update this privacy policy from time to time. We will
+                notify you of any significant changes by posting the new policy
+                on this page and updating the "last updated" date.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-semibold mb-4">12. Contact Us</h2>
+              <p>
+                For any questions about this privacy policy or our data
+                practices, please contact us at:
+              </p>
+              <ul className="list-disc pl-6 mt-2">
+                <li>Email: privacy@dineeasy.ch</li>
+                <li>Phone: [Your Swiss Phone Number]</li>
+                <li>Address: [Your Swiss Business Address]</li>
+              </ul>
+            </section>
+          </div>
         </div>
       </AnimatedSection>
     </PageWrapper>

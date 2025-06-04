@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { HeroSection } from "@/components/elements/HeroSection";
 import { AnimatedSection } from "@/components/elements/AnimatedSection";
@@ -15,225 +14,156 @@ export default function TermsPage() {
       />
 
       <AnimatedSection className="py-16 sm:py-24">
-        <div className="container mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="rounded-xl border bg-white p-8 shadow-sm"
-          >
-            <div className="mb-8 pb-8 border-b">
-              <p className="text-gray-500">Last updated: June 3, 2025</p>
-            </div>
+        <div className="container mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+          <h1 className="text-3xl font-bold mb-8">Terms of Service</h1>
 
-            <div className="prose prose-green prose-lg max-w-none">
-              <h2 className="text-2xl font-bold tracking-tight">
-                1. Introduction
+          <div className="prose prose-gray max-w-none">
+            <p className="text-sm text-gray-500 mb-8">
+              Last updated: {new Date().toLocaleDateString()}
+            </p>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                1. General Provisions
               </h2>
               <p>
-                Welcome to DineEasy ("Company", "we", "our", "us")! As you have
-                clicked "I agree" to these Terms of Service, you have entered
-                into a binding contract with DineEasy. These Terms of Service
-                ("Terms", "Terms of Service") govern your use of our website and
-                platform located at dineeasy.com (together or individually
-                "Service") operated by DineEasy.
+                These Terms of Service ("Terms") govern your access to and use
+                of DineEasy's website, applications, and services (collectively,
+                the "Services"). These Terms constitute a legally binding
+                agreement between you and DineEasy, a company registered in
+                Switzerland.
               </p>
-              <p>
-                Our Privacy Policy also governs your use of our Service and
-                explains how we collect, safeguard and disclose information that
-                results from your use of our web pages. Please read it here:{" "}
-                <a
-                  href="/privacy"
-                  className="text-green-600 hover:text-green-700"
-                >
-                  Privacy Policy
-                </a>
-                .
-              </p>
-              <p>
-                Your agreement with us includes these Terms and our Privacy
-                Policy ("Agreements"). You acknowledge that you have read and
-                understood the Agreements, and agree to be bound by them.
-              </p>
-              <p>
-                If you do not agree with (or cannot comply with) the Agreements,
-                then you may not use the Service, but please let us know by
-                emailing at{" "}
-                <a
-                  href="mailto:support@dineeasy.com"
-                  className="text-green-600 hover:text-green-700"
-                >
-                  support@dineeasy.com
-                </a>{" "}
-                so we can try to find a solution.
-              </p>
+            </section>
 
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                2. Communications
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                2. Applicable Law and Jurisdiction
               </h2>
               <p>
-                By using our Service, you agree to subscribe to newsletters,
-                marketing or promotional materials and other information we may
-                send. However, you may opt out of receiving any, or all, of
-                these communications from us by following the unsubscribe link
-                or by emailing{" "}
-                <a
-                  href="mailto:support@dineeasy.com"
-                  className="text-green-600 hover:text-green-700"
-                >
-                  support@dineeasy.com
-                </a>
-                .
+                These Terms are governed by Swiss law. Any disputes arising from
+                or in connection with these Terms shall be subject to the
+                exclusive jurisdiction of the courts of [Your Canton],
+                Switzerland, subject to any mandatory provisions of Swiss law.
               </p>
+            </section>
 
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                3. Purchases
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                3. Service Description
               </h2>
               <p>
-                If you wish to purchase any product or service made available
-                through the Service ("Purchase"), you may be asked to supply
-                certain information relevant to your Purchase including, without
-                limitation, your credit card number, the expiration date of your
-                credit card, your billing address, and your shipping
-                information.
+                DineEasy provides a restaurant management platform that
+                includes:
               </p>
-              <p>
-                You represent and warrant that: (i) you have the legal right to
-                use any credit card(s) or other payment method(s) in connection
-                with any Purchase; and that (ii) the information you supply to
-                us is true, correct and complete.
-              </p>
-              <p>
-                The service may employ the use of third-party services for the
-                purpose of facilitating payment and the completion of Purchases.
-                By submitting your information, you grant us the right to
-                provide the information to these third parties subject to our
-                Privacy Policy.
-              </p>
-              <p>
-                We reserve the right to refuse or cancel your order at any time
-                for reasons including but not limited to: product or service
-                availability, errors in the description or price of the product
-                or service, error in your order or other reasons.
-              </p>
+              <ul className="list-disc pl-6 mt-2">
+                <li>QR code-based ordering system</li>
+                <li>Payment processing (including TWINT integration)</li>
+                <li>Order management</li>
+                <li>Analytics and reporting</li>
+                <li>Menu management</li>
+                <li>Table management</li>
+              </ul>
+            </section>
 
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                4. Subscriptions
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                4. User Registration and Account
+              </h2>
+              <p>To use our Services, you must:</p>
+              <ul className="list-disc pl-6 mt-2">
+                <li>Be at least 18 years old</li>
+                <li>Register for an account with accurate information</li>
+                <li>Maintain the security of your account credentials</li>
+                <li>Notify us immediately of any unauthorized use</li>
+              </ul>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">5. Payment Terms</h2>
+              <p>Our payment terms include:</p>
+              <ul className="list-disc pl-6 mt-2">
+                <li>2% commission on processed payments</li>
+                <li>Monthly subscription fees based on selected plan</li>
+                <li>Payment processing through Stripe and TWINT</li>
+                <li>All prices are in Swiss Francs (CHF) and include VAT</li>
+              </ul>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                6. Data Protection
               </h2>
               <p>
-                Some parts of the Service are billed on a subscription basis
-                ("Subscription(s)"). You will be billed in advance on a
-                recurring and periodic basis ("Billing Cycle"). Billing cycles
-                are set either on a monthly or annual basis, depending on the
-                type of subscription plan you select when purchasing a
-                Subscription.
+                We process personal data in accordance with the Swiss Federal
+                Act on Data Protection (FADP/DSG) and, where applicable, the
+                GDPR. Details can be found in our Privacy Policy.
               </p>
-              <p>
-                At the end of each Billing Cycle, your Subscription will
-                automatically renew under the exact same conditions unless you
-                cancel it or DineEasy cancels it. You may cancel your
-                Subscription renewal either through your online account
-                management page or by contacting DineEasy customer support team.
-              </p>
+            </section>
 
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                5. Free Trial
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                7. Intellectual Property
               </h2>
               <p>
-                DineEasy may, at its sole discretion, offer a Subscription with
-                a free trial for a limited period of time ("Free Trial").
+                All intellectual property rights in the Services belong to
+                DineEasy or its licensors. Users receive a limited,
+                non-exclusive, non-transferable license to use the Services.
               </p>
-              <p>
-                You may be required to enter your billing information in order
-                to sign up for the Free Trial.
-              </p>
-              <p>
-                If you do enter your billing information when signing up for the
-                Free Trial, you will not be charged by DineEasy until the Free
-                Trial has expired. On the last day of the Free Trial period,
-                unless you cancelled your Subscription, you will be
-                automatically charged the applicable Subscription fees for the
-                type of Subscription you have selected.
-              </p>
+            </section>
 
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                6. Fee Changes
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
+                8. Liability and Warranty
               </h2>
-              <p>
-                DineEasy, in its sole discretion and at any time, may modify the
-                Subscription fees for the Subscriptions. Any Subscription fee
-                change will become effective at the end of the then-current
-                Billing Cycle.
-              </p>
-              <p>
-                DineEasy will provide you with reasonable prior notice of any
-                change in Subscription fees to give you an opportunity to
-                terminate your Subscription before such change becomes
-                effective.
-              </p>
-
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                7. Refunds
-              </h2>
-              <p>
-                Except when required by law, paid Subscription fees are
-                non-refundable.
-              </p>
-
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                8. Content
-              </h2>
-              <p>
-                Our Service allows you to post, link, store, share and otherwise
-                make available certain information, text, graphics, videos, or
-                other material ("Content"). You are responsible for the Content
-                that you post on or through the Service, including its legality,
-                reliability, and appropriateness.
-              </p>
-
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
-                9. Prohibited Uses
-              </h2>
-              <p>
-                You may use the Service only for lawful purposes and in
-                accordance with Terms. You agree not to use the Service:
-              </p>
-              <ul className="list-disc pl-6 space-y-2">
+              <p>In accordance with Swiss law:</p>
+              <ul className="list-disc pl-6 mt-2">
+                <li>We provide the Services "as is" without any warranty</li>
                 <li>
-                  In any way that violates any applicable national or
-                  international law or regulation.
+                  Our liability is limited to cases of intentional misconduct or
+                  gross negligence
                 </li>
+                <li>We are not liable for indirect or consequential damages</li>
                 <li>
-                  For the purpose of exploiting, harming, or attempting to
-                  exploit or harm minors in any way.
-                </li>
-                <li>
-                  To transmit any advertising or promotional material without
-                  permission, including "spam" or similar solicitation.
-                </li>
-                <li>
-                  To impersonate or attempt to impersonate Company, employees,
-                  users, or others.
+                  Maximum liability is limited to the amount paid for the
+                  Services in the last 12 months
                 </li>
               </ul>
+            </section>
 
-              <h2 className="text-2xl font-bold tracking-tight mt-12">
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">9. Termination</h2>
+              <p>Either party may terminate the agreement:</p>
+              <ul className="list-disc pl-6 mt-2">
+                <li>With 30 days written notice</li>
+                <li>Immediately for material breach</li>
+                <li>If the other party becomes insolvent</li>
+              </ul>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">
                 10. Changes to Terms
               </h2>
               <p>
-                We reserve the right to modify these Terms at any time. For
-                significant changes, we will provide at least 30 days notice
-                prior to any new terms taking effect.
+                We may modify these Terms at any time. We will notify you of
+                material changes via email or through the Services. Your
+                continued use of the Services after such modifications
+                constitutes acceptance of the updated Terms.
               </p>
-              <p className="mt-8 text-gray-500">
-                By continuing to access or use our Service after any revisions
-                become effective, you agree to be bound by the revised terms. If
-                you do not agree to the new terms, you are no longer authorized
-                to use the Service.
-              </p>
-            </div>
-          </motion.div>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-semibold mb-4">
+                11. Contact Information
+              </h2>
+              <p>For any questions about these Terms, please contact us at:</p>
+              <ul className="list-disc pl-6 mt-2">
+                <li>Email: legal@dineeasy.ch</li>
+                <li>Phone: [Your Swiss Phone Number]</li>
+                <li>Address: [Your Swiss Business Address]</li>
+              </ul>
+            </section>
+          </div>
         </div>
       </AnimatedSection>
     </PageWrapper>
