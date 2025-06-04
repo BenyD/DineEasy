@@ -36,7 +36,7 @@ export default function CartPage({ params }: { params: { tableId: string } }) {
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Your cart is empty</h2>
             <p className="text-gray-500 mb-6">Add some delicious items from our menu</p>
             <Link href={`/qr/${params.tableId}`}>
-              <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+              <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
                 Browse Menu
               </Button>
             </Link>
@@ -71,7 +71,7 @@ export default function CartPage({ params }: { params: { tableId: string } }) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: index * 0.1 }}
-            className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm"
+            className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs"
           >
             <div className="flex gap-4">
               <img
@@ -106,7 +106,7 @@ export default function CartPage({ params }: { params: { tableId: string } }) {
                       <Minus className="w-3 h-3" />
                     </Button>
 
-                    <span className="font-semibold text-green-700 min-w-[1.5rem] text-center">{item.quantity}</span>
+                    <span className="font-semibold text-green-700 min-w-6 text-center">{item.quantity}</span>
 
                     <Button
                       onClick={() => updateQuantity(item.id, item.quantity + 1)}
@@ -132,7 +132,7 @@ export default function CartPage({ params }: { params: { tableId: string } }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6"
+          className="bg-linear-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6"
         >
           <h3 className="font-semibold text-gray-900 mb-4">Order Summary</h3>
 
@@ -155,11 +155,11 @@ export default function CartPage({ params }: { params: { tableId: string } }) {
       </div>
 
       {/* Proceed Button */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-gradient-to-t from-white via-white to-transparent">
+      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-linear-to-t from-white via-white to-transparent">
         <Link href={`/qr/${params.tableId}/checkout`}>
           <Button
             size="lg"
-            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-14"
+            className="w-full bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-14"
           >
             <span className="font-medium text-lg">Proceed to Payment</span>
           </Button>

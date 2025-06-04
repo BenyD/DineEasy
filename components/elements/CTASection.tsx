@@ -17,7 +17,7 @@ export function CTASection({
   return (
     <section className="py-20">
       <div className="container">
-        <div className="overflow-hidden rounded-3xl bg-gradient-to-r from-green-500 to-emerald-600 shadow-lg">
+        <div className="overflow-hidden rounded-3xl bg-linear-to-r from-green-500 to-emerald-600 shadow-lg">
           <div className="grid gap-6 p-8 md:grid-cols-2 md:p-12">
             <div className="flex flex-col justify-center space-y-4">
               <h2 className="text-3xl font-bold tracking-tighter text-white sm:text-4xl">{title}</h2>

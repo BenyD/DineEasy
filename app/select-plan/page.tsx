@@ -52,10 +52,10 @@ export default function SelectPlanPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Background Pattern */}
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(#e0f2e9_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(#e0f2e9_1px,transparent_1px)] bg-size-[16px_16px] mask-[radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
 
       {/* Header */}
-      <div className="border-b bg-white/80 backdrop-blur-sm">
+      <div className="border-b bg-white/80 backdrop-blur-xs">
         <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
             <ChefHat className="h-8 w-8 text-green-600" />
@@ -75,7 +75,7 @@ export default function SelectPlanPage() {
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">Choose Your Plan</h1>
           <p className="text-lg text-gray-500 mb-8">Start your 14-day free trial. No credit card required.</p>
 
-          <div className="flex items-center justify-center gap-4 rounded-full border bg-white p-1 shadow-sm max-w-[300px] mx-auto">
+          <div className="flex items-center justify-center gap-4 rounded-full border bg-white p-1 shadow-xs max-w-[300px] mx-auto">
             <span className={`text-sm ${!annual ? "font-medium text-green-600" : "text-gray-500"}`}>Monthly</span>
             <Switch checked={annual} onCheckedChange={setAnnual} className="data-[state=checked]:bg-green-600" />
             <span className={`text-sm ${annual ? "font-medium text-green-600" : "text-gray-500"}`}>
@@ -103,7 +103,7 @@ export default function SelectPlanPage() {
                 onClick={() => handlePlanSelect(plan.id)}
               >
                 {plan.highlighted && (
-                  <div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-1 text-sm font-medium text-white">
+                  <div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-linear-to-r from-green-500 to-emerald-600 px-4 py-1 text-sm font-medium text-white">
                     Most Popular
                   </div>
                 )}
@@ -162,7 +162,7 @@ export default function SelectPlanPage() {
             onClick={handleContinue}
             disabled={isLoading}
             size="lg"
-            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8"
+            className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8"
           >
             {isLoading ? (
               <div className="flex items-center gap-2">

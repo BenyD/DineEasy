@@ -45,7 +45,7 @@ export default function ConfirmationPage({
             damping: 20,
             delay: 0.2,
           }}
-          className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-lg"
+          className="w-24 h-24 mx-auto mb-6 bg-linear-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-lg"
         >
           <Check className="w-12 h-12 text-white" />
         </motion.div>
@@ -65,7 +65,7 @@ export default function ConfirmationPage({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.6 }}
-          className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6 mb-6 text-left"
+          className="bg-linear-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6 mb-6 text-left"
         >
           <h3 className="font-semibold text-gray-900 mb-4 text-center">Order Details</h3>
 

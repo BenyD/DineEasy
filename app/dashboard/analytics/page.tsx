@@ -255,7 +255,7 @@ export default function AnalyticsPage() {
                       <div className="flex-1">
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
-                            className="bg-gradient-to-r from-green-500 to-emerald-600 h-2 rounded-full"
+                            className="bg-linear-to-r from-green-500 to-emerald-600 h-2 rounded-full"
                             style={{ width: `${(hour.orders / 20) * 100}%` }}
                           />
                         </div>
@@ -284,7 +284,7 @@ export default function AnalyticsPage() {
             <CardTitle>Revenue Trend</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-64 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg flex items-center justify-center border-2 border-dashed border-green-200">
+            <div className="h-64 bg-linear-to-br from-green-50 to-emerald-50 rounded-lg flex items-center justify-center border-2 border-dashed border-green-200">
               <div className="text-center">
                 <TrendingUp className="w-12 h-12 text-green-400 mx-auto mb-2" />
                 <p className="text-gray-500">Chart visualization coming soon</p>

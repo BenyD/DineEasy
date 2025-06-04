@@ -34,7 +34,7 @@ export default function LandingPage() {
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button
                   size="lg"
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 sm:w-auto"
+                  className="w-full bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 sm:w-auto"
                   onClick={() => (window.location.href = "/signup")}
                 >
                   Start 14-Day Free Trial
@@ -217,7 +217,7 @@ export default function LandingPage() {
                   ease: [0.21, 0.47, 0.32, 0.98],
                 }}
                 whileHover={{ y: -5 }}
-                className="rounded-lg border bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-6"
+                className="rounded-lg border bg-white p-4 shadow-xs transition-shadow hover:shadow-md sm:p-6"
               >
                 <div className="mb-3 text-green-500 sm:mb-4">
                   {[...Array(5)].map((_, i) => (

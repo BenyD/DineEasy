@@ -42,7 +42,7 @@ export default function ContactPage() {
     <PageWrapper>
       <main className="flex-1">
         <section className="relative overflow-hidden py-20 md:py-32">
-          <div className="absolute inset-0 -z-10 bg-[radial-gradient(#e0f2e9_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(#e0f2e9_1px,transparent_1px)] bg-size-[16px_16px] mask-[radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
           <div className="absolute -top-40 right-0 -z-10 h-[500px] w-[500px] rounded-full bg-green-200/20 blur-3xl" />
           <div className="container relative">
             <div className="mx-auto max-w-[800px] text-center">
@@ -55,7 +55,7 @@ export default function ContactPage() {
         <section className="container pb-20">
           <div className="grid gap-12 lg:grid-cols-2">
             <div className="space-y-6">
-              <div className="rounded-xl border bg-white p-6 shadow-sm">
+              <div className="rounded-xl border bg-white p-6 shadow-xs">
                 <h2 className="text-2xl font-bold">Contact Information</h2>
                 <p className="mt-2 text-gray-500">Reach out to our team for any questions or support needs.</p>
                 <div className="mt-6 space-y-4">
@@ -91,7 +91,7 @@ export default function ContactPage() {
                   </div>
                 </div>
               </div>
-              <div className="rounded-xl border bg-white p-6 shadow-sm">
+              <div className="rounded-xl border bg-white p-6 shadow-xs">
                 <h3 className="mb-4 text-lg font-medium">Our Location</h3>
                 <div className="aspect-video overflow-hidden rounded-lg">
                   <img
@@ -103,7 +103,7 @@ export default function ContactPage() {
               </div>
             </div>
             <div>
-              <form onSubmit={handleSubmit} className="rounded-xl border bg-white p-6 shadow-sm">
+              <form onSubmit={handleSubmit} className="rounded-xl border bg-white p-6 shadow-xs">
                 <h2 className="text-2xl font-bold">Send us a message</h2>
                 <p className="mt-2 text-gray-500">
                   Fill out the form below and we'll get back to you as soon as possible.
@@ -160,7 +160,7 @@ export default function ContactPage() {
                   </div>
                   <Button
                     type="submit"
-                    className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                    className="w-full bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
                   >
                     Send Message
                   </Button>

@@ -426,7 +426,7 @@ export default function OrderHistoryPage() {
             <Download className="w-4 h-4 mr-2" />
             Export
           </Button>
-          <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+          <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
             <RefreshCcw className="w-4 h-4 mr-2" />
             Refresh
           </Button>

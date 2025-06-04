@@ -429,7 +429,7 @@ export default function MenuPage() {
           </Button>
           <Button
             type="submit"
-            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+            className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
           >
             {item ? "Update Item" : "Add Item"}
           </Button>
@@ -450,7 +450,7 @@ export default function MenuPage() {
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button
-                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
                 onClick={() => setIsAddDialogOpen(true)}
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -587,7 +587,7 @@ export default function MenuPage() {
                       <CardContent className="p-4">
                         <div className="flex items-center gap-4">
                           {/* Image */}
-                          <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                          <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0">
                             <img
                               src={item.image || "/placeholder.svg"}
                               alt={item.name}

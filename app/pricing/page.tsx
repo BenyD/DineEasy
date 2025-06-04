@@ -88,7 +88,7 @@ export default function PricingPage() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="mx-auto flex max-w-[300px] items-center justify-center gap-4 rounded-full border bg-white p-1 shadow-sm"
+          className="mx-auto flex max-w-[300px] items-center justify-center gap-4 rounded-full border bg-white p-1 shadow-xs"
         >
           <span className={`text-sm ${!annual ? "font-medium text-green-600" : "text-gray-500"}`}>Monthly</span>
           <Switch checked={annual} onCheckedChange={setAnnual} className="data-[state=checked]:bg-green-600" />
@@ -110,12 +110,12 @@ export default function PricingPage() {
                 ease: [0.21, 0.47, 0.32, 0.98],
               }}
               whileHover={{ y: -5 }}
-              className={`relative rounded-xl border bg-white p-6 shadow-sm transition-all hover:shadow-lg sm:p-8 ${
+              className={`relative rounded-xl border bg-white p-6 shadow-xs transition-all hover:shadow-lg sm:p-8 ${
                 plan.highlighted ? "border-green-200 ring-1 ring-green-500 shadow-md" : ""
               }`}
             >
               {plan.highlighted && (
-                <div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-1 text-sm font-medium text-white">
+                <div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-linear-to-r from-green-500 to-emerald-600 px-4 py-1 text-sm font-medium text-white">
                   Most Popular
                 </div>
               )}
@@ -152,7 +152,7 @@ export default function PricingPage() {
                 <Button
                   className={`w-full ${
                     plan.highlighted
-                      ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                      ? "bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
                       : ""
                   }`}
                 >

@@ -149,7 +149,7 @@ export default function SettingsPage() {
                   />
                 </div>
 
-                <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+                <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
                   Save Changes
                 </Button>
               </CardContent>
@@ -382,7 +382,7 @@ export default function SettingsPage() {
 
                 <div className="flex gap-2">
                   <Button variant="outline">Test Print</Button>
-                  <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+                  <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
                     Save Settings
                   </Button>
                 </div>
@@ -465,7 +465,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+                <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
                   Save Preferences
                 </Button>
               </CardContent>

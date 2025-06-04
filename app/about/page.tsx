@@ -174,7 +174,7 @@ export default function AboutPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="bg-white rounded-lg p-6 shadow-sm border"
+                className="bg-white rounded-lg p-6 shadow-xs border"
               >
                 <div className="mb-4 h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
                   {value.icon}
@@ -208,7 +208,7 @@ export default function AboutPage() {
               }`}
             >
               <div className="sm:w-1/2 flex flex-col items-center sm:items-end sm:pr-8">
-                <div className="bg-white rounded-lg p-6 shadow-sm border w-full">
+                <div className="bg-white rounded-lg p-6 shadow-xs border w-full">
                   <div className="text-green-600 font-bold text-xl mb-2">{milestone.year}</div>
                   <h3 className="text-lg font-bold mb-2">{milestone.title}</h3>
                   <p className="text-gray-500 text-sm">{milestone.description}</p>
@@ -242,7 +242,7 @@ export default function AboutPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="bg-white rounded-lg overflow-hidden shadow-sm border"
+                className="bg-white rounded-lg overflow-hidden shadow-xs border"
               >
                 <img
                   src={member.image || "/placeholder.svg"}

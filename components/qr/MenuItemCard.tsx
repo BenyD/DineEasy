@@ -39,7 +39,7 @@ export function MenuItemCard({ item, onAddToCart, cartQuantity, onUpdateQuantity
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: index * 0.1 }}
-      className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-all duration-200 ${
+      className={`bg-white rounded-xl border shadow-xs overflow-hidden transition-all duration-200 ${
         cartQuantity > 0
           ? "border-green-200 shadow-md ring-1 ring-green-100"
           : "border-gray-200 hover:shadow-md hover:border-gray-300"
@@ -47,7 +47,7 @@ export function MenuItemCard({ item, onAddToCart, cartQuantity, onUpdateQuantity
     >
       <div className="flex gap-4 p-4">
         {/* Image */}
-        <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+        <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-gray-100 shrink-0">
           <img src={item.image || "/placeholder.svg"} alt={item.name} className="w-full h-full object-cover" />
           {!item.available && (
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -75,7 +75,7 @@ export function MenuItemCard({ item, onAddToCart, cartQuantity, onUpdateQuantity
                   onClick={handleAdd}
                   disabled={isAdding}
                   size="sm"
-                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-4 py-2 h-8 text-xs font-medium"
+                  className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-4 py-2 h-8 text-xs font-medium"
                 >
                   {isAdding ? (
                     <motion.div
@@ -105,7 +105,7 @@ export function MenuItemCard({ item, onAddToCart, cartQuantity, onUpdateQuantity
                     key={cartQuantity}
                     initial={{ scale: 1.2 }}
                     animate={{ scale: 1 }}
-                    className="font-semibold text-green-700 min-w-[1.5rem] text-center"
+                    className="font-semibold text-green-700 min-w-6 text-center"
                   >
                     {cartQuantity}
                   </motion.span>

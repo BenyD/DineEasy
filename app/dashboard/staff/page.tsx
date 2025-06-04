@@ -390,7 +390,7 @@ export default function StaffPage() {
           </Button>
           <Button
             type="submit"
-            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+            className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
           >
             {staff ? "Update Staff Member" : "Add Staff Member"}
           </Button>
@@ -416,7 +416,7 @@ export default function StaffPage() {
             <DialogTrigger asChild>
               <Button
                 onClick={() => setIsAddDialogOpen(true)}
-                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
               >
                 <UserPlus className="w-4 h-4 mr-2" />
                 Add Staff Member

@@ -101,7 +101,7 @@ export default function MenuPage({ params }: { params: { tableId: string } }) {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-xs border-b border-gray-100">
         <div className="px-4 py-4">
           <div className="flex items-center gap-3 mb-3">
             <img
@@ -120,12 +120,12 @@ export default function MenuPage({ params }: { params: { tableId: string } }) {
             {categories.map((category) => (
               <Button
                 key={category.id}
-                variant={activeCategory === category.id ? "default" : "outline"}
+                variant={activeCategory === category.id ? "default" : "outline-solid"}
                 size="sm"
                 onClick={() => setActiveCategory(category.id)}
                 className={`whitespace-nowrap ${
                   activeCategory === category.id
-                    ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                    ? "bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
                     : "hover:bg-green-50 hover:border-green-200"
                 }`}
               >

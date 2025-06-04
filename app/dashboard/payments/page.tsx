@@ -66,7 +66,7 @@ export default function PaymentsPage() {
                   <Button
                     onClick={handleConnectStripe}
                     disabled={isConnecting}
-                    className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
+                    className="bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
                   >
                     {isConnecting ? (
                       <div className="flex items-center gap-2">

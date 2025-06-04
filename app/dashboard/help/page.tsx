@@ -225,7 +225,7 @@ export default function HelpSupportPage() {
       />
 
       {/* Hero Section */}
-      <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 p-8 text-white">
+      <div className="relative overflow-hidden rounded-lg bg-linear-to-r from-blue-600 to-purple-600 p-8 text-white">
         <div className="relative z-10">
           <h1 className="text-3xl font-bold mb-2">How can we help you today?</h1>
           <p className="text-blue-100 mb-6 max-w-2xl">
@@ -311,7 +311,7 @@ export default function HelpSupportPage() {
                   )}
                   <Button
                     className={method.primary ? "w-full" : "w-full"}
-                    variant={method.primary ? "default" : "outline"}
+                    variant={method.primary ? "default" : "outline-solid"}
                   >
                     {method.action}
                     <ArrowRight className="w-4 h-4 ml-2" />

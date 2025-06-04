@@ -100,7 +100,7 @@ export default function PrinterPage() {
                       ? "bg-green-600 hover:bg-green-700"
                       : testPrintStatus === "error"
                         ? "bg-red-600 hover:bg-red-700"
-                        : "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                        : "bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
                   }
                 >
                   {testPrintStatus === "printing" && (
@@ -303,7 +303,7 @@ export default function PrinterPage() {
             </div>
 
             <div className="pt-4">
-              <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+              <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
                 Save Settings
               </Button>
             </div>

@@ -26,7 +26,7 @@ export function FeatureCard({ icon, title, description, className = "", index = 
         y: -8,
         transition: { duration: 0.2 },
       }}
-      className={`group rounded-lg border bg-white p-4 shadow-sm transition-all hover:shadow-lg hover:border-green-200 sm:p-6 ${className}`}
+      className={`group rounded-lg border bg-white p-4 shadow-xs transition-all hover:shadow-lg hover:border-green-200 sm:p-6 ${className}`}
     >
       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-50 transition-colors group-hover:bg-green-100 sm:mb-4 sm:h-16 sm:w-16">
         {icon}

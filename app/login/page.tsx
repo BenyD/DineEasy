@@ -113,7 +113,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full h-12 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium transition-all duration-200"
+              className="w-full h-12 bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium transition-all duration-200"
             >
               {isLoading ? (
                 <div className="flex items-center gap-2">
@@ -154,7 +154,7 @@ export default function LoginPage() {
 
       {/* Right side - Image */}
       <div className="hidden md:block md:w-1/2 bg-green-50 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(#e0f2e9_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(#e0f2e9_1px,transparent_1px)] bg-size-[16px_16px] mask-[radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
         <div className="absolute -top-40 right-0 h-[500px] w-[500px] rounded-full bg-green-200/20 blur-3xl" />
 
         <div className="relative h-full flex flex-col items-center justify-center p-12">
@@ -164,7 +164,7 @@ export default function LoginPage() {
             transition={{ duration: 0.8, delay: 0.3 }}
             className="max-w-md"
           >
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 mb-8">
+            <div className="bg-white/80 backdrop-blur-xs rounded-2xl shadow-xl p-8 mb-8">
               <img
                 src="/placeholder.svg?height=300&width=400"
                 alt="DineEasy Dashboard"

@@ -111,7 +111,7 @@ export function Navbar() {
 
       {/* Gradient Progress Bar */}
       <motion.div
-        className="h-1 w-full bg-gradient-to-r from-green-400 via-emerald-500 to-green-600"
+        className="h-1 w-full bg-linear-to-r from-green-400 via-emerald-500 to-green-600"
         style={{
           scaleX: scrollYProgress,
           transformOrigin: "0%",

@@ -68,7 +68,7 @@ export default function DashboardPage() {
           transition={{ duration: 0.3 }}
           className="mb-6"
         >
-          <Alert className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+          <Alert className="bg-linear-to-r from-green-50 to-emerald-50 border-green-200">
             <div className="flex items-start justify-between w-full">
               <div className="flex gap-3">
                 <AlertCircle className="h-5 w-5 text-green-600 mt-0.5" />
@@ -111,7 +111,7 @@ export default function DashboardPage() {
           transition={{ duration: 0.3, delay: 0.2 }}
           className="mb-6"
         >
-          <Alert className="bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-200">
+          <Alert className="bg-linear-to-r from-amber-50 to-yellow-50 border-amber-200">
             <div className="flex items-start justify-between w-full">
               <div className="flex gap-3">
                 <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />

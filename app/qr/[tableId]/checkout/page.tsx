@@ -64,7 +64,7 @@ export default function CheckoutPage({ params }: { params: { tableId: string } }
           <h2 className="text-xl font-semibold text-gray-900 mb-2">No items in cart</h2>
           <p className="text-gray-500 mb-6">Add some items before proceeding to checkout</p>
           <Link href={`/qr/${params.tableId}`}>
-            <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+            <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
               Browse Menu
             </Button>
           </Link>
@@ -204,12 +204,12 @@ export default function CheckoutPage({ params }: { params: { tableId: string } }
       </div>
 
       {/* Confirm Button */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-gradient-to-t from-white via-white to-transparent">
+      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-linear-to-t from-white via-white to-transparent">
         <Button
           onClick={handleConfirmOrder}
           disabled={!selectedPayment || isProcessing}
           size="lg"
-          className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-14 disabled:opacity-50"
+          className="w-full bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-14 disabled:opacity-50"
         >
           {isProcessing ? (
             <div className="flex items-center gap-2">

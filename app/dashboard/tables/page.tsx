@@ -111,7 +111,7 @@ export default function TablesPage() {
           </Button>
           <Button
             type="submit"
-            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+            className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
           >
             {table ? "Update Table" : "Add Table"}
           </Button>
@@ -136,7 +136,7 @@ export default function TablesPage() {
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button
-                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
                 onClick={() => setIsAddDialogOpen(true)}
               >
                 <Plus className="w-4 h-4 mr-2" />

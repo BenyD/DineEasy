@@ -98,7 +98,7 @@ export default function BillingPage() {
       {/* Trial Status Alert */}
       {isTrialActive && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          <Alert className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+          <Alert className="bg-linear-to-r from-green-50 to-emerald-50 border-green-200">
             <div className="flex items-start justify-between w-full">
               <div className="flex gap-3">
                 <Clock className="h-5 w-5 text-green-600 mt-0.5" />
@@ -269,7 +269,7 @@ export default function BillingPage() {
                     <p className="text-sm text-gray-500">
                       Upgrade to our Elite plan for unlimited tables, higher order limits, and priority support.
                     </p>
-                    <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 w-full">
+                    <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 w-full">
                       Upgrade to Elite
                     </Button>
                   </div>

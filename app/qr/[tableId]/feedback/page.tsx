@@ -43,7 +43,7 @@ export default function FeedbackPage({
           transition={{ duration: 0.5 }}
           className="text-center max-w-md"
         >
-          <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
+          <div className="w-20 h-20 mx-auto mb-6 bg-linear-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
             <span className="text-3xl">🙏</span>
           </div>
 
@@ -51,7 +51,7 @@ export default function FeedbackPage({
           <p className="text-gray-600 mb-8">Your feedback helps us improve our service and food quality.</p>
 
           <Link href={`/qr/${params.tableId}`}>
-            <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+            <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
               Back to Menu
             </Button>
           </Link>
@@ -151,7 +151,7 @@ export default function FeedbackPage({
             onClick={handleSubmit}
             disabled={rating === 0 || isSubmitting}
             size="lg"
-            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white h-14 disabled:opacity-50"
+            className="w-full bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white h-14 disabled:opacity-50"
           >
             {isSubmitting ? (
               <div className="flex items-center gap-2">

@@ -317,7 +317,7 @@ export default function OrdersPage() {
             <Button variant="outline" onClick={handleKitchenModeToggle}>
               Exit Kitchen Mode
             </Button>
-            <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+            <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
               <RefreshCcw className="w-4 h-4 mr-2" />
               Refresh
             </Button>
@@ -344,7 +344,7 @@ export default function OrdersPage() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white rounded-lg shadow-sm border border-blue-100"
+                    className="bg-white rounded-lg shadow-xs border border-blue-100"
                   >
                     <CardHeader className="p-3 pb-0">
                       <div className="flex items-center justify-between">
@@ -411,7 +411,7 @@ export default function OrdersPage() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white rounded-lg shadow-sm border border-yellow-100"
+                    className="bg-white rounded-lg shadow-xs border border-yellow-100"
                   >
                     <CardHeader className="p-3 pb-0">
                       <div className="flex items-center justify-between">
@@ -480,7 +480,7 @@ export default function OrdersPage() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white rounded-lg shadow-sm border border-green-100"
+                    className="bg-white rounded-lg shadow-xs border border-green-100"
                   >
                     <CardHeader className="p-3 pb-0">
                       <div className="flex items-center justify-between">
@@ -550,7 +550,7 @@ export default function OrdersPage() {
             <Printer className="w-4 h-4 mr-2" />
             Print
           </Button>
-          <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+          <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
             <RefreshCcw className="w-4 h-4 mr-2" />
             Refresh
           </Button>
