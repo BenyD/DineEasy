@@ -1,76 +1,89 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { ArrowLeft, Star, Send } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import Link from "next/link"
+import { use, useState } from "react";
+import { motion } from "framer-motion";
+import { ArrowLeft, Star, Send } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import Link from "next/link";
 
 export default function FeedbackPage({
   params,
   searchParams,
 }: {
-  params: { tableId: string }
-  searchParams: { order?: string }
+  params: Promise<{ tableId: string }>;
+  searchParams: Promise<{ order?: string }>;
 }) {
-  const [rating, setRating] = useState(0)
-  const [hoveredRating, setHoveredRating] = useState(0)
-  const [comment, setComment] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isSubmitted, setIsSubmitted] = useState(false)
+  const resolvedParams = use(params);
+  const resolvedSearchParams = use(searchParams);
+  const [rating, setRating] = useState(0);
+  const [hoveredRating, setHoveredRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const orderNumber = searchParams.order || "000"
+  const orderNumber = resolvedSearchParams.order || "000";
 
   const handleSubmit = async () => {
-    if (rating === 0) return
+    if (rating === 0) return;
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
 
     // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    setIsSubmitting(false)
-    setIsSubmitted(true)
-  }
+    setIsSubmitting(false);
+    setIsSubmitted(true);
+  };
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center px-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
           className="text-center max-w-md"
         >
-          <div className="w-20 h-20 mx-auto mb-6 bg-linear-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
-            <span className="text-3xl">🙏</span>
+          <div className="w-24 h-24 mx-auto mb-8 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-2xl">
+            <span className="text-4xl">🙏</span>
           </div>
 
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Thank You!</h1>
-          <p className="text-gray-600 mb-8">Your feedback helps us improve our service and food quality.</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">Thank You!</h1>
+          <p className="text-gray-600 mb-8 text-lg leading-relaxed">
+            Your feedback helps us improve our service and food quality.
+          </p>
 
-          <Link href={`/qr/${params.tableId}`}>
-            <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+          <Link href={`/qr/${resolvedParams.tableId}`}>
+            <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-8 py-3 rounded-full text-lg shadow-lg">
               Back to Menu
             </Button>
           </Link>
         </motion.div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="sticky top-0 z-40 bg-white border-b border-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+      {/* Enhanced Header */}
+      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-lg border-b border-gray-100 shadow-sm">
         <div className="flex items-center gap-4 px-4 py-4">
-          <Link href={`/qr/${params.tableId}/confirmation?order=${orderNumber}`}>
-            <Button variant="ghost" size="sm" className="p-2">
+          <Link
+            href={{
+              pathname: `/qr/${resolvedParams.tableId}/confirmation`,
+              query: { order: orderNumber },
+            }}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              className="p-2 hover:bg-gray-100 rounded-full"
+            >
               <ArrowLeft className="w-5 h-5" />
             </Button>
           </Link>
-          <div>
+          <div className="flex-1">
             <h1 className="text-lg font-bold">Rate Your Experience</h1>
             <p className="text-sm text-gray-500">Order #{orderNumber}</p>
           </div>
@@ -78,18 +91,22 @@ export default function FeedbackPage({
       </div>
 
       <div className="px-4 py-8">
-        {/* Rating Section */}
+        {/* Enhanced Rating Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
           className="text-center mb-8"
         >
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">How was your experience?</h2>
-          <p className="text-gray-600 mb-6">Your feedback helps us serve you better</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            How was your experience?
+          </h2>
+          <p className="text-gray-600 mb-8 text-lg">
+            Your feedback helps us serve you better
+          </p>
 
-          {/* Star Rating */}
-          <div className="flex justify-center gap-2 mb-6">
+          {/* Enhanced Star Rating */}
+          <div className="flex justify-center gap-3 mb-8">
             {[1, 2, 3, 4, 5].map((star) => (
               <motion.button
                 key={star}
@@ -101,20 +118,22 @@ export default function FeedbackPage({
                 className="p-2"
               >
                 <Star
-                  className={`w-10 h-10 transition-colors duration-200 ${
-                    star <= (hoveredRating || rating) ? "text-yellow-400 fill-yellow-400" : "text-gray-300"
+                  className={`w-12 h-12 transition-all duration-200 ${
+                    star <= (hoveredRating || rating)
+                      ? "text-yellow-400 fill-yellow-400 drop-shadow-lg"
+                      : "text-gray-300 hover:text-gray-400"
                   }`}
                 />
               </motion.button>
             ))}
           </div>
 
-          {/* Rating Labels */}
+          {/* Enhanced Rating Labels */}
           {rating > 0 && (
             <motion.p
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-lg font-medium text-green-700 mb-6"
+              className="text-xl font-bold text-green-700 mb-8"
             >
               {rating === 1 && "Poor 😞"}
               {rating === 2 && "Fair 😐"}
@@ -125,23 +144,25 @@ export default function FeedbackPage({
           )}
         </motion.div>
 
-        {/* Comment Section */}
+        {/* Enhanced Comment Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="mb-8"
+          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-8"
         >
-          <label className="block text-sm font-medium text-gray-700 mb-3">Tell us more (optional)</label>
+          <label className="block text-lg font-semibold text-gray-900 mb-3">
+            Tell us more (optional)
+          </label>
           <Textarea
-            placeholder="What did you like? What could we improve?"
+            placeholder="What did you like? What could we improve? Any special mentions for our staff?"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            className="min-h-[120px] border-gray-200 focus:border-green-500 focus:ring-green-500 resize-none"
+            className="min-h-[120px] border-gray-200 focus:border-green-500 focus:ring-green-500 resize-none rounded-xl text-base"
           />
         </motion.div>
 
-        {/* Submit Button */}
+        {/* Enhanced Submit Button */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -151,12 +172,12 @@ export default function FeedbackPage({
             onClick={handleSubmit}
             disabled={rating === 0 || isSubmitting}
             size="lg"
-            className="w-full bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white h-14 disabled:opacity-50"
+            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white h-16 disabled:opacity-50 rounded-2xl text-lg font-semibold shadow-lg"
           >
             {isSubmitting ? (
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Submitting...
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Submitting Feedback...
               </div>
             ) : (
               <>
@@ -167,15 +188,18 @@ export default function FeedbackPage({
           </Button>
         </motion.div>
 
-        {/* Skip Option */}
+        {/* Enhanced Skip Option */}
         <div className="text-center mt-6">
-          <Link href={`/qr/${params.tableId}`}>
-            <Button variant="ghost" className="text-gray-500 hover:text-gray-700">
+          <Link href={`/qr/${resolvedParams.tableId}`}>
+            <Button
+              variant="ghost"
+              className="text-gray-500 hover:text-gray-700 text-lg rounded-2xl"
+            >
               Skip for now
             </Button>
           </Link>
         </div>
       </div>
     </div>
-  )
+  );
 }

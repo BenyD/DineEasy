@@ -1,14 +1,21 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { ArrowLeft, CreditCard, Smartphone, Banknote, Check } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
-import { useCart } from "@/hooks/useCart"
-import Link from "next/link"
+import { use, useState } from "react";
+import { motion } from "framer-motion";
+import {
+  ArrowLeft,
+  CreditCard,
+  Smartphone,
+  Banknote,
+  Check,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { TipSelector } from "@/components/qr/TipSelector";
+import { useCart } from "@/hooks/useCart";
+import Link from "next/link";
 
 const paymentMethods = [
   {
@@ -32,110 +39,169 @@ const paymentMethods = [
     icon: Banknote,
     color: "green",
   },
-]
+];
 
-export default function CheckoutPage({ params }: { params: { tableId: string } }) {
-  const { cart, getTotalPrice, clearCart } = useCart()
-  const [selectedPayment, setSelectedPayment] = useState("")
-  const [email, setEmail] = useState("")
-  const [isProcessing, setIsProcessing] = useState(false)
+export default function CheckoutPage({
+  params,
+}: {
+  params: Promise<{ tableId: string }>;
+}) {
+  const resolvedParams = use(params);
+  const { cart, getTotalPrice, clearCart } = useCart();
+  const [selectedPayment, setSelectedPayment] = useState("");
+  const [email, setEmail] = useState("");
+  const [tip, setTip] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const subtotal = getTotalPrice()
-  const tax = subtotal * 0.077
-  const total = subtotal + tax
+  const subtotal = getTotalPrice();
+  const tax = subtotal * 0.077;
+  const total = subtotal + tax + tip;
 
   const handleConfirmOrder = async () => {
-    if (!selectedPayment) return
+    if (!selectedPayment) return;
 
-    setIsProcessing(true)
+    setIsProcessing(true);
 
     // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Clear cart and redirect to confirmation
-    clearCart()
-    window.location.href = `/qr/${params.tableId}/confirmation?payment=${selectedPayment}&total=${total.toFixed(2)}`
-  }
+    clearCart();
+    window.location.href = `/qr/${
+      resolvedParams.tableId
+    }/confirmation?payment=${selectedPayment}&total=${total.toFixed(
+      2
+    )}&tip=${tip.toFixed(2)}`;
+  };
 
   if (cart.length === 0) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center px-4">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">No items in cart</h2>
-          <p className="text-gray-500 mb-6">Add some items before proceeding to checkout</p>
-          <Link href={`/qr/${params.tableId}`}>
-            <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center px-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center max-w-sm"
+        >
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            No items in cart
+          </h2>
+          <p className="text-gray-500 mb-8">
+            Add some items before proceeding to checkout
+          </p>
+          <Link href={`/qr/${resolvedParams.tableId}`}>
+            <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-8 py-3 rounded-full">
               Browse Menu
             </Button>
           </Link>
-        </div>
+        </motion.div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="sticky top-0 z-40 bg-white border-b border-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+      {/* Enhanced Header */}
+      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-lg border-b border-gray-100 shadow-sm">
         <div className="flex items-center gap-4 px-4 py-4">
-          <Link href={`/qr/${params.tableId}/cart`}>
-            <Button variant="ghost" size="sm" className="p-2">
+          <Link href={`/qr/${resolvedParams.tableId}/cart`}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="p-2 hover:bg-gray-100 rounded-full"
+            >
               <ArrowLeft className="w-5 h-5" />
             </Button>
           </Link>
-          <div>
+          <div className="flex-1">
             <h1 className="text-lg font-bold">Payment</h1>
-            <p className="text-sm text-gray-500">Table {params.tableId}</p>
+            <p className="text-sm text-gray-500">
+              Table {resolvedParams.tableId} • Final step
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="px-4 py-6 pb-32">
-        {/* Order Summary */}
+      <div className="px-4 py-6 pb-32 space-y-6">
+        {/* Enhanced Order Summary */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="bg-gray-50 rounded-xl p-4 mb-6"
+          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
         >
-          <h3 className="font-semibold text-gray-900 mb-3">Order Summary</h3>
-          <div className="space-y-2 text-sm">
+          <h3 className="font-bold text-gray-900 mb-4 text-lg">
+            Order Summary
+          </h3>
+          <div className="space-y-3 text-sm">
             {cart.map((item) => (
-              <div key={item.id} className="flex justify-between">
-                <span className="text-gray-600">
-                  {item.quantity}x {item.name}
+              <div key={item.id} className="flex justify-between items-center">
+                <div className="flex-1">
+                  <span className="text-gray-900 font-medium">
+                    {item.quantity}x {item.name}
+                  </span>
+                  {item.tags?.includes("Popular") && (
+                    <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">
+                      Popular
+                    </span>
+                  )}
+                </div>
+                <span className="text-gray-900 font-medium">
+                  CHF {(item.price * item.quantity).toFixed(2)}
                 </span>
-                <span className="text-gray-900">CHF {(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
-            <Separator className="my-2" />
-            <div className="flex justify-between">
+            <Separator className="my-3" />
+            <div className="flex justify-between text-base">
               <span className="text-gray-600">Subtotal</span>
-              <span className="text-gray-900">CHF {subtotal.toFixed(2)}</span>
+              <span className="text-gray-900 font-medium">
+                CHF {subtotal.toFixed(2)}
+              </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between text-base">
               <span className="text-gray-600">Tax (7.7%)</span>
-              <span className="text-gray-900">CHF {tax.toFixed(2)}</span>
+              <span className="text-gray-900 font-medium">
+                CHF {tax.toFixed(2)}
+              </span>
             </div>
-            <div className="flex justify-between font-bold text-lg pt-2">
+            {tip > 0 && (
+              <div className="flex justify-between text-base">
+                <span className="text-gray-600">Tip</span>
+                <span className="text-gray-900 font-medium">
+                  CHF {tip.toFixed(2)}
+                </span>
+              </div>
+            )}
+            <Separator className="my-3" />
+            <div className="flex justify-between text-xl font-bold">
               <span>Total</span>
               <span className="text-green-700">CHF {total.toFixed(2)}</span>
             </div>
           </div>
         </motion.div>
 
-        {/* Payment Methods */}
+        {/* Tip Selection */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="mb-6"
         >
-          <h3 className="font-semibold text-gray-900 mb-4">Choose Payment Method</h3>
+          <TipSelector subtotal={subtotal} onTipChange={setTip} />
+        </motion.div>
+
+        {/* Enhanced Payment Methods */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
+        >
+          <h3 className="font-bold text-gray-900 mb-4 text-lg">
+            Choose Payment Method
+          </h3>
           <div className="space-y-3">
             {paymentMethods.map((method, index) => {
-              const Icon = method.icon
-              const isSelected = selectedPayment === method.id
+              const Icon = method.icon;
+              const isSelected = selectedPayment === method.id;
 
               return (
                 <motion.div
@@ -146,22 +212,30 @@ export default function CheckoutPage({ params }: { params: { tableId: string } }
                   onClick={() => setSelectedPayment(method.id)}
                   className={`relative border rounded-xl p-4 cursor-pointer transition-all duration-200 ${
                     isSelected
-                      ? "border-green-500 bg-green-50 ring-2 ring-green-200"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                      ? "border-green-500 bg-green-50 ring-2 ring-green-200 shadow-md"
+                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm"
                   }`}
                 >
                   <div className="flex items-center gap-4">
                     <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                      className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
                         isSelected ? "bg-green-100" : "bg-gray-100"
                       }`}
                     >
-                      <Icon className={`w-6 h-6 ${isSelected ? "text-green-600" : "text-gray-600"}`} />
+                      <Icon
+                        className={`w-6 h-6 ${
+                          isSelected ? "text-green-600" : "text-gray-600"
+                        }`}
+                      />
                     </div>
 
                     <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{method.name}</h4>
-                      <p className="text-sm text-gray-500">{method.description}</p>
+                      <h4 className="font-semibold text-gray-900">
+                        {method.name}
+                      </h4>
+                      <p className="text-sm text-gray-500">
+                        {method.description}
+                      </p>
                     </div>
 
                     {isSelected && (
@@ -175,7 +249,7 @@ export default function CheckoutPage({ params }: { params: { tableId: string } }
                     )}
                   </div>
                 </motion.div>
-              )
+              );
             })}
           </div>
         </motion.div>
@@ -186,41 +260,47 @@ export default function CheckoutPage({ params }: { params: { tableId: string } }
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             transition={{ duration: 0.3 }}
-            className="mb-6"
+            className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
           >
-            <Label htmlFor="email" className="text-sm font-medium text-gray-700 mb-2 block">
-              Email Address (for receipt)
+            <Label
+              htmlFor="email"
+              className="text-base font-semibold text-gray-900 mb-3 block"
+            >
+              Email Address
             </Label>
+            <p className="text-sm text-gray-500 mb-4">
+              We'll send your receipt and order updates here
+            </p>
             <Input
               id="email"
               type="email"
               placeholder="your.email@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-12 border-gray-200 focus:border-green-500 focus:ring-green-500"
+              className="h-12 border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-xl text-base"
             />
           </motion.div>
         )}
       </div>
 
-      {/* Confirm Button */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-linear-to-t from-white via-white to-transparent">
+      {/* Enhanced Confirm Button */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-gradient-to-t from-white via-white/95 to-transparent">
         <Button
           onClick={handleConfirmOrder}
           disabled={!selectedPayment || isProcessing}
           size="lg"
-          className="w-full bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-14 disabled:opacity-50"
+          className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-xl hover:shadow-2xl transition-all duration-200 h-16 disabled:opacity-50 rounded-2xl text-lg font-semibold"
         >
           {isProcessing ? (
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Processing Order...
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Processing Payment...
             </div>
           ) : (
-            <span className="font-medium text-lg">Confirm Order • CHF {total.toFixed(2)}</span>
+            <span>Confirm Order • CHF {total.toFixed(2)}</span>
           )}
         </Button>
       </div>
     </div>
-  )
+  );
 }
