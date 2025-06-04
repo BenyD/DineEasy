@@ -20,6 +20,7 @@ import {
   Printer,
   Building,
   Receipt,
+  Activity,
 } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -106,6 +107,12 @@ const navigationData = {
       icon: Users,
       description: "Manage team members",
       badge: "Elite",
+    },
+    {
+      name: "Activity Logs",
+      url: "/dashboard/activity",
+      icon: Activity,
+      description: "View system activity logs",
     },
     {
       name: "Printer",
