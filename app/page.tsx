@@ -62,9 +62,18 @@ export default function LandingPage() {
               className="flex flex-col justify-center space-y-6 sm:space-y-8"
             >
               <div className="space-y-4 sm:space-y-6">
-                <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl lg:text-6xl">
-                  Modern Restaurant Management Made Simple
-                </h1>
+                <div className="flex flex-col gap-4">
+                  <span className="self-start inline-flex items-center rounded-full bg-green-50/60 px-3 py-1 text-sm font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                    {"🇨🇭"} Made in Switzerland
+                  </span>
+                  <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl lg:text-6xl">
+                    Modern{" "}
+                    <span className="text-green-600">
+                      Restaurant Management
+                    </span>{" "}
+                    Made Simple
+                  </h1>
+                </div>
                 <p className="max-w-[600px] text-base text-gray-500 sm:text-lg md:text-xl">
                   Transform your restaurant with QR-based ordering, real-time
                   dashboards, and seamless payments. Accept Stripe, TWINT, and
