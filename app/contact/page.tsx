@@ -121,10 +121,16 @@ export default function ContactPage() {
               >
                 <h3 className="text-xl font-medium mb-4">Our Location</h3>
                 <div className="aspect-video overflow-hidden rounded-lg">
-                  <img
-                    src="/placeholder.svg?height=300&width=600"
-                    alt="Map location"
-                    className="h-full w-full object-cover"
+                  <iframe
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3153.2295113080297!2d-122.4194!3d37.7749!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x80858085a5e384d9%3A0x70107b2d095d60f!2s123%20Restaurant%20Row%2C%20San%20Francisco%2C%20CA%2094103!5e0!3m2!1sen!2sus!4v1234567890"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    className="w-full h-full"
+                    title="DineEasy Office Location"
                   />
                 </div>
               </motion.div>

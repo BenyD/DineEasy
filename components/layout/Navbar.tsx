@@ -55,7 +55,7 @@ export function Navbar() {
             </Link>
           </motion.div>
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6 }}>
-            <Button asChild size="sm">
+            <Button asChild size="sm" variant="gradient">
               <Link href="/signup">Sign Up</Link>
             </Button>
           </motion.div>
@@ -98,7 +98,7 @@ export function Navbar() {
                 <Link href="/login" className="text-sm font-medium hover:underline" onClick={() => setIsOpen(false)}>
                   Sign In
                 </Link>
-                <Button asChild size="sm" className="w-fit">
+                <Button asChild size="sm" variant="gradient" className="w-fit">
                   <Link href="/signup" onClick={() => setIsOpen(false)}>
                     Sign Up
                   </Link>

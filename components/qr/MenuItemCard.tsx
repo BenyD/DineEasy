@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { Plus, Minus } from "lucide-react";
+import { useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, Minus, Clock, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { MenuItem } from "@/types";
@@ -23,12 +23,12 @@ export function MenuItemCard({
   index,
 }: MenuItemCardProps) {
   const [isAdding, setIsAdding] = useState(false);
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const handleAdd = async () => {
     setIsAdding(true);
     onAddToCart(item);
-
-    // Brief animation delay
     setTimeout(() => setIsAdding(false), 300);
   };
 
@@ -45,121 +45,169 @@ export function MenuItemCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: index * 0.1 }}
-      className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all duration-200 ${
+      className={`bg-white rounded-2xl border overflow-hidden transition-all duration-200 ${
         cartQuantity > 0
           ? "border-green-200 shadow-lg ring-2 ring-green-100"
           : "border-gray-200 hover:shadow-lg hover:border-gray-300"
-      } ${!item.available ? "opacity-60" : ""}`}
+      } ${!item.available ? "opacity-75" : ""}`}
     >
-      <div className="flex gap-4 p-4">
-        {/* Enhanced Image */}
-        <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-          <img
-            src={item.image || "/placeholder.svg"}
-            alt={item.name}
-            className="w-full h-full object-cover"
-          />
+      <div className="flex flex-col sm:flex-row">
+        {/* Image Container */}
+        <div className="relative w-full sm:w-48 h-48 sm:h-full">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: isImageLoaded ? 1 : 0 }}
+            className="absolute inset-0 bg-gray-100"
+          >
+            <img
+              src={item.image || "/placeholder.svg"}
+              alt={item.name}
+              onLoad={() => setIsImageLoaded(true)}
+              className="w-full h-full object-cover"
+            />
+          </motion.div>
+          {!isImageLoaded && (
+            <div className="absolute inset-0 bg-gray-100 animate-pulse" />
+          )}
           {!item.available && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-              <Badge variant="secondary" className="text-xs">
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center">
+              <Badge variant="secondary" className="text-base mb-2">
                 Sold Out
               </Badge>
+              <p className="text-sm text-gray-600">Currently unavailable</p>
             </div>
           )}
           {item.tags?.includes("Popular") && (
-            <div className="absolute top-2 left-2 bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-medium">
-              Popular
+            <div className="absolute top-3 left-3">
+              <Badge className="bg-orange-500 text-white font-medium px-3 py-1">
+                Popular Choice
+              </Badge>
             </div>
           )}
         </div>
 
-        {/* Enhanced Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex justify-between items-start mb-2">
-            <div className="flex-1">
-              <h3 className="font-bold text-gray-900 text-base sm:text-lg leading-tight">
+        {/* Content Container */}
+        <div className="flex-1 p-4 sm:p-6 flex flex-col">
+          <div className="flex justify-between items-start gap-4 mb-3">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 mb-1">
                 {item.name}
               </h3>
-              <div className="flex gap-1 mt-1">
+              <div className="flex flex-wrap gap-2 mb-2">
                 {item.tags
                   ?.filter((tag) => tag !== "Popular")
                   .map((tag) => (
                     <Badge
                       key={tag}
                       variant="secondary"
-                      className="text-xs bg-green-100 text-green-700"
+                      className="bg-green-50 text-green-700 font-medium"
                     >
                       {tag}
                     </Badge>
                   ))}
               </div>
             </div>
-            <span className="font-bold text-gray-900 text-base sm:text-lg ml-2">
-              CHF {item.price.toFixed(2)}
-            </span>
+            <div className="text-right">
+              <span className="text-2xl font-bold text-gray-900">
+                CHF {item.price.toFixed(2)}
+              </span>
+            </div>
           </div>
 
-          <p className="text-gray-600 text-sm mb-4 line-clamp-2 leading-relaxed">
+          <p className="text-gray-600 text-base mb-4 flex-grow">
             {item.description}
           </p>
 
-          {/* Enhanced Add to Cart Controls */}
+          {/* Item Details */}
+          <div className="flex flex-wrap gap-4 mb-4 text-sm">
+            {item.preparationTime && (
+              <div className="flex items-center gap-1 text-gray-600">
+                <Clock className="w-4 h-4" />
+                <span>{item.preparationTime} min prep</span>
+              </div>
+            )}
+            {item.allergens?.length > 0 && (
+              <div className="flex items-center gap-1 text-amber-600">
+                <AlertCircle className="w-4 h-4" />
+                <span>Contains: {item.allergens.join(", ")}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Add to Cart Controls */}
           {item.available && (
-            <div className="flex items-center justify-between">
-              {cartQuantity === 0 ? (
-                <Button
-                  onClick={handleAdd}
-                  disabled={isAdding}
-                  size="sm"
-                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-2 h-10 text-sm font-semibold rounded-full shadow-md hover:shadow-lg transition-all duration-200"
-                >
-                  {isAdding ? (
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{
-                        duration: 0.5,
-                        repeat: Number.POSITIVE_INFINITY,
-                        ease: "linear",
-                      }}
-                      className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
-                    />
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add
-                    </>
-                  )}
-                </Button>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <Button
-                    onClick={() => handleQuantityChange(cartQuantity - 1)}
-                    size="sm"
-                    variant="outline"
-                    className="w-10 h-10 p-0 border-green-200 hover:bg-green-50 rounded-full"
+            <div className="flex items-center justify-between mt-2">
+              <AnimatePresence mode="wait">
+                {cartQuantity === 0 ? (
+                  <motion.div
+                    key="add"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="w-full"
                   >
-                    <Minus className="w-4 h-4" />
-                  </Button>
+                    <Button
+                      ref={buttonRef}
+                      onClick={handleAdd}
+                      disabled={isAdding}
+                      size="lg"
+                      className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all duration-200 h-12 rounded-xl"
+                    >
+                      {isAdding ? (
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{
+                            duration: 0.5,
+                            repeat: Number.POSITIVE_INFINITY,
+                            ease: "linear",
+                          }}
+                          className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
+                        />
+                      ) : (
+                        <>
+                          <Plus className="w-5 h-5 mr-2" />
+                          Add to Cart
+                        </>
+                      )}
+                    </Button>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="quantity"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-center gap-4 w-full"
+                  >
+                    <Button
+                      onClick={() => handleQuantityChange(cartQuantity - 1)}
+                      variant="outline"
+                      size="lg"
+                      className="w-12 h-12 p-0 border-green-200 hover:bg-green-50 rounded-xl"
+                    >
+                      <Minus className="w-5 h-5" />
+                    </Button>
 
-                  <motion.span
-                    key={cartQuantity}
-                    initial={{ scale: 1.2 }}
-                    animate={{ scale: 1 }}
-                    className="font-bold text-green-700 min-w-[2rem] text-center text-lg"
-                  >
-                    {cartQuantity}
-                  </motion.span>
+                    <motion.span
+                      key={cartQuantity}
+                      initial={{ scale: 1.2 }}
+                      animate={{ scale: 1 }}
+                      className="font-bold text-green-700 text-2xl min-w-[3rem] text-center"
+                    >
+                      {cartQuantity}
+                    </motion.span>
 
-                  <Button
-                    onClick={() => handleQuantityChange(cartQuantity + 1)}
-                    size="sm"
-                    variant="outline"
-                    className="w-10 h-10 p-0 border-green-200 hover:bg-green-50 rounded-full"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-              )}
+                    <Button
+                      onClick={() => handleQuantityChange(cartQuantity + 1)}
+                      variant="outline"
+                      size="lg"
+                      className="w-12 h-12 p-0 border-green-200 hover:bg-green-50 rounded-xl"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </Button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
         </div>

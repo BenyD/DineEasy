@@ -8,33 +8,6 @@ import { AnimatedSection } from "@/components/elements/AnimatedSection";
 import { CTASection } from "@/components/elements/CTASection";
 
 export default function AboutPage() {
-  const teamMembers = [
-    {
-      name: "Alex Johnson",
-      role: "CEO & Co-Founder",
-      bio: "Former restaurant owner with 15 years of experience. Built DineEasy after struggling with outdated POS systems.",
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      name: "Sarah Chen",
-      role: "CTO & Co-Founder",
-      bio: "Tech innovator specializing in real-time systems and payment processing. Expert in Stripe Connect integration.",
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      name: "Michael Rodriguez",
-      role: "Head of Customer Success",
-      bio: "Dedicated to ensuring every restaurant maximizes their ROI with DineEasy's platform.",
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      name: "Emma Wilson",
-      role: "Lead Product Designer",
-      bio: "Creates intuitive mobile-first interfaces that make technology accessible to restaurant staff and customers.",
-      image: "/placeholder.svg?height=300&width=300",
-    },
-  ];
-
   const values = [
     {
       icon: <Heart className="h-6 w-6 text-green-600" />,
@@ -59,39 +32,6 @@ export default function AboutPage() {
       title: "Innovation",
       description:
         "Continuously improving with AI OCR, TWINT integration, and cutting-edge restaurant technology.",
-    },
-  ];
-
-  const milestones = [
-    {
-      year: "2020",
-      title: "The Problem",
-      description:
-        "During the pandemic, restaurants needed contactless ordering solutions. Existing systems were expensive and complex.",
-    },
-    {
-      year: "2021",
-      title: "DineEasy Launch",
-      description:
-        "Launched with 10 pilot restaurants, focusing on QR menus and Stripe Connect integration.",
-    },
-    {
-      year: "2022",
-      title: "Rapid Growth",
-      description:
-        "Reached 500+ restaurants and added thermal printing, TWINT support, and real-time dashboards.",
-    },
-    {
-      year: "2023",
-      title: "International Expansion",
-      description:
-        "Scaled to 1,000+ restaurants across 15 countries with AI OCR and advanced analytics.",
-    },
-    {
-      year: "2024",
-      title: "Platform Maturity",
-      description:
-        "Introduced staff management, custom branding, and API access for enterprise customers.",
     },
   ];
 
@@ -208,95 +148,6 @@ export default function AboutPage() {
                 </div>
                 <h3 className="text-xl font-bold mb-3">{value.title}</h3>
                 <p className="text-gray-500">{value.description}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <AnimatedSection className="py-16 sm:py-24">
-        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-4xl text-center mb-12 sm:mb-16">
-            <h2 className="text-2xl font-bold tracking-tighter sm:text-3xl md:text-4xl lg:text-5xl">
-              Our Journey
-            </h2>
-            <p className="mt-4 text-lg text-gray-500">
-              From startup to serving 1,000+ restaurants worldwide
-            </p>
-          </div>
-
-          <div className="relative max-w-3xl mx-auto">
-            <div className="absolute left-4 sm:left-1/2 h-full w-0.5 bg-green-200 transform -translate-x-1/2"></div>
-
-            {milestones.map((milestone, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className={`relative flex flex-col sm:flex-row gap-8 mb-12 ${
-                  index % 2 === 0 ? "sm:flex-row" : "sm:flex-row-reverse"
-                }`}
-              >
-                <div className="sm:w-1/2 flex flex-col items-center sm:items-end sm:pr-8">
-                  <div className="bg-white rounded-lg p-8 shadow-xs border hover:shadow-md transition-shadow w-full">
-                    <div className="text-green-600 font-bold text-xl mb-3">
-                      {milestone.year}
-                    </div>
-                    <h3 className="text-xl font-bold mb-3">
-                      {milestone.title}
-                    </h3>
-                    <p className="text-gray-500">{milestone.description}</p>
-                  </div>
-                </div>
-
-                <div className="absolute left-4 sm:left-1/2 w-8 h-8 bg-green-500 rounded-full border-4 border-white transform -translate-x-1/2 flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">
-                    {index + 1}
-                  </span>
-                </div>
-
-                <div className="sm:w-1/2 sm:pl-8"></div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </AnimatedSection>
-
-      <section className="bg-gray-50 py-16 sm:py-24">
-        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <AnimatedSection>
-            <div className="mx-auto max-w-4xl text-center mb-12 sm:mb-16">
-              <h2 className="text-2xl font-bold tracking-tighter sm:text-3xl md:text-4xl lg:text-5xl">
-                Meet Our Team
-              </h2>
-              <p className="mt-4 text-lg text-gray-500">
-                The passionate people behind DineEasy
-              </p>
-            </div>
-          </AnimatedSection>
-
-          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-            {teamMembers.map((member, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="bg-white rounded-lg overflow-hidden shadow-xs border hover:shadow-md transition-shadow"
-              >
-                <img
-                  src={member.image || "/placeholder.svg"}
-                  alt={member.name}
-                  className="w-full h-64 object-cover object-center"
-                />
-                <div className="p-6">
-                  <h3 className="text-xl font-bold mb-1">{member.name}</h3>
-                  <p className="text-green-600 text-sm mb-3">{member.role}</p>
-                  <p className="text-gray-500 text-sm">{member.bio}</p>
-                </div>
               </motion.div>
             ))}
           </div>
