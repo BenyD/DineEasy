@@ -669,7 +669,11 @@ export default function StaffPage() {
                                     Joined{" "}
                                     {new Date(
                                       staff.joinDate
-                                    ).toLocaleDateString()}
+                                    ).toLocaleDateString("en-US", {
+                                      year: "numeric",
+                                      month: "numeric",
+                                      day: "numeric",
+                                    })}
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <Clock className="w-3 h-3" />

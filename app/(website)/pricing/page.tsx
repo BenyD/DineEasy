@@ -29,42 +29,95 @@ import {
 import { PLANS } from "@/lib/constants";
 import Link from "next/link";
 
-const comparisonFeatures = [
-  { name: "QR Menu + Ordering", starter: true, pro: true, elite: true },
-  { name: "Stripe & Cash Payments", starter: true, pro: true, elite: true },
-  { name: "Card Payment Commission", starter: "2%", pro: "2%", elite: "2%" },
-  { name: "Cash Payment Commission", starter: "0%", pro: "0%", elite: "0%" },
-  { name: "Staff Logins", starter: "1", pro: "Up to 3", elite: "Unlimited" },
+interface PlanFeature {
+  text: string;
+  included: boolean;
+}
+
+const FEATURE_COMPARISON = [
   {
-    name: "Staff Roles (Waiter/Supervisor)",
+    name: "Digital Menu & QR Ordering",
+    starter: true,
+    pro: true,
+    elite: true,
+  },
+  {
+    name: "Number of Tables/QR Codes",
+    starter: "Up to 6",
+    pro: "Up to 12",
+    elite: "Unlimited",
+  },
+  {
+    name: "Real-Time Order Dashboard",
+    starter: true,
+    pro: true,
+    elite: true,
+  },
+  {
+    name: "Stripe & Cash Payments",
+    starter: true,
+    pro: true,
+    elite: true,
+  },
+  {
+    name: "Receipt Printing",
+    starter: "Basic Setup",
+    pro: "Basic Setup",
+    elite: "Assisted Setup",
+  },
+  {
+    name: "Multi-Factor Authentication (MFA)",
+    starter: true,
+    pro: true,
+    elite: true,
+  },
+  {
+    name: "Staff Accounts",
+    starter: "1 User",
+    pro: "Up to 3 Users",
+    elite: "Unlimited",
+  },
+  {
+    name: "Role-Based Access Control",
     starter: false,
     pro: true,
     elite: true,
   },
-  { name: "Order Dashboard", starter: true, pro: true, elite: true },
-  { name: "Receipt Printing", starter: true, pro: true, elite: true },
-  { name: "Receipt Customization", starter: false, pro: true, elite: true },
-  { name: "Daily Sales Reports", starter: false, pro: true, elite: true },
-  { name: "Order Analytics", starter: false, pro: "Basic", elite: "Advanced" },
-  { name: "Feedback Management", starter: false, pro: true, elite: true },
   {
-    name: "Audit Trails (Logins, Orders)",
-    starter: false,
-    pro: false,
-    elite: true,
+    name: "Sales Reports",
+    starter: "Weekly (Email)",
+    pro: "Daily (Email + Download)",
+    elite: "Daily + Audit Logs",
   },
   {
-    name: "Staff Performance Metrics",
+    name: "Analytics",
+    starter: false,
+    pro: "Basic Order Analytics",
+    elite: "Enhanced Analytics",
+  },
+  {
+    name: "Early Access Features",
+    starter: false,
+    pro: "New Features",
+    elite: "New + Experimental AI",
+  },
+  {
+    name: "Onboarding",
+    starter: "Self-Service",
+    pro: "Self-Service",
+    elite: "Dedicated Session",
+  },
+  {
+    name: "Feature Requests",
     starter: false,
     pro: false,
-    elite: "Coming Soon",
+    elite: "Priority Queue",
   },
-  { name: "Early Access: AI OCR", starter: false, pro: true, elite: true },
   {
-    name: "Support Level",
-    starter: "Basic",
-    pro: "Priority",
-    elite: "24/7 Priority",
+    name: "Support",
+    starter: "Email",
+    pro: "Priority Email",
+    elite: "24/7 Email + Phone",
   },
 ];
 
@@ -79,40 +132,29 @@ export default function PricingPage() {
       emoji: "🥗",
       color: "green",
       description:
-        "Perfect for small cafés and food stalls looking to modernize their ordering process",
-      bestFor: "Small cafés & food stalls",
+        "For independent owners, food stalls & cafés with no staff complexity",
+      bestFor: "Independent owners",
       features: [
-        { text: "AI-Powered Digital Menu", included: true },
-        { text: "Secure QR Table Ordering", included: true },
-        { text: "Swiss Payment Processing", included: true },
-        { text: "Live Order Dashboard", included: true },
-        { text: "Basic Staff Access", included: true },
-        { text: "Standard Receipt Printing", included: true },
-        { text: "Basic Analytics & Reports", included: true },
-        { text: "Advanced Staff Management", included: false },
-        { text: "Custom Branding Options", included: false },
+        ...PLANS.starter.features.map(
+          (text) => ({ text, included: true } as PlanFeature)
+        ),
+        ...(PLANS.starter.negativeFeatures || []).map(
+          (text) => ({ text, included: false } as PlanFeature)
+        ),
       ],
     },
     {
       ...PLANS.pro,
       highlighted: true,
       icon: ChefHat,
-      emoji: "👨‍🍳",
+      emoji: "🍽️",
       color: "green",
       description:
-        "Advanced features and analytics for growing restaurants that need more control",
-      bestFor: "Growing restaurants & chains",
-      features: [
-        { text: "Everything in Starter", included: true },
-        { text: "Multi-Language Menus", included: true },
-        { text: "Staff Role Management", included: true },
-        { text: "Custom Receipt Branding", included: true },
-        { text: "Advanced Analytics Dashboard", included: true },
-        { text: "Customer Feedback System", included: true },
-        { text: "Inventory Management", included: true },
-        { text: "Priority Support (12/7)", included: true },
-        { text: "Early Access to New Features", included: true },
-      ],
+        "Designed for busy cafés, bars, and small restaurants with a few staff",
+      bestFor: "Growing restaurants",
+      features: PLANS.pro.features.map(
+        (text) => ({ text, included: true } as PlanFeature)
+      ),
     },
     {
       ...PLANS.elite,
@@ -120,64 +162,43 @@ export default function PricingPage() {
       icon: Building2,
       emoji: "🏢",
       color: "green",
-      description:
-        "Enterprise-grade solution for high-volume restaurants and chains",
-      bestFor: "Large restaurants & franchises",
-      features: [
-        { text: "Everything in Pro", included: true },
-        { text: "Unlimited Staff & Locations", included: true },
-        { text: "Advanced Access Control", included: true },
-        { text: "Full Security Audit Logs", included: true },
-        { text: "Custom Integration Options", included: true },
-        { text: "AI-Powered Analytics", included: true },
-        { text: "Priority Feature Development", included: true },
-        { text: "24/7 Swiss Support", included: true },
-        { text: "Dedicated Account Manager", included: true },
-      ],
+      description: "For high-volume kitchens and restaurants with larger staff",
+      bestFor: "High-volume restaurants",
+      features: PLANS.elite.features.map(
+        (text) => ({ text, included: true } as PlanFeature)
+      ),
     },
   ];
 
   const faqs = [
     {
-      question: "How is the monthly subscription fee calculated?",
+      question: "How is the subscription fee calculated?",
       answer:
-        "Our pricing is straightforward: you pay a fixed monthly subscription (CHF 15 for Starter, CHF 39 for Pro, CHF 79 for Elite) plus a 2% commission on card payments. Cash payments are always free with no additional fees. The subscription fee includes all features in your chosen plan.",
+        "Monthly billing starts after the 14-day trial ends. You can upgrade/downgrade anytime.",
     },
     {
-      question: "Are there any hidden fees or additional costs?",
+      question: "Is the 2% commission charged on all orders?",
       answer:
-        "No hidden fees. You only pay the monthly subscription and the 2% card payment commission. There are no setup fees, no minimum transaction fees, and no long-term contracts. Cash payments are always commission-free.",
+        "Only on Stripe card payments. Cash orders are completely fee-free.",
     },
     {
-      question: "What happens after my 14-day free trial?",
-      answer:
-        "During your trial, you'll have full access to all features of your chosen plan. At the end of the trial, you can enter your payment details to continue using DineEasy. If you choose not to continue, your account will be automatically paused - no charges, no commitments.",
+      question: "Can I switch plans later?",
+      answer: "Yes. You can upgrade, downgrade, or cancel at any time.",
     },
     {
-      question: "Can I change my subscription plan later?",
+      question: "Do you offer annual discounts?",
       answer:
-        "Yes, you can upgrade or downgrade your plan at any time. When upgrading, you'll get immediate access to new features and will only be charged the difference for the remainder of your billing cycle. When downgrading, changes take effect at the start of your next billing cycle.",
+        "Yes — save 20% when paying yearly. (Starter: CHF 144/yr, Pro: CHF 374/yr, Elite: CHF 758/yr)",
     },
     {
-      question: "Do you offer any discounts for annual subscriptions?",
+      question: "Is support included for all plans?",
       answer:
-        "Yes! You can save 20% by choosing annual billing. This brings the effective monthly cost down to CHF 12 for Starter, CHF 31 for Pro, and CHF 63 for Elite, while keeping all the same great features.",
+        "Yes, but Pro & Elite customers get priority support with faster response times.",
     },
     {
-      question: "What payment methods do you accept for the subscription?",
+      question: "What happens after the trial?",
       answer:
-        "We accept all major credit and debit cards (Visa, Mastercard, American Express) through our secure payment processor, Stripe. For Swiss businesses, we also accept direct bank transfers for annual subscriptions.",
-    },
-    {
-      question:
-        "Is the 2% card payment commission negotiable for high-volume businesses?",
-      answer:
-        "For businesses processing over CHF 50,000 per month in card payments, we offer custom pricing plans with reduced commission rates. Contact our sales team to discuss enterprise pricing options.",
-    },
-    {
-      question: "What happens if I need to cancel my subscription?",
-      answer:
-        "You can cancel your subscription at any time through your dashboard. Your service will continue until the end of your current billing period. We don't offer partial refunds for unused time, but you won't be charged again after cancellation.",
+        "You'll be asked to choose a plan. If you don't subscribe, your account will pause — no charges.",
     },
   ];
 
@@ -186,39 +207,30 @@ export default function PricingPage() {
       <HeaderSection
         title="Swiss Quality, Fair Pricing"
         subtitle={
-          <span>
-            Enterprise features at SMB prices{" "}
+          <>
+            <span>Enterprise features at SMB prices</span>
             <span className="text-gray-500">
-              + only 2% commission on card payments
+              {" "}
+              — built for growing restaurants, with just a 2% commission on card
+              payments.
             </span>
-          </span>
+          </>
         }
       >
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-center sm:gap-6"
-        >
-          {[
-            { text: "14-day free trial", icon: Star },
-            { text: "No credit card required", icon: Shield },
-            { text: "Cancel anytime", icon: Zap },
-          ].map((item, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.7 + index * 0.1 }}
-              className="flex items-center gap-2 text-sm text-gray-600"
-            >
-              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100/80 backdrop-blur-sm">
-                <item.icon className="h-3 w-3 text-green-600" />
-              </div>
-              <span>{item.text}</span>
-            </motion.div>
-          ))}
-        </motion.div>
+        <div className="mt-4 flex flex-col items-center gap-2 text-sm text-gray-600">
+          <div className="flex items-center gap-2">
+            <Check className="h-4 w-4 text-green-500" />
+            <span>14-day free trial — No credit card required</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Check className="h-4 w-4 text-green-500" />
+            <span>Cancel anytime — No hidden fees</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Check className="h-4 w-4 text-green-500" />
+            <span>Stripe & Cash Payments Supported</span>
+          </div>
+        </div>
       </HeaderSection>
 
       <AnimatedSection className="relative py-16 sm:py-24">
@@ -403,7 +415,7 @@ export default function PricingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {comparisonFeatures.map((feature, index) => (
+                  {FEATURE_COMPARISON.map((feature, index) => (
                     <tr
                       key={index}
                       className={index % 2 === 0 ? "bg-gray-50" : "bg-white"}

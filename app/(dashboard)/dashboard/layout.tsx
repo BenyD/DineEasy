@@ -1,20 +1,18 @@
-import type React from "react"
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/dashboard/app-sidebar"
-import { BreadcrumbHeader } from "@/components/dashboard/breadcrumb-header"
+import { cookies } from "next/headers";
+import { DashboardLayoutClient } from "@/components/dashboard/dashboard-layout-client";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
+  // Get the sidebar state from cookies in the server component
+  const cookieStore = await cookies();
+  const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";
+
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <BreadcrumbHeader />
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">{children}</div>
-      </SidebarInset>
-    </SidebarProvider>
-  )
+    <DashboardLayoutClient defaultOpen={defaultOpen}>
+      {children}
+    </DashboardLayoutClient>
+  );
 }

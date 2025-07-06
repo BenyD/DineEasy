@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { CommandMenu } from "./CommandMenu";
+import { NotificationPopover } from "./NotificationPopover";
 
 interface BreadcrumbItem {
   label: string;
@@ -71,19 +73,16 @@ export function BreadcrumbHeader({ items }: BreadcrumbHeaderProps = {}) {
   const currentPage = breadcrumbs[breadcrumbs.length - 1]?.label || "Dashboard";
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
-      <div className="hidden md:flex items-center gap-2">
-        {/* Sidebar Toggle Button */}
-        <SidebarTrigger className="-ml-1">
+    <div className="flex h-14 items-center gap-4 px-4">
+      <div className="hidden md:flex items-center gap-4">
+        <SidebarTrigger>
           <PanelLeft className="h-4 w-4" />
           <span className="sr-only">Toggle Sidebar</span>
         </SidebarTrigger>
-
-        <Separator orientation="vertical" className="mr-2 h-4" />
+        <Separator orientation="vertical" className="h-4" />
       </div>
 
-      {/* Breadcrumbs - Hidden on mobile, show page title instead */}
-      <div className="flex items-center gap-2 overflow-hidden">
+      <div className="flex items-center gap-2">
         <Breadcrumb className="hidden md:flex">
           <BreadcrumbList>
             {breadcrumbs.map((breadcrumb, index) => (
@@ -112,16 +111,15 @@ export function BreadcrumbHeader({ items }: BreadcrumbHeaderProps = {}) {
           </BreadcrumbList>
         </Breadcrumb>
 
-        {/* Mobile: Show only current page title */}
         <div className="md:hidden">
           <h1 className="font-semibold text-foreground">{currentPage}</h1>
         </div>
       </div>
 
-      {/* Right side actions can be added here */}
-      <div className="ml-auto flex items-center gap-2">
-        {/* Future: Add search, notifications, user menu, etc. */}
+      <div className="ml-auto flex items-center gap-4">
+        <CommandMenu />
+        <NotificationPopover />
       </div>
-    </header>
+    </div>
   );
 }
