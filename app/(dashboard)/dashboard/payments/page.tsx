@@ -410,25 +410,6 @@ export default function PaymentsPage() {
           </Card>
         </motion.div>
       )}
-
-      {/* Test Mode Notice */}
-      {stripeAccount.isTestMode && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.4 }}
-        >
-          <Alert className="bg-blue-50 border-blue-200">
-            <AlertCircle className="h-4 w-4 text-blue-600" />
-            <AlertTitle className="text-blue-800">Test Mode Active</AlertTitle>
-            <AlertDescription className="text-blue-700">
-              Your Stripe account is currently in test mode. No real payments
-              will be processed. Switch to live mode in your Stripe dashboard
-              when you're ready to accept real payments.
-            </AlertDescription>
-          </Alert>
-        </motion.div>
-      )}
     </div>
   );
 }
