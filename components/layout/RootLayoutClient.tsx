@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { AnimatePresence } from "framer-motion";
+import { initializeCookies } from "@/lib/cookies";
+import { CookieConsent } from "@/components/elements/CookieConsent";
 
 interface RootLayoutClientProps {
   children: ReactNode;
@@ -12,11 +15,14 @@ export function RootLayoutClient({
   children,
   className,
 }: RootLayoutClientProps) {
+  useEffect(() => {
+    initializeCookies();
+  }, []);
+
   return (
-    <html lang="en">
-      <body className={className}>
-        <AnimatePresence mode="wait">{children}</AnimatePresence>
-      </body>
-    </html>
+    <div className={className}>
+      <AnimatePresence mode="wait">{children}</AnimatePresence>
+      <CookieConsent />
+    </div>
   );
 }

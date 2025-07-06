@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { Navbar } from "./Navbar";
 import { Footer } from "./Footer";
-import { CookieConsent } from "../elements/CookieConsent";
 import { PageTransition } from "./PageTransition";
 
 interface PageWrapperProps {
@@ -22,7 +21,6 @@ export function PageWrapper({
         <PageTransition>{children}</PageTransition>
       </main>
       {showFooter && <Footer />}
-      <CookieConsent />
     </div>
   );
 }

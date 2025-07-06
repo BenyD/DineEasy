@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { viewport } from "../metadata";
+import { viewport } from "./metadata";
 
 export { viewport };
 

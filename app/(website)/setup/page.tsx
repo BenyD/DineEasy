@@ -1,19 +1,27 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { ArrowRight, ArrowLeft, Upload, MapPin, QrCode, FileText, ChefHat } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
+import { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  ArrowRight,
+  ArrowLeft,
+  Upload,
+  MapPin,
+  QrCode,
+  FileText,
+  ChefHat,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 
 export default function SetupPage() {
-  const [step, setStep] = useState(1)
-  const [isLoading, setIsLoading] = useState(false)
+  const [step, setStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     logo: null,
     coverPhoto: null,
@@ -23,53 +31,58 @@ export default function SetupPage() {
     country: "",
     tableCount: 5,
     menuUploadMethod: "manual", // 'manual' or 'ocr'
-  })
+  });
 
-  const totalSteps = 4
-  const progress = (step / totalSteps) * 100
+  const totalSteps = 4;
+  const progress = (step / totalSteps) * 100;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
-    })
-  }
+    });
+  };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
+  const handleFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: string
+  ) => {
     if (e.target.files && e.target.files[0]) {
       setFormData({
         ...formData,
         [field]: e.target.files[0],
-      })
+      });
     }
-  }
+  };
 
   const handleNext = () => {
     if (step < totalSteps) {
-      setStep(step + 1)
-      window.scrollTo(0, 0)
+      setStep(step + 1);
+      window.scrollTo(0, 0);
     } else {
-      handleComplete()
+      handleComplete();
     }
-  }
+  };
 
   const handleBack = () => {
     if (step > 1) {
-      setStep(step - 1)
-      window.scrollTo(0, 0)
+      setStep(step - 1);
+      window.scrollTo(0, 0);
     }
-  }
+  };
 
   const handleComplete = async () => {
-    setIsLoading(true)
+    setIsLoading(true);
     // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    window.location.href = "/dashboard"
-  }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    window.location.href = "/dashboard";
+  };
 
   const handleSkip = () => {
-    handleNext()
-  }
+    handleNext();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -87,7 +100,9 @@ export default function SetupPage() {
               <div className="hidden sm:block h-6 w-px bg-gray-300" />
               <div className="hidden sm:block">
                 <h1 className="text-lg font-semibold">Restaurant Setup</h1>
-                <p className="text-sm text-gray-500">Complete your profile to get started</p>
+                <p className="text-sm text-gray-500">
+                  Complete your profile to get started
+                </p>
               </div>
             </div>
             <div className="text-sm text-gray-500">
@@ -110,8 +125,12 @@ export default function SetupPage() {
           {step === 1 && (
             <div className="space-y-6">
               <div className="text-center">
-                <h2 className="text-2xl font-bold">Upload Your Restaurant Images</h2>
-                <p className="text-gray-500 mt-2">These will be displayed to your customers</p>
+                <h2 className="text-2xl font-bold">
+                  Upload Your Restaurant Images
+                </h2>
+                <p className="text-gray-500 mt-2">
+                  These will be displayed to your customers
+                </p>
               </div>
 
               <Card className="overflow-hidden">
@@ -124,17 +143,25 @@ export default function SetupPage() {
                           <div className="text-center">
                             <div className="w-32 h-32 mx-auto bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
                               <img
-                                src={URL.createObjectURL(formData.logo as unknown as Blob) || "/placeholder.svg"}
+                                src={
+                                  URL.createObjectURL(
+                                    formData.logo as unknown as Blob
+                                  ) || "/placeholder.svg"
+                                }
                                 alt="Logo preview"
                                 className="max-w-full max-h-full object-contain"
                               />
                             </div>
-                            <p className="text-sm text-gray-500 mt-2">{(formData.logo as unknown as File).name}</p>
+                            <p className="text-sm text-gray-500 mt-2">
+                              {(formData.logo as unknown as File).name}
+                            </p>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="mt-2"
-                              onClick={() => setFormData({ ...formData, logo: null })}
+                              onClick={() =>
+                                setFormData({ ...formData, logo: null })
+                              }
                             >
                               Remove
                             </Button>
@@ -159,7 +186,9 @@ export default function SetupPage() {
                                 />
                               </label>
                             </p>
-                            <p className="text-xs text-gray-400">PNG, JPG, GIF up to 2MB</p>
+                            <p className="text-xs text-gray-400">
+                              PNG, JPG, GIF up to 2MB
+                            </p>
                           </div>
                         )}
                       </div>
@@ -172,7 +201,11 @@ export default function SetupPage() {
                           <div className="text-center w-full">
                             <div className="w-full h-48 mx-auto bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
                               <img
-                                src={URL.createObjectURL(formData.coverPhoto as unknown as Blob) || "/placeholder.svg"}
+                                src={
+                                  URL.createObjectURL(
+                                    formData.coverPhoto as unknown as Blob
+                                  ) || "/placeholder.svg"
+                                }
                                 alt="Cover photo preview"
                                 className="w-full h-full object-cover"
                               />
@@ -184,7 +217,9 @@ export default function SetupPage() {
                               variant="ghost"
                               size="sm"
                               className="mt-2"
-                              onClick={() => setFormData({ ...formData, coverPhoto: null })}
+                              onClick={() =>
+                                setFormData({ ...formData, coverPhoto: null })
+                              }
                             >
                               Remove
                             </Button>
@@ -205,11 +240,15 @@ export default function SetupPage() {
                                   type="file"
                                   className="sr-only"
                                   accept="image/*"
-                                  onChange={(e) => handleFileChange(e, "coverPhoto")}
+                                  onChange={(e) =>
+                                    handleFileChange(e, "coverPhoto")
+                                  }
                                 />
                               </label>
                             </p>
-                            <p className="text-xs text-gray-400">PNG, JPG, GIF up to 5MB</p>
+                            <p className="text-xs text-gray-400">
+                              PNG, JPG, GIF up to 5MB
+                            </p>
                           </div>
                         )}
                       </div>
@@ -224,7 +263,9 @@ export default function SetupPage() {
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-2xl font-bold">Restaurant Address</h2>
-                <p className="text-gray-500 mt-2">Enter your restaurant's physical location</p>
+                <p className="text-gray-500 mt-2">
+                  Enter your restaurant's physical location
+                </p>
               </div>
 
               <Card>
@@ -284,10 +325,13 @@ export default function SetupPage() {
                         <div className="flex items-start gap-3">
                           <MapPin className="h-5 w-5 text-green-600 mt-0.5" />
                           <div>
-                            <h3 className="font-medium text-sm">Why we need your address</h3>
+                            <h3 className="font-medium text-sm">
+                              Why we need your address
+                            </h3>
                             <p className="text-xs text-gray-500 mt-1">
-                              Your address will be displayed on your digital menu and receipts. It helps customers find
-                              your restaurant and is required for payment processing.
+                              Your address will be displayed on your digital
+                              menu and receipts. It helps customers find your
+                              restaurant and is required for payment processing.
                             </p>
                           </div>
                         </div>
@@ -303,7 +347,9 @@ export default function SetupPage() {
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-2xl font-bold">Table Setup</h2>
-                <p className="text-gray-500 mt-2">Configure your restaurant tables and QR codes</p>
+                <p className="text-gray-500 mt-2">
+                  Configure your restaurant tables and QR codes
+                </p>
               </div>
 
               <Card>
@@ -342,10 +388,13 @@ export default function SetupPage() {
                       <div className="flex items-start gap-3">
                         <QrCode className="h-5 w-5 text-green-600 mt-0.5" />
                         <div>
-                          <h3 className="font-medium text-sm">QR Codes will be auto-generated</h3>
+                          <h3 className="font-medium text-sm">
+                            QR Codes will be auto-generated
+                          </h3>
                           <p className="text-xs text-gray-500 mt-1">
-                            After setup, you'll be able to print QR codes for each table. Customers will scan these to
-                            access your digital menu and place orders.
+                            After setup, you'll be able to print QR codes for
+                            each table. Customers will scan these to access your
+                            digital menu and place orders.
                           </p>
                         </div>
                       </div>
@@ -360,7 +409,9 @@ export default function SetupPage() {
                         </div>
                         <div className="text-center">
                           <h4 className="font-medium">Table 1</h4>
-                          <p className="text-xs text-gray-500">Sample QR Code</p>
+                          <p className="text-xs text-gray-500">
+                            Sample QR Code
+                          </p>
                         </div>
                       </div>
 
@@ -372,7 +423,9 @@ export default function SetupPage() {
                         </div>
                         <div className="text-center">
                           <h4 className="font-medium">Table 2</h4>
-                          <p className="text-xs text-gray-500">Sample QR Code</p>
+                          <p className="text-xs text-gray-500">
+                            Sample QR Code
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -386,7 +439,9 @@ export default function SetupPage() {
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-2xl font-bold">Menu Setup</h2>
-                <p className="text-gray-500 mt-2">Choose how you want to create your digital menu</p>
+                <p className="text-gray-500 mt-2">
+                  Choose how you want to create your digital menu
+                </p>
               </div>
 
               <Card>
@@ -399,7 +454,12 @@ export default function SetupPage() {
                             ? "border-green-500 bg-green-50 ring-1 ring-green-500"
                             : "hover:border-gray-300"
                         }`}
-                        onClick={() => setFormData({ ...formData, menuUploadMethod: "manual" })}
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            menuUploadMethod: "manual",
+                          })
+                        }
                       >
                         <div className="flex justify-center mb-4">
                           <div
@@ -412,9 +472,12 @@ export default function SetupPage() {
                             <FileText className="h-6 w-6" />
                           </div>
                         </div>
-                        <h3 className="font-medium text-center mb-2">Manual Entry</h3>
+                        <h3 className="font-medium text-center mb-2">
+                          Manual Entry
+                        </h3>
                         <p className="text-sm text-gray-500 text-center">
-                          Create your menu items one by one with our easy-to-use menu builder
+                          Create your menu items one by one with our easy-to-use
+                          menu builder
                         </p>
                       </div>
 
@@ -424,7 +487,9 @@ export default function SetupPage() {
                             ? "border-green-500 bg-green-50 ring-1 ring-green-500"
                             : "hover:border-gray-300"
                         }`}
-                        onClick={() => setFormData({ ...formData, menuUploadMethod: "ocr" })}
+                        onClick={() =>
+                          setFormData({ ...formData, menuUploadMethod: "ocr" })
+                        }
                       >
                         <div className="flex justify-center mb-4">
                           <div
@@ -437,9 +502,12 @@ export default function SetupPage() {
                             <Upload className="h-6 w-6" />
                           </div>
                         </div>
-                        <h3 className="font-medium text-center mb-2">AI OCR Upload</h3>
+                        <h3 className="font-medium text-center mb-2">
+                          AI OCR Upload
+                        </h3>
                         <p className="text-sm text-gray-500 text-center">
-                          Upload an image of your existing menu and our AI will extract the items
+                          Upload an image of your existing menu and our AI will
+                          extract the items
                         </p>
                       </div>
                     </div>
@@ -448,10 +516,13 @@ export default function SetupPage() {
                       <div className="flex items-start gap-3">
                         <FileText className="h-5 w-5 text-green-600 mt-0.5" />
                         <div>
-                          <h3 className="font-medium text-sm">You can always edit your menu later</h3>
+                          <h3 className="font-medium text-sm">
+                            You can always edit your menu later
+                          </h3>
                           <p className="text-xs text-gray-500 mt-1">
-                            After setup, you'll have full access to the menu builder where you can add, edit, or remove
-                            items anytime.
+                            After setup, you'll have full access to the menu
+                            builder where you can add, edit, or remove items
+                            anytime.
                           </p>
                         </div>
                       </div>
@@ -464,7 +535,11 @@ export default function SetupPage() {
 
           <div className="flex justify-between pt-6">
             {step > 1 ? (
-              <Button variant="outline" onClick={handleBack} disabled={isLoading}>
+              <Button
+                variant="outline"
+                onClick={handleBack}
+                disabled={isLoading}
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
               </Button>
@@ -496,5 +571,5 @@ export default function SetupPage() {
         </motion.div>
       </main>
     </div>
-  )
+  );
 }

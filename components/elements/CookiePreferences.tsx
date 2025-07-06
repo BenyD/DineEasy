@@ -3,7 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { getCookieConsent, clearCookieConsent } from "@/lib/cookies";
 
-export function CookiePreferences() {
+interface CookiePreferencesProps {
+  className?: string;
+}
+
+export function CookiePreferences({ className = "" }: CookiePreferencesProps) {
   const [preferences, setPreferences] = useState({
     necessary: true, // Always true and disabled
     analytics: false,
@@ -37,7 +41,7 @@ export function CookiePreferences() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${className}`}>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -46,7 +50,7 @@ export function CookiePreferences() {
               Required for the website to function properly. Cannot be disabled.
             </p>
           </div>
-          <Switch checked disabled />
+          <Switch checked disabled className="switch" />
         </div>
 
         <div className="flex items-center justify-between">
@@ -61,6 +65,7 @@ export function CookiePreferences() {
             onCheckedChange={(checked) =>
               setPreferences((prev) => ({ ...prev, analytics: checked }))
             }
+            className="switch"
           />
         </div>
 
@@ -77,6 +82,7 @@ export function CookiePreferences() {
             onCheckedChange={(checked) =>
               setPreferences((prev) => ({ ...prev, marketing: checked }))
             }
+            className="switch"
           />
         </div>
       </div>

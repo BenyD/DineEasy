@@ -1,63 +1,66 @@
 export const PLANS = {
   starter: {
     name: "Starter",
-    price: { monthly: 5.99, yearly: 59.99 },
+    price: { monthly: 15, yearly: 150 },
     currency: "USD",
     features: [
-      "Digital menu builder",
-      "QR code generation for 5 tables",
-      "Basic order management",
-      "Stripe payment integration",
-      "TWINT payment support",
-      "Auto thermal printing",
-      "Email support",
+      "Digital Menu (Manual Entry)",
+      "QR-Based Table Ordering",
+      "Stripe & Cash Payments",
+      "Realtime Order Dashboard",
+      "1 Staff Login (No Roles)",
+      "Basic Receipt Printing (ESC/POS)",
+      "Weekly Sales Summary via Email",
     ],
     limits: {
-      tables: 5,
+      staff: 1,
       analytics: false,
-      staff: false,
+      roles: false,
     },
   },
   pro: {
     name: "Pro",
-    price: { monthly: 11.99, yearly: 119.99 },
+    price: { monthly: 39, yearly: 390 },
     currency: "USD",
     features: [
       "Everything in Starter",
-      "Unlimited tables",
-      "Real-time analytics dashboard",
-      "Advanced reporting",
-      "Priority email support",
-      "AI OCR menu upload",
-      "Custom receipt formatting",
+      "Up to 3 Staff Roles",
+      "Role-Based Permissions (RBAC)",
+      "PDF Receipts + Custom Branding",
+      "Daily Sales Reports",
+      "Customer Feedback Management",
+      "Basic Order Analytics",
+      "Early Access: AI OCR Menu Upload",
+      "Priority Email Support",
     ],
     limits: {
-      tables: "unlimited",
-      analytics: true,
-      staff: false,
+      staff: 3,
+      analytics: "basic",
+      roles: true,
     },
   },
   elite: {
     name: "Elite",
-    price: { monthly: 24.99, yearly: 239.99 },
+    price: { monthly: 79, yearly: 790 },
     currency: "USD",
     features: [
       "Everything in Pro",
-      "Multi-user staff management",
-      "Staff role permissions",
-      "Advanced analytics & insights",
-      "Custom branding",
-      "API access",
-      "24/7 phone support",
-      "Dedicated account manager",
+      "Unlimited Staff Accounts",
+      "Supervisor Tools",
+      "Audit Logs",
+      "Full Receipt Customization",
+      "Enhanced Analytics",
+      "Early Access: AI Features",
+      "Priority Support (Slack + Email)",
+      "Staff Performance Metrics (Coming Soon)",
     ],
     limits: {
-      tables: "unlimited",
-      analytics: true,
-      staff: true,
+      staff: "unlimited",
+      analytics: "advanced",
+      roles: true,
     },
   },
-} as const
+} as const;
 
 export const ORDER_STATUSES = {
   pending: "Pending",
@@ -65,13 +68,13 @@ export const ORDER_STATUSES = {
   ready: "Ready",
   served: "Served",
   cancelled: "Cancelled",
-} as const
+} as const;
 
 export const PAYMENT_METHODS = {
   stripe: "Credit Card",
   twint: "TWINT",
   cash: "Cash",
-} as const
+} as const;
 
-export const PLATFORM_COMMISSION = 0.02 // 2% commission on restaurant payments
-export const TRIAL_DAYS = 14
+export const PLATFORM_COMMISSION = 0.02; // 2% commission on restaurant payments
+export const TRIAL_DAYS = 14;

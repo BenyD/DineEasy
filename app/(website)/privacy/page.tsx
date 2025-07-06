@@ -1,28 +1,49 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { PageWrapper } from "@/components/layout/PageWrapper";
-import { HeroSection } from "@/components/elements/HeroSection";
+import { HeaderSection } from "@/components/elements/HeaderSection";
 import { AnimatedSection } from "@/components/elements/AnimatedSection";
 import { CookiePreferences } from "@/components/elements/CookiePreferences";
 
+// Set a fixed date for the last update
+const LAST_UPDATE_DATE = "2025-07-06";
+
 export default function PrivacyPolicy() {
+  const [formattedDate, setFormattedDate] = useState(LAST_UPDATE_DATE);
+
+  useEffect(() => {
+    // Format the date on the client side to avoid hydration mismatch
+    const date = new Date(LAST_UPDATE_DATE);
+    setFormattedDate(date.toLocaleDateString());
+  }, []);
+
   return (
     <PageWrapper>
-      <HeroSection
-        layout="centered"
+      <HeaderSection
         title="Privacy Policy"
-        subtitle="Learn how we collect, use, and protect your information"
+        subtitle="Learn how we collect, use, and protect your data in accordance with Swiss and EU regulations."
       />
 
       <AnimatedSection className="py-16 sm:py-24">
         <div className="container mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold mb-8">Privacy Policy</h1>
-
           <div className="prose prose-gray max-w-none">
-            <p className="text-sm text-gray-500 mb-8">
-              Last updated: {new Date().toLocaleDateString()}
-            </p>
+            <div className="mb-8 flex items-center justify-between">
+              <h1 className="text-3xl font-bold m-0">Privacy Policy</h1>
+              <p className="text-sm text-gray-500 m-0">
+                Last updated: {formattedDate}
+              </p>
+            </div>
+
+            <div className="bg-green-50 border-l-4 border-green-600 p-4 mb-8">
+              <p className="text-sm text-green-800 m-0">
+                <strong>Your Privacy Matters:</strong> We are committed to
+                protecting your personal data and being transparent about how we
+                use it. This policy explains your rights and our
+                responsibilities.
+              </p>
+            </div>
 
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4">1. Introduction</h2>
@@ -115,14 +136,14 @@ export default function PrivacyPolicy() {
               </ul>
             </section>
 
-            <section className="mb-8">
+            <section id="cookie-policy" className="mb-8 scroll-mt-24">
               <h2 className="text-2xl font-semibold mb-4">7. Cookie Policy</h2>
               <p className="mb-4">
                 We use cookies and similar technologies to enhance your browsing
                 experience. You can manage your cookie preferences below:
               </p>
-              <div className="bg-gray-50 p-6 rounded-lg">
-                <CookiePreferences />
+              <div className="bg-gray-50 border border-gray-100 p-6 rounded-lg shadow-sm">
+                <CookiePreferences className="[&_.switch]:data-[state=checked]:bg-green-600 [&_.switch]:data-[state=checked]:hover:bg-green-700" />
               </div>
             </section>
 
@@ -179,11 +200,32 @@ export default function PrivacyPolicy() {
                 For any questions about this privacy policy or our data
                 practices, please contact us at:
               </p>
-              <ul className="list-disc pl-6 mt-2">
-                <li>Email: privacy@dineeasy.ch</li>
-                <li>Phone: [Your Swiss Phone Number]</li>
-                <li>Address: [Your Swiss Business Address]</li>
-              </ul>
+              <div className="bg-white border border-gray-200 rounded-lg p-4 mt-4">
+                <ul className="list-none pl-0 m-0 space-y-2">
+                  <li className="flex items-center gap-2">
+                    <span className="font-semibold min-w-24">Email:</span>
+                    <a
+                      href="mailto:privacy@dineeasy.ch"
+                      className="text-green-600 hover:text-green-700"
+                    >
+                      privacy@dineeasy.ch
+                    </a>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="font-semibold min-w-24">Phone:</span>
+                    <a
+                      href="tel:+41XXXXXXXXX"
+                      className="text-green-600 hover:text-green-700"
+                    >
+                      +41 XX XXX XX XX
+                    </a>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="font-semibold min-w-24">Address:</span>
+                    <span>Bahnhofstrasse 123, 8001 Zürich, Switzerland</span>
+                  </li>
+                </ul>
+              </div>
             </section>
           </div>
         </div>
