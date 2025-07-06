@@ -5,9 +5,10 @@ import {
   Bell,
   Check,
   Trash2,
-  XCircle,
   Clock,
   ChevronRight,
+  ShoppingCart,
+  CreditCard,
 } from "lucide-react";
 import {
   Popover,
@@ -18,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
 // Mock notification type
@@ -28,7 +28,7 @@ interface Notification {
   message: string;
   timestamp: number;
   read: boolean;
-  type: "order" | "payment" | "alert" | "system";
+  type: "order" | "payment";
   actionUrl?: string;
 }
 
@@ -54,25 +54,6 @@ const getInitialNotifications = (): Notification[] => {
       type: "payment",
       actionUrl: "/dashboard/payments",
     },
-    {
-      id: "3",
-      title: "System Update Available",
-      message:
-        "A new version of DineEasy is available. Update includes performance improvements and bug fixes.",
-      timestamp: now - 1000 * 60 * 60, // 1 hour ago
-      read: true,
-      type: "system",
-    },
-    {
-      id: "4",
-      title: "Low Stock Alert",
-      message:
-        "Chicken Wings are running low (5 portions left). Consider updating your inventory soon.",
-      timestamp: now - 1000 * 60 * 120, // 2 hours ago
-      read: true,
-      type: "alert",
-      actionUrl: "/dashboard/menu",
-    },
   ];
 };
 
@@ -80,10 +61,12 @@ export function NotificationPopover() {
   const [mounted, setMounted] = React.useState(false);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [isOpen, setIsOpen] = React.useState(false);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
   React.useEffect(() => {
     setMounted(true);
     setNotifications(getInitialNotifications());
+    audioRef.current = new Audio("/notification-sound.mp3");
   }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -96,14 +79,12 @@ export function NotificationPopover() {
     setNotifications([]);
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(
-      notifications.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-  };
-
-  const removeNotification = (id: string) => {
-    setNotifications(notifications.filter((n) => n.id !== id));
+  const playNotificationSound = () => {
+    if (audioRef.current) {
+      audioRef.current.play().catch((error) => {
+        console.error("Error playing notification sound:", error);
+      });
+    }
   };
 
   const getTimeAgo = (timestamp: number) => {
@@ -123,38 +104,24 @@ export function NotificationPopover() {
     switch (type) {
       case "order":
         return {
-          dot: "bg-blue-500",
           bg: "bg-blue-50",
           text: "text-blue-700",
           hover: "hover:bg-blue-50/80",
+          icon: <ShoppingCart className="h-4 w-4 text-blue-500" />,
         };
       case "payment":
         return {
-          dot: "bg-green-500",
           bg: "bg-green-50",
           text: "text-green-700",
           hover: "hover:bg-green-50/80",
-        };
-      case "alert":
-        return {
-          dot: "bg-red-500",
-          bg: "bg-red-50",
-          text: "text-red-700",
-          hover: "hover:bg-red-50/80",
-        };
-      case "system":
-        return {
-          dot: "bg-purple-500",
-          bg: "bg-purple-50",
-          text: "text-purple-700",
-          hover: "hover:bg-purple-50/80",
+          icon: <CreditCard className="h-4 w-4 text-green-500" />,
         };
       default:
         return {
-          dot: "bg-gray-500",
           bg: "bg-gray-50",
           text: "text-gray-700",
           hover: "hover:bg-gray-50/80",
+          icon: <Bell className="h-4 w-4 text-gray-500" />,
         };
     }
   };
@@ -198,14 +165,7 @@ export function NotificationPopover() {
       </PopoverTrigger>
       <PopoverContent className="w-[380px] p-0" align="end">
         <div className="flex items-center justify-between border-b px-4 py-3">
-          <div className="flex items-center gap-2">
-            <h4 className="font-semibold">Notifications</h4>
-            {unreadCount > 0 && (
-              <Badge variant="secondary" className="rounded-full px-2 py-0.5">
-                {unreadCount} new
-              </Badge>
-            )}
-          </div>
+          <h4 className="font-semibold">Notifications</h4>
           <div className="flex items-center gap-1.5">
             {unreadCount > 0 && (
               <Button
@@ -226,7 +186,7 @@ export function NotificationPopover() {
                 onClick={clearNotifications}
               >
                 <Trash2 className="mr-1 h-3.5 w-3.5" />
-                Clear
+                Clear all
               </Button>
             )}
           </div>
@@ -244,21 +204,22 @@ export function NotificationPopover() {
               {notifications.map((notification) => {
                 const styles = getNotificationStyles(notification.type);
                 return (
-                  <div
+                  <Link
                     key={notification.id}
+                    href={notification.actionUrl || "#"}
                     className={cn(
-                      "group relative flex gap-4 border-b p-4 transition-colors",
+                      "group flex gap-4 border-b p-4 transition-colors",
                       !notification.read && styles.bg,
-                      notification.actionUrl && "cursor-pointer",
                       styles.hover
                     )}
+                    onClick={() => {
+                      setIsOpen(false);
+                      if (!notification.read) {
+                        markAllAsRead();
+                      }
+                    }}
                   >
-                    <span
-                      className={cn(
-                        "mt-1.5 h-2 w-2 shrink-0 rounded-full",
-                        styles.dot
-                      )}
-                    />
+                    {styles.icon}
                     <div className="flex-1 space-y-1">
                       <div className="flex items-start justify-between gap-2">
                         <div className="space-y-0.5">
@@ -269,69 +230,17 @@ export function NotificationPopover() {
                             {notification.message}
                           </p>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <time className="text-[11px] text-muted-foreground tabular-nums">
-                            {getTimeAgo(notification.timestamp)}
-                          </time>
-                          {!notification.read && (
-                            <div className="opacity-0 transition-opacity group-hover:opacity-100">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markAsRead(notification.id);
-                                }}
-                              >
-                                <Check className="h-3 w-3" />
-                                <span className="sr-only">Mark as read</span>
-                              </Button>
-                            </div>
-                          )}
-                          <div className="opacity-0 transition-opacity group-hover:opacity-100">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeNotification(notification.id);
-                              }}
-                            >
-                              <XCircle className="h-3 w-3" />
-                              <span className="sr-only">
-                                Remove notification
-                              </span>
-                            </Button>
-                          </div>
-                        </div>
+                        <time className="text-[11px] text-muted-foreground tabular-nums">
+                          {getTimeAgo(notification.timestamp)}
+                        </time>
                       </div>
-                      {notification.actionUrl && (
-                        <div className="mt-2.5 flex items-center gap-1 text-[11px] font-medium text-muted-foreground/60">
-                          <Clock className="h-3 w-3" />
-                          View details
-                          <ChevronRight className="h-3 w-3" />
-                        </div>
-                      )}
+                      <div className="mt-2.5 flex items-center gap-1 text-[11px] font-medium text-muted-foreground/60">
+                        <Clock className="h-3 w-3" />
+                        View details
+                        <ChevronRight className="h-3 w-3" />
+                      </div>
                     </div>
-                    {notification.actionUrl && (
-                      <Link
-                        href={notification.actionUrl}
-                        className="absolute inset-0"
-                        onClick={() => {
-                          setIsOpen(false);
-                          if (!notification.read) {
-                            markAsRead(notification.id);
-                          }
-                        }}
-                      >
-                        <span className="sr-only">
-                          View {notification.title}
-                        </span>
-                      </Link>
-                    )}
-                  </div>
+                  </Link>
                 );
               })}
             </div>

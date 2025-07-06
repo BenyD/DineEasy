@@ -2,111 +2,151 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import {
-  CreditCard,
-  ExternalLink,
-  Clock,
-  CheckCircle,
-  Download,
-} from "lucide-react";
+import { CheckCircle, ArrowRight, CreditCard, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { DashboardAlert } from "@/components/dashboard/DashboardAlert";
+import { PLANS } from "@/lib/constants";
 
-// Mock billing data
+// Mock data - replace with real data fetching
 const billingData = {
   plan: "Pro",
-  price: 11.99,
+  price: 39,
   billingCycle: "monthly",
-  trialEndsAt: "2025-06-15",
-  nextBillingDate: "2025-06-15",
-  paymentMethod: {
-    type: "card",
-    last4: "4242",
-    expiryMonth: 12,
-    expiryYear: 2026,
-    brand: "visa",
-  },
-  invoices: [
-    {
-      id: "INV-001",
-      date: "2025-05-15",
-      amount: 11.99,
-      status: "paid",
-      description: "DineEasy Pro Plan - Monthly",
-    },
-    {
-      id: "INV-002",
-      date: "2025-04-15",
-      amount: 11.99,
-      status: "paid",
-      description: "DineEasy Pro Plan - Monthly",
-    },
-    {
-      id: "INV-003",
-      date: "2025-03-15",
-      amount: 11.99,
-      status: "paid",
-      description: "DineEasy Pro Plan - Monthly",
-    },
-  ],
+  nextBillingDate: new Date("2024-05-01"),
+  trialEndsAt: new Date("2024-04-15"),
+  stripeConnected: true,
   usage: {
-    orders: {
-      current: 1247,
-      limit: 5000,
-    },
-    tables: {
-      current: 12,
-      limit: 20,
-    },
-    staff: {
-      current: 3,
-      limit: 5,
-    },
+    tables: { used: 8, limit: 12 },
+    menuItems: { used: 75, limit: 100 },
+    staff: { used: 2, limit: 3 },
   },
 };
 
-// Calculate days left in trial
-const calculateDaysLeft = (endDate: string) => {
-  const end = new Date(endDate);
+function calculateDaysLeft(endDate: Date) {
   const now = new Date();
-  const diffTime = end.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-};
+  const diff = endDate.getTime() - now.getTime();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
 
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
+function formatDate(date: Date) {
   return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "long",
     day: "numeric",
+    month: "long",
+    year: "numeric",
   }).format(date);
-};
+}
 
 export default function BillingPage() {
-  const [activeTab, setActiveTab] = useState("subscription");
   const daysLeft = calculateDaysLeft(billingData.trialEndsAt);
   const isTrialActive = daysLeft > 0;
 
+  if (!billingData.stripeConnected) {
+    return (
+      <div className="p-6 space-y-8 max-w-3xl mx-auto">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+            Set Up Billing
+          </h1>
+          <p className="text-lg text-gray-500">
+            Connect your payment method to continue using DineEasy
+          </p>
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-full bg-amber-100">
+                  <AlertCircle className="h-6 w-6 text-amber-600" />
+                </div>
+                <div>
+                  <CardTitle>Payment Method Required</CardTitle>
+                  <CardDescription>
+                    Please connect your Stripe account to manage your
+                    subscription
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Before you can manage your subscription and billing, you'll
+                  need to:
+                </p>
+                <ul className="space-y-3">
+                  <li className="flex items-center gap-2 text-sm">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <span>Connect your Stripe account</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <span>Set up your payment method</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <span>Choose your subscription plan</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="pt-4">
+                <Button
+                  className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg"
+                  onClick={() =>
+                    (window.location.href = "/dashboard/connect-stripe")
+                  }
+                >
+                  <CreditCard className="h-5 w-5 mr-2" />
+                  Connect Stripe Account
+                </Button>
+                <p className="text-xs text-gray-500 text-center mt-3">
+                  You'll be guided through a secure setup process
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {isTrialActive && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <DashboardAlert
+              variant="info"
+              title={`Trial Status: ${daysLeft} days remaining`}
+              description="Set up your payment method before your trial ends to continue using DineEasy without interruption."
+            />
+          </motion.div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-8 max-w-6xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900">
           Billing & Subscription
         </h1>
-        <p className="text-gray-500">
+        <p className="text-lg text-gray-500">
           Manage your subscription plan and billing details
         </p>
       </div>
@@ -136,379 +176,248 @@ export default function BillingPage() {
         </motion.div>
       )}
 
-      {/* Payment Method Alert */}
-      {!billingData.paymentMethod && (
+      <div className="grid gap-8 md:grid-cols-2">
+        {/* Current Plan Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
-          <DashboardAlert
-            variant="warning"
-            title="Add a payment method"
-            description="Please add a payment method to ensure uninterrupted service when your trial ends."
-          >
-            <div className="mt-3">
-              <Button variant="outline" className="bg-white">
-                <CreditCard className="mr-2 h-4 w-4" />
-                Add Payment Method
-              </Button>
-            </div>
-          </DashboardAlert>
-        </motion.div>
-      )}
-
-      {/* Usage Alerts */}
-      {Object.entries(billingData.usage).map(
-        ([resource, { current, limit }]) => {
-          const usage = (current / limit) * 100;
-          if (usage > 80) {
-            return (
-              <motion.div
-                key={resource}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.2 }}
-              >
-                <DashboardAlert
-                  variant={usage > 90 ? "error" : "warning"}
-                  title={`${
-                    resource.charAt(0).toUpperCase() + resource.slice(1)
-                  } limit approaching`}
-                  description={`You've used ${current} out of ${limit} ${resource}. Consider upgrading your plan to avoid service interruption.`}
-                >
-                  <div className="mt-3">
-                    <Progress value={usage} className="h-2" />
-                  </div>
-                </DashboardAlert>
-              </motion.div>
-            );
-          }
-          return null;
-        }
-      )}
-
-      <Tabs
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="space-y-6"
-      >
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="subscription">Subscription</TabsTrigger>
-          <TabsTrigger value="payment">Payment Methods</TabsTrigger>
-          <TabsTrigger value="invoices">Billing History</TabsTrigger>
-        </TabsList>
-
-        {/* Subscription Tab */}
-        <TabsContent value="subscription">
-          <div className="grid gap-6 md:grid-cols-2">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.1 }}
-            >
-              <Card>
-                <CardHeader>
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <div>
                   <CardTitle>Current Plan</CardTitle>
                   <CardDescription>Your subscription details</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-xl font-bold text-green-700">
-                        {billingData.plan} Plan
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        CHF {billingData.price}/
-                        {billingData.billingCycle === "monthly"
-                          ? "month"
-                          : "year"}
-                      </p>
-                    </div>
-                    <Badge className="bg-green-100 text-green-800">
-                      {isTrialActive ? "Trial" : "Active"}
-                    </Badge>
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Billing cycle</span>
-                      <span className="font-medium capitalize">
-                        {billingData.billingCycle}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Next billing date</span>
-                      <span className="font-medium">
-                        {formatDate(billingData.nextBillingDate)}
-                      </span>
-                    </div>
-                    {isTrialActive && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Trial ends on</span>
-                        <span className="font-medium">
-                          {formatDate(billingData.trialEndsAt)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Plan Features</h4>
-                    <ul className="space-y-2">
-                      <li className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span>Unlimited menu items</span>
-                      </li>
-                      <li className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span>
-                          Up to {billingData.usage.tables.limit} tables with QR
-                          codes
-                        </span>
-                      </li>
-                      <li className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span>
-                          Up to {billingData.usage.orders.limit} orders per
-                          month
-                        </span>
-                      </li>
-                      <li className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span>
-                          Up to {billingData.usage.staff.limit} staff accounts
-                        </span>
-                      </li>
-                      <li className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span>Analytics & reporting</span>
-                      </li>
-                      <li className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span>Email support</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="flex gap-2 pt-4">
-                    <Button variant="outline">Change Plan</Button>
-                    <Button
-                      variant="outline"
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      Cancel Subscription
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.2 }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle>Usage</CardTitle>
-                  <CardDescription>Your current usage metrics</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">Orders</span>
-                      <span className="text-sm text-gray-500">
-                        {billingData.usage.orders.current} /{" "}
-                        {billingData.usage.orders.limit}
-                      </span>
-                    </div>
-                    <Progress
-                      value={
-                        (billingData.usage.orders.current /
-                          billingData.usage.orders.limit) *
-                        100
-                      }
-                      className="h-2"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">Tables</span>
-                      <span className="text-sm text-gray-500">
-                        {billingData.usage.tables.current} /{" "}
-                        {billingData.usage.tables.limit}
-                      </span>
-                    </div>
-                    <Progress
-                      value={
-                        (billingData.usage.tables.current /
-                          billingData.usage.tables.limit) *
-                        100
-                      }
-                      className="h-2"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">
-                        Staff Accounts
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        {billingData.usage.staff.current} /{" "}
-                        {billingData.usage.staff.limit}
-                      </span>
-                    </div>
-                    <Progress
-                      value={
-                        (billingData.usage.staff.current /
-                          billingData.usage.staff.limit) *
-                        100
-                      }
-                      className="h-2"
-                    />
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Need More?</h4>
-                    <p className="text-sm text-gray-500">
-                      Upgrade to our Elite plan for unlimited tables, higher
-                      order limits, and priority support.
-                    </p>
-                    <Button className="bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 w-full">
-                      Upgrade to Elite
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
-        </TabsContent>
-
-        {/* Payment Methods Tab */}
-        <TabsContent value="payment">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Methods</CardTitle>
-                <CardDescription>Manage your payment methods</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">
-                      {billingData.paymentMethod.brand
-                        .toUpperCase()
-                        .slice(0, 2)}
-                    </div>
-                    <div>
-                      <p className="font-medium">
-                        {billingData.paymentMethod.brand
-                          .charAt(0)
-                          .toUpperCase() +
-                          billingData.paymentMethod.brand.slice(1)}{" "}
-                        •••• {billingData.paymentMethod.last4}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Expires {billingData.paymentMethod.expiryMonth}/
-                        {billingData.paymentMethod.expiryYear}
-                      </p>
-                    </div>
-                  </div>
-                  <Badge>Default</Badge>
                 </div>
+                <Badge
+                  className={`${
+                    isTrialActive
+                      ? "bg-blue-100 text-blue-800"
+                      : "bg-green-100 text-green-800"
+                  }`}
+                >
+                  {isTrialActive ? "Trial" : "Active"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <h3 className="text-2xl font-bold text-green-700">
+                  {billingData.plan} Plan
+                </h3>
+                <p className="text-sm text-gray-500">
+                  CHF {billingData.price}/
+                  {billingData.billingCycle === "monthly" ? "month" : "year"}
+                </p>
+              </div>
 
-                <div className="flex gap-2">
-                  <Button variant="outline">
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Add Payment Method
-                  </Button>
-                  <Button variant="outline">
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Manage in Stripe
-                  </Button>
+              <Separator />
+
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Billing cycle</span>
+                  <span className="font-medium capitalize">
+                    {billingData.billingCycle}
+                  </span>
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </TabsContent>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Next billing date</span>
+                  <span className="font-medium">
+                    {formatDate(billingData.nextBillingDate)}
+                  </span>
+                </div>
+                {isTrialActive && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Trial ends on</span>
+                    <span className="font-medium">
+                      {formatDate(billingData.trialEndsAt)}
+                    </span>
+                  </div>
+                )}
+              </div>
 
-        {/* Invoices Tab */}
-        <TabsContent value="invoices">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle>Billing History</CardTitle>
-                <CardDescription>
-                  View and download your invoices
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {billingData.invoices.map((invoice) => (
-                    <div
-                      key={invoice.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium">{invoice.description}</p>
-                        <div className="flex items-center gap-4 mt-1">
-                          <p className="text-sm text-gray-500">{invoice.id}</p>
-                          <p className="text-sm text-gray-500">
-                            {formatDate(invoice.date)}
+              <Separator />
+
+              <div className="space-y-4">
+                <h4 className="font-medium">Plan Features</h4>
+                <ul className="space-y-2.5">
+                  {PLANS[
+                    billingData.plan.toLowerCase() as keyof typeof PLANS
+                  ].features.map((feature: string, index: number) => (
+                    <li key={index} className="flex items-center gap-2 text-sm">
+                      <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() =>
+                    (window.location.href = "/dashboard/billing/change-plan")
+                  }
+                >
+                  Change Plan
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => (window.location.href = "/api/stripe/portal")}
+                >
+                  Cancel Subscription
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Usage Stats Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle>Usage & Limits</CardTitle>
+              <CardDescription>
+                Monitor your current usage and plan limits
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Menu Items Usage */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium">Menu Items</span>
+                  <span className="text-gray-500">
+                    {billingData.usage.menuItems.used} of{" "}
+                    {billingData.usage.menuItems.limit} used
+                  </span>
+                </div>
+                <Progress
+                  value={
+                    (billingData.usage.menuItems.used /
+                      billingData.usage.menuItems.limit) *
+                    100
+                  }
+                  className="h-2 bg-gray-100 [&>div]:bg-green-600"
+                />
+              </div>
+
+              {/* Tables Usage */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium">Tables with QR Codes</span>
+                  <span className="text-gray-500">
+                    {billingData.usage.tables.used} of{" "}
+                    {billingData.usage.tables.limit} used
+                  </span>
+                </div>
+                <Progress
+                  value={
+                    (billingData.usage.tables.used /
+                      billingData.usage.tables.limit) *
+                    100
+                  }
+                  className="h-2 bg-gray-100 [&>div]:bg-green-600"
+                />
+              </div>
+
+              {/* Staff Usage */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium">Staff Accounts</span>
+                  <span className="text-gray-500">
+                    {billingData.usage.staff.used} of{" "}
+                    {billingData.usage.staff.limit} used
+                  </span>
+                </div>
+                <Progress
+                  value={
+                    (billingData.usage.staff.used /
+                      billingData.usage.staff.limit) *
+                    100
+                  }
+                  className="h-2 bg-gray-100 [&>div]:bg-green-600"
+                />
+              </div>
+
+              <Separator />
+
+              {/* Stripe Portal Link */}
+              <div className="space-y-3">
+                <h4 className="font-medium">Payment & Billing</h4>
+                <p className="text-sm text-gray-500">
+                  View your payment history and manage your payment methods
+                  through our secure Stripe portal.
+                </p>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => (window.location.href = "/api/stripe/portal")}
+                >
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Manage Billing in Stripe
+                </Button>
+              </div>
+
+              {/* Contextual Upgrade Card */}
+              {billingData.plan.toLowerCase() !== "elite" && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Ready to grow?</h4>
+                    <div className="rounded-lg bg-green-50 p-4 space-y-3">
+                      {billingData.plan.toLowerCase() === "pro" ? (
+                        <>
+                          <p className="text-sm text-green-800">
+                            Upgrade to Elite for unlimited tables, staff
+                            accounts, and enhanced analytics. Plus, get priority
+                            24/7 support and early access to AI features!
                           </p>
-                          <Badge
-                            className={
-                              invoice.status === "paid"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-amber-100 text-amber-800"
+                          <Button
+                            className="w-full bg-green-600 hover:bg-green-700 text-white"
+                            onClick={() =>
+                              (window.location.href =
+                                "/dashboard/billing/change-plan")
                             }
                           >
-                            {invoice.status.charAt(0).toUpperCase() +
-                              invoice.status.slice(1)}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <p className="font-bold">
-                          CHF {invoice.amount.toFixed(2)}
-                        </p>
-                        <Button variant="outline" size="sm">
-                          <Download className="w-4 h-4 mr-2" />
-                          PDF
-                        </Button>
-                      </div>
+                            Upgrade to Elite
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-green-800">
+                            Upgrade to Pro for more tables, staff accounts, and
+                            advanced features like role-based permissions and
+                            analytics!
+                          </p>
+                          <Button
+                            className="w-full bg-green-600 hover:bg-green-700 text-white"
+                            onClick={() =>
+                              (window.location.href =
+                                "/dashboard/billing/change-plan")
+                            }
+                          >
+                            Upgrade to Pro
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
-                  ))}
-                </div>
-
-                <div className="mt-6">
-                  <Button variant="outline" className="w-full">
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    View All Invoices in Stripe
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </TabsContent>
-      </Tabs>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
     </div>
   );
 }

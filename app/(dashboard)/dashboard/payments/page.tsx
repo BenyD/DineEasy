@@ -8,8 +8,8 @@ import {
   Check,
   AlertCircle,
   RefreshCw,
-  Smartphone,
   Banknote,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,44 +18,75 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+  CardFooter,
 } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+// Mock data - replace with real data fetching
+const stripeAccount = {
+  id: "acct_1234567890abcdef",
+  isConnected: true,
+  isTestMode: true,
+  status: "active",
+  chargesEnabled: true,
+  payoutsEnabled: true,
+  detailsSubmitted: true,
+};
 
 export default function PaymentsPage() {
-  const [stripeConnected, setStripeConnected] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [paymentMethods, setPaymentMethods] = useState({
+  const [isSaving, setIsSaving] = useState(false);
+  const [originalMethods, setOriginalMethods] = useState({
     creditCard: true,
-    twint: true,
     cash: true,
   });
-  const [payoutSchedule, setPayoutSchedule] = useState("daily");
+  const [paymentMethods, setPaymentMethods] = useState({
+    creditCard: true,
+    cash: true,
+  });
+
+  const hasChanges =
+    JSON.stringify(originalMethods) !== JSON.stringify(paymentMethods);
 
   const handleConnectStripe = async () => {
     setIsConnecting(true);
-    // Simulate API call to create Stripe Connect OAuth link
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setStripeConnected(true);
-    setIsConnecting(false);
+    // Redirect to Stripe Connect OAuth flow
+    window.location.href = "/api/stripe/connect";
+  };
+
+  const handleRefreshConnection = async () => {
+    // Refresh Stripe account status
+    window.location.href = "/api/stripe/refresh-status";
+  };
+
+  const handleSaveChanges = async () => {
+    setIsSaving(true);
+    try {
+      // Here you would make an API call to save the changes
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate API call
+      setOriginalMethods({ ...paymentMethods });
+      // Show success message or toast here
+    } catch (error) {
+      // Handle error here
+      console.error("Failed to save payment methods:", error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Payment Settings</h1>
-        <p className="text-gray-500">
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+          Payment Settings
+        </h1>
+        <p className="text-lg text-gray-500">
           Configure how you accept payments from customers
         </p>
       </div>
@@ -67,30 +98,34 @@ export default function PaymentsPage() {
         transition={{ duration: 0.3 }}
       >
         <Card
-          className={stripeConnected ? "border-green-200" : "border-amber-200"}
+          className={
+            stripeAccount.isConnected ? "border-green-200" : "border-amber-200"
+          }
         >
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div
                   className={`p-3 rounded-full ${
-                    stripeConnected ? "bg-green-100" : "bg-amber-100"
+                    stripeAccount.isConnected ? "bg-green-100" : "bg-amber-100"
                   }`}
                 >
                   <CreditCard
                     className={`h-6 w-6 ${
-                      stripeConnected ? "text-green-600" : "text-amber-600"
+                      stripeAccount.isConnected
+                        ? "text-green-600"
+                        : "text-amber-600"
                     }`}
                   />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold">
-                    {stripeConnected
+                    {stripeAccount.isConnected
                       ? "Stripe Connected"
                       : "Stripe Not Connected"}
                   </h3>
                   <p className="text-sm text-gray-500">
-                    {stripeConnected
+                    {stripeAccount.isConnected
                       ? "Your Stripe account is connected and ready to accept payments"
                       : "Connect your Stripe account to accept online payments"}
                   </p>
@@ -98,7 +133,7 @@ export default function PaymentsPage() {
               </div>
 
               <div>
-                {stripeConnected ? (
+                {stripeAccount.isConnected ? (
                   <Badge className="bg-green-100 text-green-800">
                     Connected
                   </Badge>
@@ -125,7 +160,7 @@ export default function PaymentsPage() {
       </motion.div>
 
       {/* Warning Alert - Show only when Stripe is not connected */}
-      {!stripeConnected && (
+      {!stripeAccount.isConnected && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -138,8 +173,7 @@ export default function PaymentsPage() {
             </AlertTitle>
             <AlertDescription className="text-amber-700">
               Without Stripe connected, customers can only pay with cash.
-              Connect your Stripe account to accept credit cards and TWINT
-              payments.
+              Connect your Stripe account to accept credit card payments.
             </AlertDescription>
           </Alert>
         </motion.div>
@@ -176,38 +210,12 @@ export default function PaymentsPage() {
               </div>
               <Switch
                 id="creditCard"
-                checked={paymentMethods.creditCard && stripeConnected}
+                checked={paymentMethods.creditCard}
                 onCheckedChange={(checked) =>
                   setPaymentMethods({ ...paymentMethods, creditCard: checked })
                 }
-                disabled={!stripeConnected}
-              />
-            </div>
-
-            <Separator />
-
-            {/* TWINT */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Smartphone className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <Label htmlFor="twint" className="text-base font-medium">
-                    TWINT
-                  </Label>
-                  <p className="text-sm text-gray-500">
-                    Swiss mobile payment solution
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="twint"
-                checked={paymentMethods.twint && stripeConnected}
-                onCheckedChange={(checked) =>
-                  setPaymentMethods({ ...paymentMethods, twint: checked })
-                }
-                disabled={!stripeConnected}
+                disabled={!stripeAccount.isConnected}
+                className="data-[state=checked]:bg-green-600 data-[state=checked]:hover:bg-green-700"
               />
             </div>
 
@@ -234,14 +242,38 @@ export default function PaymentsPage() {
                 onCheckedChange={(checked) =>
                   setPaymentMethods({ ...paymentMethods, cash: checked })
                 }
+                className="data-[state=checked]:bg-green-600 data-[state=checked]:hover:bg-green-700"
               />
             </div>
           </CardContent>
+          <CardFooter
+            className={cn(
+              "flex justify-end transition-all duration-200",
+              hasChanges
+                ? "opacity-100 h-[60px]"
+                : "opacity-0 h-0 overflow-hidden"
+            )}
+          >
+            <Button
+              onClick={handleSaveChanges}
+              disabled={isSaving || !hasChanges}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </CardFooter>
         </Card>
       </motion.div>
 
-      {/* Stripe Settings - Only show when connected */}
-      {stripeConnected && (
+      {/* Stripe Account Status - Only show when connected */}
+      {stripeAccount.isConnected && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -249,43 +281,19 @@ export default function PaymentsPage() {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Stripe Configuration</CardTitle>
+              <CardTitle>Stripe Account Status</CardTitle>
               <CardDescription>
-                Manage your Stripe payment processing settings
+                Your Stripe account information and status
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Payout Schedule */}
-              <div className="space-y-2">
-                <Label htmlFor="payoutSchedule">Payout Schedule</Label>
-                <Select
-                  value={payoutSchedule}
-                  onValueChange={setPayoutSchedule}
-                >
-                  <SelectTrigger id="payoutSchedule">
-                    <SelectValue placeholder="Select payout schedule" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-gray-500">
-                  How often you want to receive payments from Stripe
-                </p>
-              </div>
-
-              <Separator />
-
-              {/* Account Information */}
+              {/* Account Status */}
               <div className="space-y-4">
-                <h3 className="font-medium">Account Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Account ID</Label>
                     <div className="p-2 bg-gray-50 rounded border text-sm font-mono">
-                      acct_1234567890abcdef
+                      {stripeAccount.id}
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -304,29 +312,96 @@ export default function PaymentsPage() {
 
               {/* Processing Fees */}
               <div className="space-y-4">
-                <h3 className="font-medium">Processing Fees</h3>
-                <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Credit/Debit Cards:</span>
-                    <span className="font-medium">2.9% + CHF 0.30</span>
+                <h3 className="font-medium">Transaction Fees</h3>
+                <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+                  <div className="space-y-2">
+                    <p className="font-medium text-gray-900 mb-2">
+                      Card Payments:
+                    </p>
+                    <div className="flex justify-between text-sm">
+                      <span>Stripe Processing Fee:</span>
+                      <span className="font-medium">2.9% + CHF 0.30</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>DineEasy Commission:</span>
+                      <span className="font-medium">2.0%</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-medium text-gray-900 pt-2 border-t">
+                      <span>Total Fee per Card Transaction:</span>
+                      <span>4.9% + CHF 0.30</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span>TWINT:</span>
-                    <span className="font-medium">1.5% + CHF 0.30</span>
+
+                  <div className="space-y-2">
+                    <p className="font-medium text-gray-900 mb-2">
+                      Cash Payments:
+                    </p>
+                    <div className="flex justify-between text-sm">
+                      <span>All Fees:</span>
+                      <span className="font-medium text-green-600">Free</span>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Cash payments are processed without any additional fees
+                    </p>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Cash:</span>
-                    <span className="font-medium">Free</span>
+
+                  <div className="text-sm bg-blue-50 p-3 rounded-md space-y-2">
+                    <p className="font-medium text-blue-900">
+                      Example Card Transaction:
+                    </p>
+                    <div className="space-y-1 text-blue-800">
+                      <div className="flex justify-between">
+                        <span>Order Amount:</span>
+                        <span>CHF 100.00</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Stripe Fee (2.9% + CHF 0.30):</span>
+                        <span>- CHF 3.20</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>DineEasy Commission (2%):</span>
+                        <span>- CHF 2.00</span>
+                      </div>
+                      <div className="flex justify-between font-medium border-t border-blue-200 pt-1 mt-1">
+                        <span>You Receive:</span>
+                        <span>CHF 94.80</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    <p>
+                      • Stripe processing fees are standard and go directly to
+                      Stripe
+                    </p>
+                    <p>• DineEasy commission applies only to card payments</p>
+                    <p>
+                      • Cash payments are completely free - no Stripe fees or
+                      DineEasy commission
+                    </p>
+                    <p>
+                      • View detailed pricing and transaction history in your
+                      Stripe Dashboard
+                    </p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <Button variant="outline">
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() =>
+                    (window.location.href = "https://dashboard.stripe.com")
+                  }
+                >
                   <ExternalLink className="w-4 h-4 mr-2" />
-                  Manage in Stripe Dashboard
+                  Open Stripe Dashboard
                 </Button>
-                <Button variant="outline">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleRefreshConnection}
+                >
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Refresh Connection
                 </Button>
@@ -337,21 +412,23 @@ export default function PaymentsPage() {
       )}
 
       {/* Test Mode Notice */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.4 }}
-      >
-        <Alert className="bg-blue-50 border-blue-200">
-          <AlertCircle className="h-4 w-4 text-blue-600" />
-          <AlertTitle className="text-blue-800">Test Mode Active</AlertTitle>
-          <AlertDescription className="text-blue-700">
-            Your Stripe account is currently in test mode. No real payments will
-            be processed. Switch to live mode in your Stripe dashboard when
-            you're ready to accept real payments.
-          </AlertDescription>
-        </Alert>
-      </motion.div>
+      {stripeAccount.isTestMode && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.4 }}
+        >
+          <Alert className="bg-blue-50 border-blue-200">
+            <AlertCircle className="h-4 w-4 text-blue-600" />
+            <AlertTitle className="text-blue-800">Test Mode Active</AlertTitle>
+            <AlertDescription className="text-blue-700">
+              Your Stripe account is currently in test mode. No real payments
+              will be processed. Switch to live mode in your Stripe dashboard
+              when you're ready to accept real payments.
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
     </div>
   );
 }

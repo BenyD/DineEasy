@@ -5,6 +5,7 @@ export const PLANS = {
     currency: "CHF",
     features: [
       "Manual Digital Menu",
+      "Up to 25 menu items",
       "QR-Based Table Ordering (Up to 6 Tables)",
       "Stripe & Cash Payments",
       "Real-Time Order Dashboard",
@@ -31,6 +32,7 @@ export const PLANS = {
     currency: "CHF",
     features: [
       "Everything in Starter",
+      "Up to 100 menu items",
       "Up to 12 Tables with QR Codes",
       "Up to 3 Staff Accounts (Waiter, Staff, Supervisor)",
       "Role-Based Permissions (RBAC)",
@@ -55,6 +57,7 @@ export const PLANS = {
     features: [
       "Everything in Pro",
       "Unlimited Tables & QR Codes",
+      "Unlimited menu items",
       "Unlimited Staff Accounts",
       "Full Audit Logs (Order actions, logins, changes)",
       "Enhanced Analytics",

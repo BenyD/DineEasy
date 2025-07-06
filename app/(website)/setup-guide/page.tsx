@@ -113,13 +113,63 @@ export default function SetupGuidePage() {
   return (
     <PageWrapper>
       <HeaderSection
-        title={
-          <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-            Setup Guide
-          </span>
-        }
-        subtitle="Get your restaurant up and running with DineEasy in under an hour. Follow our step-by-step guide to configure everything you need."
+        title="Setup Guide"
+        subtitle="Get started with DineEasy in minutes. Follow our step-by-step guide to set up your restaurant's digital ordering system."
       />
+
+      <section className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+        {/* Background gradient effects */}
+        <div className="absolute inset-0 overflow-hidden">
+          <GradientBlob
+            colors={["emerald-500/30", "green-500/30"]}
+            className="-top-1/2 -right-1/2 w-full h-full"
+          />
+          <GradientBlob
+            colors={["emerald-500/20", "green-500/20"]}
+            className="-bottom-1/2 -left-1/2 w-full h-full"
+          />
+        </div>
+
+        {/* Video container with enhanced styling */}
+        <div className="relative">
+          {/* Video title */}
+          <h2 className="text-center mb-8">
+            <span className="inline-block text-2xl sm:text-3xl font-semibold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+              Watch How It Works
+            </span>
+          </h2>
+
+          {/* Video player wrapper */}
+          <div className="relative group">
+            {/* Glass effect container */}
+            <div className="absolute -inset-3 bg-gradient-to-r from-green-100/10 to-emerald-100/10 rounded-2xl backdrop-blur-xl group-hover:from-green-100/20 group-hover:to-emerald-100/20 transition duration-300" />
+
+            {/* Video player */}
+            <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900 shadow-2xl ring-1 ring-gray-800/10 dark:ring-white/10">
+              <video
+                className="w-full h-full"
+                controls
+                poster="/images/setup-guide-thumbnail.jpg"
+                preload="metadata"
+              >
+                <source src="/videos/setup-guide.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          </div>
+
+          {/* Video description */}
+          <div className="mt-8 text-center">
+            <p className="text-base text-gray-600 dark:text-gray-300">
+              Learn how to set up your restaurant's digital menu, QR codes, and
+              ordering system
+            </p>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              Complete setup in under 10 minutes
+            </p>
+          </div>
+        </div>
+      </section>
 
       <AnimatedSection className="relative py-16 sm:py-24">
         <GradientBlob

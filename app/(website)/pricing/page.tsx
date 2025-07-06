@@ -42,6 +42,12 @@ const FEATURE_COMPARISON = [
     elite: true,
   },
   {
+    name: "Menu Items",
+    starter: "Up to 25 items",
+    pro: "Up to 100 items",
+    elite: "Unlimited",
+  },
+  {
     name: "Number of Tables/QR Codes",
     starter: "Up to 6",
     pro: "Up to 12",
@@ -152,9 +158,11 @@ export default function PricingPage() {
       description:
         "Designed for busy cafés, bars, and small restaurants with a few staff",
       bestFor: "Growing restaurants",
-      features: PLANS.pro.features.map(
-        (text) => ({ text, included: true } as PlanFeature)
-      ),
+      features: [
+        ...PLANS.pro.features.map(
+          (text) => ({ text, included: true } as PlanFeature)
+        ),
+      ],
     },
     {
       ...PLANS.elite,
@@ -164,9 +172,11 @@ export default function PricingPage() {
       color: "green",
       description: "For high-volume kitchens and restaurants with larger staff",
       bestFor: "High-volume restaurants",
-      features: PLANS.elite.features.map(
-        (text) => ({ text, included: true } as PlanFeature)
-      ),
+      features: [
+        ...PLANS.elite.features.map(
+          (text) => ({ text, included: true } as PlanFeature)
+        ),
+      ],
     },
   ];
 

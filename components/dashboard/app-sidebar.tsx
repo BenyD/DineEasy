@@ -32,6 +32,7 @@ import {
   ChevronRight,
   Building2,
   CircleDot,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -156,19 +157,28 @@ const navigationData = {
       href: "/dashboard/staff",
       icon: Users,
       description: "Manage team members",
-      badge: "Elite",
+      badge: "Pro",
     },
     {
       name: "Activity",
       href: "/dashboard/activity",
       icon: Activity,
       description: "View system activity logs",
+      badge: "Elite",
+    },
+    {
+      name: "Feedback",
+      href: "/dashboard/feedback",
+      icon: MessageSquare,
+      description: "View customer feedback",
+      badge: "Pro",
     },
     {
       name: "Printer",
       href: "/dashboard/printer",
       icon: Printer,
       description: "Receipt printer settings",
+      badge: restaurant.plan === "Elite" ? "Assisted Setup" : undefined,
     },
   ],
   settings: [
@@ -183,7 +193,6 @@ const navigationData = {
       href: "/dashboard/billing",
       icon: Receipt,
       description: "Subscription and payments",
-      badge: "12d",
     },
     {
       name: "Payments",
