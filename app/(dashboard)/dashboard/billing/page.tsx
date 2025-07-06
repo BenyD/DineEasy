@@ -58,7 +58,7 @@ export default function BillingPage() {
             Set Up Billing
           </h1>
           <p className="text-lg text-gray-500">
-            Connect your payment method to continue using DineEasy
+            Add a payment method to start your DineEasy subscription
           </p>
         </div>
 
@@ -76,8 +76,7 @@ export default function BillingPage() {
                 <div>
                   <CardTitle>Payment Method Required</CardTitle>
                   <CardDescription>
-                    Please connect your Stripe account to manage your
-                    subscription
+                    Please add a payment method to continue using DineEasy
                   </CardDescription>
                 </div>
               </div>
@@ -85,21 +84,20 @@ export default function BillingPage() {
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <p className="text-sm text-gray-600">
-                  Before you can manage your subscription and billing, you'll
-                  need to:
+                  Before you can start your subscription, you'll need to:
                 </p>
                 <ul className="space-y-3">
                   <li className="flex items-center gap-2 text-sm">
                     <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span>Connect your Stripe account</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span>Set up your payment method</span>
+                    <span>Add a payment method</span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
                     <CheckCircle className="h-5 w-5 text-green-600" />
                     <span>Choose your subscription plan</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <span>Start your free trial</span>
                   </li>
                 </ul>
               </div>
@@ -108,14 +106,14 @@ export default function BillingPage() {
                 <Button
                   className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg"
                   onClick={() =>
-                    (window.location.href = "/dashboard/connect-stripe")
+                    (window.location.href = "/dashboard/billing/change-plan")
                   }
                 >
                   <CreditCard className="h-5 w-5 mr-2" />
-                  Connect Stripe Account
+                  Choose a Plan
                 </Button>
                 <p className="text-xs text-gray-500 text-center mt-3">
-                  You'll be guided through a secure setup process
+                  You'll be guided through a secure payment setup process
                 </p>
               </div>
             </CardContent>

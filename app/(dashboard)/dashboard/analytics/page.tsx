@@ -10,6 +10,11 @@ import {
   ShoppingCart,
   Users,
   Star,
+  Filter,
+  Download,
+  RefreshCw,
+  Clock,
+  ChevronDown,
 } from "lucide-react";
 import {
   LineChart,
@@ -29,7 +34,13 @@ import {
   Area,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -37,7 +48,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+
+import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 // Mock analytics data
 const mockAnalytics = {
@@ -153,108 +167,207 @@ const StatCard = ({
 
 export default function AnalyticsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState("today");
+  const [selectedMetrics, setSelectedMetrics] = useState([
+    "revenue",
+    "orders",
+    "customers",
+    "avgOrderValue",
+  ]);
+
+  const resetFilters = () => {
+    setSelectedPeriod("today");
+    setSelectedMetrics(["revenue", "orders", "customers", "avgOrderValue"]);
+  };
+
+  const handleExportReport = () => {
+    console.log(`Exporting report for ${selectedPeriod}`);
+  };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex-1 space-y-6 p-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-gray-500">
+          <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
+          <p className="text-muted-foreground">
             Track your restaurant's performance and insights
           </p>
         </div>
-        <div className="flex gap-2">
-          <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="thisWeek">This Week</SelectItem>
-              <SelectItem value="thisMonth">This Month</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline">
-            <Calendar className="w-4 h-4 mr-2" />
-            Custom Range
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportReport}>
+            <Download className="w-4 h-4 mr-2" />
+            Export Data
           </Button>
         </div>
       </div>
 
+      {/* Filters Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filters & Analytics
+          </CardTitle>
+          <CardDescription>
+            Customize your analytics view and reporting preferences
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Time Period Filter */}
+            <div className="space-y-2">
+              <Label>Time Period</Label>
+              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="yesterday">Yesterday</SelectItem>
+                  <SelectItem value="thisWeek">This Week</SelectItem>
+                  <SelectItem value="lastWeek">Last Week</SelectItem>
+                  <SelectItem value="thisMonth">This Month</SelectItem>
+                  <SelectItem value="lastMonth">Last Month</SelectItem>
+                  <SelectItem value="thisYear">This Year</SelectItem>
+                  <SelectItem value="lastYear">Last Year</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Metrics Selection */}
+          <div>
+            <Label className="mb-3 block">Metrics to Display</Label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: "revenue", label: "Revenue", icon: DollarSign },
+                { id: "orders", label: "Orders", icon: ShoppingCart },
+                { id: "customers", label: "Customers", icon: Users },
+                {
+                  id: "avgOrderValue",
+                  label: "Avg Order Value",
+                  icon: TrendingUp,
+                },
+              ].map(({ id, label, icon: Icon }) => (
+                <Button
+                  key={id}
+                  variant={selectedMetrics.includes(id) ? "default" : "outline"}
+                  onClick={() => {
+                    if (selectedMetrics.includes(id)) {
+                      setSelectedMetrics(
+                        selectedMetrics.filter((m) => m !== id)
+                      );
+                    } else {
+                      setSelectedMetrics([...selectedMetrics, id]);
+                    }
+                  }}
+                  className={
+                    selectedMetrics.includes(id)
+                      ? "bg-green-600 hover:bg-green-700"
+                      : ""
+                  }
+                >
+                  <Icon className="w-4 h-4 mr-2" />
+                  {label}
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                onClick={resetFilters}
+                className="ml-auto"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reset
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Key Metrics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <StatCard
-            title="Revenue"
-            value={
-              mockAnalytics.revenue[
-                selectedPeriod as keyof typeof mockAnalytics.revenue
-              ]
-            }
-            previousValue={mockAnalytics.revenue.yesterday}
-            icon={<DollarSign className="w-6 h-6 text-green-600" />}
-            formatter={(val) => `CHF ${val.toFixed(2)}`}
-          />
-        </motion.div>
+        {selectedMetrics.includes("revenue") && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <StatCard
+              title="Revenue"
+              value={
+                mockAnalytics.revenue[
+                  selectedPeriod as keyof typeof mockAnalytics.revenue
+                ]
+              }
+              previousValue={mockAnalytics.revenue.yesterday}
+              icon={<DollarSign className="w-6 h-6 text-green-600" />}
+              formatter={(val) => `CHF ${val.toFixed(2)}`}
+            />
+          </motion.div>
+        )}
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-        >
-          <StatCard
-            title="Orders"
-            value={
-              mockAnalytics.orders[
-                selectedPeriod as keyof typeof mockAnalytics.orders
-              ]
-            }
-            previousValue={mockAnalytics.orders.yesterday}
-            icon={<ShoppingCart className="w-6 h-6 text-blue-600" />}
-          />
-        </motion.div>
+        {selectedMetrics.includes("orders") && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <StatCard
+              title="Orders"
+              value={
+                mockAnalytics.orders[
+                  selectedPeriod as keyof typeof mockAnalytics.orders
+                ]
+              }
+              previousValue={mockAnalytics.orders.yesterday}
+              icon={<ShoppingCart className="w-6 h-6 text-blue-600" />}
+            />
+          </motion.div>
+        )}
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-        >
-          <StatCard
-            title="Customers"
-            value={
-              mockAnalytics.customers[
-                selectedPeriod as keyof typeof mockAnalytics.customers
-              ]
-            }
-            previousValue={mockAnalytics.customers.yesterday}
-            icon={<Users className="w-6 h-6 text-purple-600" />}
-          />
-        </motion.div>
+        {selectedMetrics.includes("customers") && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+          >
+            <StatCard
+              title="Customers"
+              value={
+                mockAnalytics.customers[
+                  selectedPeriod as keyof typeof mockAnalytics.customers
+                ]
+              }
+              previousValue={mockAnalytics.customers.yesterday}
+              icon={<Users className="w-6 h-6 text-purple-600" />}
+            />
+          </motion.div>
+        )}
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.3 }}
-        >
-          <StatCard
-            title="Avg Order Value"
-            value={
-              mockAnalytics.avgOrderValue[
-                selectedPeriod as keyof typeof mockAnalytics.avgOrderValue
-              ]
-            }
-            previousValue={mockAnalytics.avgOrderValue.yesterday}
-            icon={<TrendingUp className="w-6 h-6 text-amber-600" />}
-            formatter={(val) => `CHF ${val.toFixed(2)}`}
-          />
-        </motion.div>
+        {selectedMetrics.includes("avgOrderValue") && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.3 }}
+          >
+            <StatCard
+              title="Avg Order Value"
+              value={
+                mockAnalytics.avgOrderValue[
+                  selectedPeriod as keyof typeof mockAnalytics.avgOrderValue
+                ]
+              }
+              previousValue={mockAnalytics.avgOrderValue.yesterday}
+              icon={<TrendingUp className="w-6 h-6 text-amber-600" />}
+              formatter={(val) => `CHF ${val.toFixed(2)}`}
+            />
+          </motion.div>
+        )}
       </div>
 
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Weekly Revenue Trend */}
         <motion.div
@@ -265,6 +378,9 @@ export default function AnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Weekly Revenue Trend</CardTitle>
+              <CardDescription>
+                Revenue performance over the past week
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[300px] w-full">
@@ -299,6 +415,9 @@ export default function AnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Hourly Orders Distribution</CardTitle>
+              <CardDescription>
+                Order patterns throughout the day
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[300px] w-full">
@@ -326,6 +445,9 @@ export default function AnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Revenue by Menu Items</CardTitle>
+              <CardDescription>
+                Top performing menu items by revenue
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[300px] w-full">
@@ -368,6 +490,9 @@ export default function AnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Weekly Performance Overview</CardTitle>
+              <CardDescription>
+                Combined view of key performance metrics
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[300px] w-full">

@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
 import { BreadcrumbHeader } from "@/components/dashboard/breadcrumb-header";
 
 // Mock activity data
@@ -207,6 +208,7 @@ export default function ActivityLogsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [selectedUser, setSelectedUser] = useState("all");
+  const [timeRange, setTimeRange] = useState("all");
 
   // Get unique users for filter
   const uniqueUsers = Array.from(
@@ -223,6 +225,26 @@ export default function ActivityLogsPage() {
     const matchesUser =
       selectedUser === "all" || activity.user.name === selectedUser;
 
+    // Add time range filtering
+    if (timeRange !== "all") {
+      const now = new Date();
+      const activityTime = activity.timestamp;
+      const hoursDiff =
+        (now.getTime() - activityTime.getTime()) / (1000 * 60 * 60);
+
+      switch (timeRange) {
+        case "24h":
+          if (hoursDiff > 24) return false;
+          break;
+        case "7d":
+          if (hoursDiff > 24 * 7) return false;
+          break;
+        case "30d":
+          if (hoursDiff > 24 * 30) return false;
+          break;
+      }
+    }
+
     return matchesSearch && matchesType && matchesUser;
   });
 
@@ -230,6 +252,7 @@ export default function ActivityLogsPage() {
     setSearchTerm("");
     setSelectedType("all");
     setSelectedUser("all");
+    setTimeRange("all");
   };
 
   return (
@@ -254,71 +277,93 @@ export default function ActivityLogsPage() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters Card */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Filters</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filters & Search
+          </CardTitle>
           <CardDescription>
-            Filter activities by type, user, or search terms
+            Filter and search through activity logs
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-4 md:flex-row md:items-end">
-            <div className="flex-1">
-              <label className="text-sm font-medium mb-2 block">Search</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search activities..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Search Input */}
+            <div className="relative col-span-full lg:col-span-2">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+              <Input
+                placeholder="Search activities..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+              />
             </div>
-            <div className="w-full md:w-48">
-              <label className="text-sm font-medium mb-2 block">
-                Activity Type
-              </label>
-              <Select value={selectedType} onValueChange={setSelectedType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activityTypes.map((type) => {
-                    const Icon = type.icon;
-                    return (
-                      <SelectItem key={type.value} value={type.value}>
-                        <div className="flex items-center">
-                          <Icon className="w-4 h-4 mr-2" />
-                          {type.label}
-                        </div>
+
+            {/* Time Range Filter */}
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Time Range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="24h">Last 24 Hours</SelectItem>
+                <SelectItem value="7d">Last 7 Days</SelectItem>
+                <SelectItem value="30d">Last 30 Days</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* User Filter */}
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Select value={selectedUser} onValueChange={setSelectedUser}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select User" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Users</SelectItem>
+                    {uniqueUsers.map((user) => (
+                      <SelectItem key={user} value={user}>
+                        {user}
                       </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                variant="outline"
+                onClick={resetFilters}
+                className="shrink-0"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reset
+              </Button>
             </div>
-            <div className="w-full md:w-48">
-              <label className="text-sm font-medium mb-2 block">User</label>
-              <Select value={selectedUser} onValueChange={setSelectedUser}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select user" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Users</SelectItem>
-                  {uniqueUsers.map((user) => (
-                    <SelectItem key={user} value={user}>
-                      {user}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button variant="outline" onClick={resetFilters}>
-              <Filter className="w-4 h-4 mr-2" />
-              Reset
-            </Button>
+          </div>
+
+          <Separator />
+
+          {/* Activity Type Filters */}
+          <div className="flex flex-wrap gap-2">
+            {activityTypes.map((type) => {
+              const Icon = type.icon;
+              return (
+                <Button
+                  key={type.value}
+                  variant={selectedType === type.value ? "default" : "outline"}
+                  onClick={() => setSelectedType(type.value)}
+                  className={`flex-1 md:flex-none ${
+                    selectedType === type.value
+                      ? "bg-green-600 hover:bg-green-700"
+                      : ""
+                  }`}
+                >
+                  <Icon className="w-4 h-4 mr-2" />
+                  {type.label}
+                </Button>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -326,7 +371,7 @@ export default function ActivityLogsPage() {
       {/* Activity List */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Recent Activities</CardTitle>
+          <CardTitle className="text-lg">Activity Logs</CardTitle>
           <CardDescription>
             Showing {filteredActivities.length} of {mockActivities.length}{" "}
             activities

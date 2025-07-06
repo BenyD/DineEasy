@@ -85,6 +85,8 @@ export default function SettingsPage() {
     acceptsReservations: true,
     deliveryAvailable: true,
     takeoutAvailable: true,
+    taxRate: 7.7,
+    vatNumber: "CHE-123.456.789",
   });
 
   const [notifications, setNotifications] = useState({
@@ -394,6 +396,45 @@ export default function SettingsPage() {
                         }
                         className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                         disabled={!isEditing}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="taxRate" className="text-base">
+                        Tax Rate (%)
+                      </Label>
+                      <Input
+                        id="taxRate"
+                        type="number"
+                        step="0.1"
+                        value={restaurantInfo.taxRate || ""}
+                        onChange={(e) =>
+                          setRestaurantInfo({
+                            ...restaurantInfo,
+                            taxRate: parseFloat(e.target.value),
+                          })
+                        }
+                        className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        disabled={!isEditing}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="vatNumber" className="text-base">
+                        VAT Number
+                      </Label>
+                      <Input
+                        id="vatNumber"
+                        value={restaurantInfo.vatNumber || ""}
+                        onChange={(e) =>
+                          setRestaurantInfo({
+                            ...restaurantInfo,
+                            vatNumber: e.target.value,
+                          })
+                        }
+                        className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        disabled={!isEditing}
+                        placeholder="e.g., CHE-123.456.789"
                       />
                     </div>
 

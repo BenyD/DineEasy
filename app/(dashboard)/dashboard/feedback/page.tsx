@@ -10,6 +10,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   ExternalLink,
+  Filter,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,8 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { motion } from "framer-motion";
+import { Separator } from "@/components/ui/separator";
 import React from "react";
 
 type FeedbackSentiment = "positive" | "neutral" | "negative";
@@ -99,10 +100,10 @@ export default function FeedbackPage() {
   const [timeRange, setTimeRange] = useState("week");
   const [selectedRating, setSelectedRating] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedTab, setSelectedTab] = useState("all");
+  const [sentiment, setSentiment] = useState("all");
 
   const filteredFeedback = feedbackItems.filter((item) => {
-    if (selectedTab !== "all" && item.sentiment !== selectedTab) return false;
+    if (sentiment !== "all" && item.sentiment !== sentiment) return false;
     if (selectedRating !== "all" && item.rating !== parseInt(selectedRating))
       return false;
     if (
@@ -123,40 +124,16 @@ export default function FeedbackPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Customer Feedback
-          </h1>
-          <p className="text-muted-foreground">
-            View customer feedback and ratings
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select time range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="day">Last 24 Hours</SelectItem>
-              <SelectItem value="week">Last 7 Days</SelectItem>
-              <SelectItem value="month">Last 30 Days</SelectItem>
-              <SelectItem value="year">Last Year</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="icon">
-            <Calendar className="h-4 w-4" />
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Customer Feedback</h1>
+        <p className="text-gray-500">
+          Monitor and analyze customer feedback and ratings
+        </p>
       </div>
 
       {/* Stats Overview */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
+        <div>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -180,13 +157,9 @@ export default function FeedbackPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-        >
+        <div>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -199,13 +172,9 @@ export default function FeedbackPage() {
               <p className="text-xs text-muted-foreground">Last 30 days</p>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-        >
+        <div>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Positive</CardTitle>
@@ -223,13 +192,9 @@ export default function FeedbackPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.3 }}
-        >
+        <div>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Negative</CardTitle>
@@ -247,118 +212,200 @@ export default function FeedbackPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </div>
 
-      {/* Filters and Search */}
+      {/* Filters Card */}
       <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-                <Input
-                  placeholder="Search feedback..."
-                  className="pl-8"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filters & Search
+          </CardTitle>
+          <CardDescription>
+            Filter and search through customer feedback
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Search Input */}
+            <div className="relative col-span-full lg:col-span-2">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+              <Input
+                placeholder="Search feedback..."
+                className="pl-8"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-            <Select value={selectedRating} onValueChange={setSelectedRating}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Rating" />
+
+            {/* Time Range Filter */}
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Time Range" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Ratings</SelectItem>
-                <SelectItem value="5">5 Stars</SelectItem>
-                <SelectItem value="4">4 Stars</SelectItem>
-                <SelectItem value="3">3 Stars</SelectItem>
-                <SelectItem value="2">2 Stars</SelectItem>
-                <SelectItem value="1">1 Star</SelectItem>
+                <SelectItem value="day">Last 24 Hours</SelectItem>
+                <SelectItem value="week">Last 7 Days</SelectItem>
+                <SelectItem value="month">Last 30 Days</SelectItem>
+                <SelectItem value="year">Last Year</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* Rating Filter */}
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Select
+                  value={selectedRating}
+                  onValueChange={setSelectedRating}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Rating" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Ratings</SelectItem>
+                    <SelectItem value="5">5 Stars</SelectItem>
+                    <SelectItem value="4">4 Stars</SelectItem>
+                    <SelectItem value="3">3 Stars</SelectItem>
+                    <SelectItem value="2">2 Stars</SelectItem>
+                    <SelectItem value="1">1 Star</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchTerm("");
+                  setSelectedRating("all");
+                  setTimeRange("week");
+                  setSentiment("all");
+                }}
+                className="shrink-0"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reset
+              </Button>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Sentiment Filters */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={sentiment === "all" ? "default" : "outline"}
+              onClick={() => setSentiment("all")}
+              className={`flex-1 md:flex-none ${
+                sentiment === "all" ? "bg-green-600 hover:bg-green-700" : ""
+              }`}
+            >
+              All Feedback
+            </Button>
+            <Button
+              variant={sentiment === "positive" ? "default" : "outline"}
+              onClick={() => setSentiment("positive")}
+              className={`flex-1 md:flex-none ${
+                sentiment === "positive"
+                  ? "bg-green-600 hover:bg-green-700"
+                  : ""
+              }`}
+            >
+              <ThumbsUp className="h-4 w-4 mr-2" />
+              Positive
+            </Button>
+            <Button
+              variant={sentiment === "neutral" ? "default" : "outline"}
+              onClick={() => setSentiment("neutral")}
+              className={`flex-1 md:flex-none ${
+                sentiment === "neutral" ? "bg-green-600 hover:bg-green-700" : ""
+              }`}
+            >
+              Neutral
+            </Button>
+            <Button
+              variant={sentiment === "negative" ? "default" : "outline"}
+              onClick={() => setSentiment("negative")}
+              className={`flex-1 md:flex-none ${
+                sentiment === "negative"
+                  ? "bg-green-600 hover:bg-green-700"
+                  : ""
+              }`}
+            >
+              <ThumbsDown className="h-4 w-4 mr-2" />
+              Negative
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Feedback Tabs and List */}
-      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-        <TabsList>
-          <TabsTrigger value="all">All Feedback</TabsTrigger>
-          <TabsTrigger value="positive">Positive</TabsTrigger>
-          <TabsTrigger value="neutral">Neutral</TabsTrigger>
-          <TabsTrigger value="negative">Negative</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={selectedTab} className="mt-6">
-          <div className="space-y-4">
-            {filteredFeedback.map((item) => (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Card>
-                  <CardHeader className="flex flex-row items-start justify-between space-y-0">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-base">
-                          {item.customerName}
-                        </CardTitle>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 text-muted-foreground hover:text-foreground"
-                          onClick={() =>
-                            (window.location.href = `/dashboard/orders/history?order=${item.orderNumber}`)
-                          }
-                        >
-                          {item.orderNumber}
-                          <ExternalLink className="ml-1 h-3 w-3" />
-                        </Button>
-                      </div>
-                      <CardDescription className="flex items-center gap-2">
-                        <Clock className="h-3 w-3" />
-                        {item.date} • Table {item.tableNumber} •{" "}
-                        {item.timeSpent}
-                      </CardDescription>
+      {/* Feedback List */}
+      <div className="space-y-4">
+        {filteredFeedback.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center text-gray-500">
+              No feedback found matching your filters.
+            </CardContent>
+          </Card>
+        ) : (
+          filteredFeedback.map((item) => (
+            <div key={item.id}>
+              <Card>
+                <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-base">
+                        {item.customerName}
+                      </CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-muted-foreground hover:text-foreground"
+                        onClick={() =>
+                          (window.location.href = `/dashboard/orders/history?order=${item.orderNumber}`)
+                        }
+                      >
+                        {item.orderNumber}
+                        <ExternalLink className="ml-1 h-3 w-3" />
+                      </Button>
                     </div>
-                    <Badge
-                      variant="secondary"
-                      className={sentimentColors[item.sentiment]}
-                    >
-                      {item.rating} ★
-                    </Badge>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <p className="text-sm text-gray-600">{item.comment}</p>
-                      <div className="mt-2">
-                        <p className="text-sm font-medium text-gray-500">
-                          Items Ordered:
-                        </p>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {item.items.map((itemName, index) => (
-                            <Badge
-                              key={index}
-                              variant="secondary"
-                              className="bg-gray-100"
-                            >
-                              {itemName}
-                            </Badge>
-                          ))}
-                        </div>
+                    <CardDescription className="flex items-center gap-2">
+                      <Clock className="h-3 w-3" />
+                      {item.date} • Table {item.tableNumber} • {item.timeSpent}
+                    </CardDescription>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className={sentimentColors[item.sentiment]}
+                  >
+                    {item.rating} ★
+                  </Badge>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-600">{item.comment}</p>
+                    <div className="mt-2">
+                      <p className="text-sm font-medium text-gray-500">
+                        Items Ordered:
+                      </p>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {item.items.map((itemName, index) => (
+                          <Badge
+                            key={index}
+                            variant="secondary"
+                            className="bg-gray-100"
+                          >
+                            {itemName}
+                          </Badge>
+                        ))}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

@@ -33,6 +33,10 @@ import {
   Building2,
   CircleDot,
   MessageSquare,
+  ShoppingBag,
+  UtensilsCrossed,
+  Table2,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -59,6 +63,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/animated-popover";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Mock data for the restaurant
 const restaurant = {
@@ -179,6 +185,23 @@ const navigationData = {
       icon: Printer,
       description: "Receipt printer settings",
       badge: restaurant.plan === "Elite" ? "Assisted Setup" : undefined,
+      subItems: [
+        {
+          name: "Settings",
+          href: "/dashboard/printer/settings",
+          description: "General printer settings",
+        },
+        {
+          name: "Kitchen Orders",
+          href: "/dashboard/printer/kitchen-orders",
+          description: "Kitchen order ticket settings",
+        },
+        {
+          name: "Customer Receipts",
+          href: "/dashboard/printer/customer-receipt",
+          description: "Customer receipt settings",
+        },
+      ],
     },
   ],
   settings: [
@@ -243,6 +266,148 @@ function MobileMenuButton() {
   );
 }
 
+interface SidebarLink {
+  title: string;
+  href: string;
+  icon?: any;
+  submenu?: {
+    title: string;
+    href: string;
+  }[];
+}
+
+const sidebarLinks: SidebarLink[] = [
+  {
+    title: "Dashboard",
+    href: "/dashboard",
+    icon: Home,
+  },
+  {
+    title: "Orders",
+    href: "/dashboard/orders",
+    icon: ShoppingBag,
+  },
+  {
+    title: "Menu",
+    href: "/dashboard/menu",
+    icon: UtensilsCrossed,
+  },
+  {
+    title: "Tables",
+    href: "/dashboard/tables",
+    icon: Table2,
+  },
+  {
+    title: "Kitchen",
+    href: "/dashboard/kitchen",
+    icon: ChefHat,
+  },
+  {
+    title: "Staff",
+    href: "/dashboard/staff",
+    icon: Users,
+  },
+  {
+    title: "Printer",
+    href: "/dashboard/printer",
+    icon: Printer,
+    submenu: [
+      {
+        title: "Settings",
+        href: "/dashboard/printer",
+      },
+      {
+        title: "Kitchen Orders",
+        href: "/dashboard/printer/kitchen-orders",
+      },
+      {
+        title: "Customer Receipts",
+        href: "/dashboard/printer/customer-receipt",
+      },
+    ],
+  },
+  {
+    title: "Analytics",
+    href: "/dashboard/analytics",
+    icon: BarChart3,
+  },
+  {
+    title: "Payments",
+    href: "/dashboard/payments",
+    icon: Wallet,
+  },
+  {
+    title: "Settings",
+    href: "/dashboard/settings",
+    icon: Settings,
+  },
+  {
+    title: "Help",
+    href: "/dashboard/help",
+    icon: HelpCircle,
+  },
+];
+
+function SidebarItem({ link }: { link: SidebarLink }) {
+  const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
+  const isActive =
+    pathname === link.href || pathname.startsWith(link.href + "/");
+  const hasSubmenu = link.submenu && link.submenu.length > 0;
+
+  return (
+    <>
+      <Link
+        href={hasSubmenu ? "#" : link.href}
+        onClick={hasSubmenu ? () => setIsOpen(!isOpen) : undefined}
+        className={cn(
+          "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-50",
+          isActive &&
+            "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-50"
+        )}
+      >
+        {link.icon && <link.icon className="h-4 w-4" />}
+        <span>{link.title}</span>
+        {hasSubmenu && (
+          <div className="ml-auto">
+            {isOpen ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </div>
+        )}
+      </Link>
+      <AnimatePresence>
+        {isOpen && hasSubmenu && link.submenu && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="ml-6 mt-1 space-y-1"
+          >
+            {link.submenu.map((subItem) => (
+              <Link
+                key={subItem.href}
+                href={subItem.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-50",
+                  pathname === subItem.href &&
+                    "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-50"
+                )}
+              >
+                <CircleDot className="h-3 w-3" />
+                <span>{subItem.title}</span>
+              </Link>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [mounted, setMounted] = React.useState(false);
   const { state, isMobile } = useSidebar();
@@ -303,9 +468,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <item.icon
               className={cn(
                 "h-4 w-4 shrink-0",
-                active || activeChild
-                  ? "text-green-700"
-                  : "text-gray-400 group-hover:text-gray-900"
+                active || activeChild ? "text-green-700" : "text-gray-600"
               )}
             />
           )}

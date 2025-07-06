@@ -31,7 +31,6 @@ import { cn } from "@/lib/utils";
 const stripeAccount = {
   id: "acct_1234567890abcdef",
   isConnected: true,
-  isTestMode: true,
   status: "active",
   chargesEnabled: true,
   payoutsEnabled: true,
@@ -92,72 +91,78 @@ export default function PaymentsPage() {
       </div>
 
       {/* Stripe Connection Status */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <Card
-          className={
-            stripeAccount.isConnected ? "border-green-200" : "border-amber-200"
-          }
+      {stripeAccount.isConnected && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
         >
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div
-                  className={`p-3 rounded-full ${
-                    stripeAccount.isConnected ? "bg-green-100" : "bg-amber-100"
-                  }`}
-                >
-                  <CreditCard
-                    className={`h-6 w-6 ${
+          <Card
+            className={
+              stripeAccount.isConnected
+                ? "border-green-200"
+                : "border-amber-200"
+            }
+          >
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`p-3 rounded-full ${
                       stripeAccount.isConnected
-                        ? "text-green-600"
-                        : "text-amber-600"
+                        ? "bg-green-100"
+                        : "bg-amber-100"
                     }`}
-                  />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">
-                    {stripeAccount.isConnected
-                      ? "Stripe Connected"
-                      : "Stripe Not Connected"}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    {stripeAccount.isConnected
-                      ? "Your Stripe account is connected and ready to accept payments"
-                      : "Connect your Stripe account to accept online payments"}
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                {stripeAccount.isConnected ? (
-                  <Badge className="bg-green-100 text-green-800">
-                    Connected
-                  </Badge>
-                ) : (
-                  <Button
-                    onClick={handleConnectStripe}
-                    disabled={isConnecting}
-                    className="bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
                   >
-                    {isConnecting ? (
-                      <div className="flex items-center gap-2">
-                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        Connecting...
-                      </div>
-                    ) : (
-                      "Connect Stripe"
-                    )}
-                  </Button>
-                )}
+                    <CreditCard
+                      className={`h-6 w-6 ${
+                        stripeAccount.isConnected
+                          ? "text-green-600"
+                          : "text-amber-600"
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold">
+                      {stripeAccount.isConnected
+                        ? "Stripe Connected"
+                        : "Stripe Not Connected"}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {stripeAccount.isConnected
+                        ? "Your Stripe account is connected and ready to accept payments"
+                        : "Connect your Stripe account to accept online payments"}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  {stripeAccount.isConnected ? (
+                    <Badge className="bg-green-100 text-green-800">
+                      Connected
+                    </Badge>
+                  ) : (
+                    <Button
+                      onClick={handleConnectStripe}
+                      disabled={isConnecting}
+                      className="bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
+                    >
+                      {isConnecting ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          Connecting...
+                        </div>
+                      ) : (
+                        "Connect Stripe"
+                      )}
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Warning Alert - Show only when Stripe is not connected */}
       {!stripeAccount.isConnected && (
@@ -166,16 +171,89 @@ export default function PaymentsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
-          <Alert variant="default" className="bg-amber-50 border-amber-200">
-            <AlertCircle className="h-4 w-4 text-amber-600" />
-            <AlertTitle className="text-amber-800">
-              Payment Processing Limited
-            </AlertTitle>
-            <AlertDescription className="text-amber-700">
-              Without Stripe connected, customers can only pay with cash.
-              Connect your Stripe account to accept credit card payments.
-            </AlertDescription>
-          </Alert>
+          <Card>
+            <CardHeader>
+              <CardTitle>Connect Your Stripe Account</CardTitle>
+              <CardDescription>
+                Set up secure payment processing for your restaurant
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                    <p className="text-sm text-amber-800">
+                      You need to connect your Stripe account to receive
+                      payments from customers.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4">
+                  <div className="flex items-start gap-3 bg-gray-50 p-4 rounded-lg">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <Banknote className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Receive Payments Directly</p>
+                      <p className="text-sm text-gray-500">
+                        Payments go straight to your bank account with automatic
+                        transfers
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 bg-gray-50 p-4 rounded-lg">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <CreditCard className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Accept Card Payments</p>
+                      <p className="text-sm text-gray-500">
+                        Take payments from all major credit and debit cards
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 bg-gray-50 p-4 rounded-lg">
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <Check className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Simple Fee Structure</p>
+                      <p className="text-sm text-gray-500">
+                        2.9% + CHF 0.30 for cards, cash payments are always free
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <Button
+                    onClick={handleConnectStripe}
+                    disabled={isConnecting}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg"
+                  >
+                    {isConnecting ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Connecting to Stripe...
+                      </div>
+                    ) : (
+                      <>
+                        <CreditCard className="h-5 w-5 mr-2" />
+                        Connect with Stripe
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-gray-500 text-center mt-3">
+                    You'll be guided through Stripe's secure setup process
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
       )}
 
