@@ -131,90 +131,6 @@ export default function FeedbackPage() {
         </p>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Average Rating
-              </CardTitle>
-              <Star className="h-4 w-4 text-yellow-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.averageRating}</div>
-              <div className="flex items-center mt-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Star
-                    key={star}
-                    className={`h-3 w-3 ${
-                      star <= stats.averageRating
-                        ? "text-yellow-400 fill-yellow-400"
-                        : "text-gray-300"
-                    }`}
-                  />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Reviews
-              </CardTitle>
-              <MessageSquare className="h-4 w-4 text-gray-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalReviews}</div>
-              <p className="text-xs text-muted-foreground">Last 30 days</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Positive</CardTitle>
-              <ThumbsUp className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {stats.positivePercentage}%
-              </div>
-              <div className="h-2 w-full bg-gray-100 rounded-full mt-2">
-                <div
-                  className="h-2 bg-green-500 rounded-full"
-                  style={{ width: `${stats.positivePercentage}%` }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Negative</CardTitle>
-              <ThumbsDown className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {stats.negativePercentage}%
-              </div>
-              <div className="h-2 w-full bg-gray-100 rounded-full mt-2">
-                <div
-                  className="h-2 bg-red-500 rounded-full"
-                  style={{ width: `${stats.negativePercentage}%` }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
       {/* Filters Card */}
       <Card>
         <CardHeader>
@@ -337,6 +253,90 @@ export default function FeedbackPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Stats Overview */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Average Rating
+              </CardTitle>
+              <Star className="h-4 w-4 text-yellow-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.averageRating}</div>
+              <div className="flex items-center mt-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    className={`h-3 w-3 ${
+                      star <= stats.averageRating
+                        ? "text-yellow-400 fill-yellow-400"
+                        : "text-gray-300"
+                    }`}
+                  />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Reviews
+              </CardTitle>
+              <MessageSquare className="h-4 w-4 text-gray-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalReviews}</div>
+              <p className="text-xs text-muted-foreground">Last 30 days</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Positive</CardTitle>
+              <ThumbsUp className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stats.positivePercentage}%
+              </div>
+              <div className="h-2 w-full bg-gray-100 rounded-full mt-2">
+                <div
+                  className="h-2 bg-green-500 rounded-full"
+                  style={{ width: `${stats.positivePercentage}%` }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Negative</CardTitle>
+              <ThumbsDown className="h-4 w-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stats.negativePercentage}%
+              </div>
+              <div className="h-2 w-full bg-gray-100 rounded-full mt-2">
+                <div
+                  className="h-2 bg-red-500 rounded-full"
+                  style={{ width: `${stats.negativePercentage}%` }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       {/* Feedback List */}
       <div className="space-y-4">

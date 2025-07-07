@@ -114,13 +114,13 @@ const navigationData = {
     },
     {
       name: "Orders",
-      href: "/dashboard/orders",
+      href: "/dashboard/orders/active",
       icon: ShoppingCart,
       description: "Manage customer orders",
       subItems: [
         {
           name: "Active Orders",
-          href: "/dashboard/orders",
+          href: "/dashboard/orders/active",
           description: "View and manage current orders",
           badge: "3",
         },

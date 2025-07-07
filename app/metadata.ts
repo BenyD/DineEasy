@@ -19,7 +19,7 @@ const defaultMetadata: Metadata = {
     template: "%s | DineEasy",
   },
   description:
-    "Transform your restaurant with QR-based ordering, real-time dashboards, and seamless payments. Accept Stripe, TWINT, and cash payments with automatic thermal printing.",
+    "Transform your restaurant with QR-based ordering, real-time dashboards, and seamless payments. Accept Stripe and cash payments with automatic thermal printing.",
   keywords: [
     "restaurant management",
     "QR code menu",
@@ -29,7 +29,6 @@ const defaultMetadata: Metadata = {
     "restaurant payment system",
     "thermal printing",
     "Stripe payments",
-    "TWINT payments",
     "restaurant analytics",
   ],
   authors: [{ name: "DineEasy" }],
@@ -68,7 +67,7 @@ const defaultMetadata: Metadata = {
     siteName: "DineEasy",
     title: "DineEasy - Modern Restaurant Management Made Simple",
     description:
-      "Transform your restaurant with QR-based ordering, real-time dashboards, and seamless payments. Accept Stripe, TWINT, and cash payments with automatic thermal printing.",
+      "Transform your restaurant with QR-based ordering, real-time dashboards, and seamless payments. Accept Stripe and cash payments with automatic thermal printing.",
     images: [
       {
         url: "/images/android-chrome-512x512.png",

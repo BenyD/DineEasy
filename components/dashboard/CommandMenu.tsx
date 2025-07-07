@@ -117,7 +117,7 @@ export function CommandMenu() {
             </CommandItem>
             <CommandItem
               onSelect={() =>
-                runCommand(() => router.push("/dashboard/orders"))
+                runCommand(() => router.push("/dashboard/orders/active"))
               }
             >
               <Utensils className="mr-2 h-4 w-4" />

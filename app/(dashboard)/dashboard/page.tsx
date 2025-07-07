@@ -1,322 +1,379 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  AlertCircle,
   BarChart3,
   DollarSign,
   ShoppingCart,
   Users,
-  X,
+  ArrowUpIcon,
+  ArrowDownIcon,
   Clock,
-  ArrowRight,
+  ChevronRight,
+  Timer,
+  CheckCircle,
+  AlertCircle,
+  Bell,
+  CreditCard,
 } from "lucide-react";
-import { DashboardCard } from "@/components/dashboard/DashboardCard";
-import { DashboardAlert } from "@/components/dashboard/DashboardAlert";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
-  const [showTrialBanner, setShowTrialBanner] = useState(true);
-  const [showConnectBanner, setShowConnectBanner] = useState(true);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [currentTime] = useState(new Date());
 
   // Mock data - in a real app, this would come from the backend
-  const trialDaysRemaining = 12;
-  const [isStripeConnected, setIsStripeConnected] = useState(false);
-
-  // Mock recent activities data
-  const recentActivities = [
+  const stats = [
     {
-      id: 1,
-      type: "order",
-      description: "New order received from Table 5",
-      time: "5 minutes ago",
-      status: "new",
+      title: "Total Revenue",
+      value: "$12,345",
+      description: "This month",
+      icon: DollarSign,
+      trend: { value: 12, isPositive: true },
+      color: "green",
     },
     {
-      id: 2,
-      type: "menu",
-      description: "Menu item 'Margherita Pizza' updated",
-      time: "15 minutes ago",
-      status: "update",
+      title: "Orders",
+      value: "234",
+      description: "This week",
+      icon: ShoppingCart,
+      trend: { value: 8, isPositive: true },
+      color: "amber",
     },
     {
-      id: 3,
-      type: "payment",
-      description: "Payment received for Order #1234",
-      time: "30 minutes ago",
-      status: "success",
+      title: "Customers",
+      value: "1,234",
+      description: "Total served",
+      icon: Users,
+      trend: { value: 15, isPositive: true },
+      color: "blue",
     },
     {
-      id: 4,
-      type: "table",
-      description: "Table 3 marked as available",
-      time: "1 hour ago",
-      status: "info",
-    },
-    {
-      id: 5,
-      type: "staff",
-      description: "New staff member added: John Doe",
-      time: "2 hours ago",
-      status: "new",
+      title: "Avg Order Value",
+      value: "$52.80",
+      description: "Per order",
+      icon: BarChart3,
+      trend: { value: 3, isPositive: false },
+      color: "red",
     },
   ];
 
-  useEffect(() => {
-    // Check if user just connected Stripe (from URL parameter)
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("stripe_connected") === "true") {
-      setIsStripeConnected(true);
-      setShowConnectBanner(false);
+  const recentOrders = [
+    {
+      id: 1,
+      table: "Table 4",
+      items: 3,
+      total: "$38.50",
+      status: "Preparing",
+      time: "5 min ago",
+    },
+    {
+      id: 2,
+      table: "Table 2",
+      items: 2,
+      total: "$24.50",
+      status: "Ready",
+      time: "8 min ago",
+    },
+    {
+      id: 3,
+      table: "Table 7",
+      items: 4,
+      total: "$52.00",
+      status: "Served",
+      time: "15 min ago",
+    },
+  ];
 
-      // Remove the query parameter from URL without page refresh
-      window.history.replaceState({}, document.title, window.location.pathname);
-
-      // Show success message
-      alert("Stripe connected successfully! You can now accept payments.");
-    } else {
-      // Check localStorage for connection status
-      const stripeConnected =
-        localStorage.getItem("stripeConnected") === "true";
-      setIsStripeConnected(stripeConnected);
-      setShowConnectBanner(!stripeConnected);
-    }
-  }, []);
-
-  const handleConnectStripe = async () => {
-    setIsConnecting(true);
-
-    // Simulate API call to create Stripe Connect OAuth link
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // In a real app, this would be the actual Stripe Connect OAuth URL
-    // const stripeConnectUrl = `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=${STRIPE_CLIENT_ID}&scope=read_write&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`
-
-    // For the prototype, simulate the external redirect and return
-    // window.open(stripeConnectUrl, '_blank')
-
-    // Simulate successful connection after a delay
-    setTimeout(() => {
-      localStorage.setItem("stripeConnected", "true");
-      setIsStripeConnected(true);
-      setShowConnectBanner(false);
-      setIsConnecting(false);
-      alert("Stripe connected successfully! You can now accept payments.");
-    }, 2000);
-  };
+  const recentPayments = [
+    {
+      id: 1,
+      amount: "$38.50",
+      method: "Credit Card",
+      status: "Completed",
+      time: "5 min ago",
+      last4: "4242",
+      customer: "Table 4",
+    },
+    {
+      id: 2,
+      amount: "$52.75",
+      method: "Cash",
+      status: "Completed",
+      time: "12 min ago",
+      customer: "Table 8",
+    },
+    {
+      id: 3,
+      amount: "$24.50",
+      method: "Cash",
+      status: "Completed",
+      time: "25 min ago",
+      customer: "Table 2",
+    },
+    {
+      id: 4,
+      amount: "$42.00",
+      method: "Credit Card",
+      status: "Pending",
+      time: "2 min ago",
+      last4: "8556",
+      customer: "Table 6",
+    },
+  ];
 
   return (
-    <div className="p-8">
-      {/* Trial Banner */}
-      {showTrialBanner && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="mb-6"
-        >
-          <DashboardAlert
-            variant="success"
-            title={`🎉 You're on your 14-day free trial — ${trialDaysRemaining} days remaining!`}
-            description="Full access to your selected plan. Upgrade anytime to continue after your trial ends."
-            onClose={() => setShowTrialBanner(false)}
-          >
-            <div className="mt-3">
-              <Button
-                size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => (window.location.href = "/pricing")}
-              >
-                Upgrade Plan
-              </Button>
-            </div>
-          </DashboardAlert>
-        </motion.div>
-      )}
-
-      {/* Stripe Connect Banner */}
-      {showConnectBanner && !isStripeConnected && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-          className="mb-6"
-        >
-          <DashboardAlert
-            variant="warning"
-            title="Connect your Stripe account to accept payments"
-            description="Your customers won't be able to pay with Stripe or TWINT until you connect your account. This takes just 2 minutes."
-            onClose={() => setShowConnectBanner(false)}
-          >
-            <div className="mt-3">
-              <Button
-                size="sm"
-                className="bg-amber-600 hover:bg-amber-700 text-white"
-                onClick={handleConnectStripe}
-                disabled={isConnecting}
-              >
-                {isConnecting ? (
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    Connecting...
-                  </div>
-                ) : (
-                  "Connect Stripe"
-                )}
-              </Button>
-            </div>
-          </DashboardAlert>
-        </motion.div>
-      )}
-
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-gray-500">
-          Welcome back! Here's what's happening at your restaurant.
-        </p>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <DashboardCard
-          title="Total Revenue"
-          value="$12,345"
-          description="This month"
-          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-          trend={{ value: 12, isPositive: true }}
-        />
-        <DashboardCard
-          title="Orders"
-          value="234"
-          description="This week"
-          icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />}
-          trend={{ value: 8, isPositive: true }}
-        />
-        <DashboardCard
-          title="Customers"
-          value="1,234"
-          description="Total served"
-          icon={<Users className="h-4 w-4 text-muted-foreground" />}
-          trend={{ value: 15, isPositive: true }}
-        />
-        <DashboardCard
-          title="Avg Order Value"
-          value="$52.80"
-          description="Per order"
-          icon={<BarChart3 className="h-4 w-4 text-muted-foreground" />}
-          trend={{ value: 3, isPositive: false }}
-        />
-      </div>
-
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border bg-white p-6">
-          <h3 className="text-lg font-semibold">Recent Orders</h3>
-          <p className="text-sm text-gray-500">
-            Latest orders from your restaurant
+    <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500">
+            Welcome back! Here's what's happening at your restaurant.
           </p>
-          <div className="mt-4 space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between border-b pb-2"
-              >
-                <div>
-                  <p className="font-medium">Table {i + 2}</p>
-                  <p className="text-sm text-gray-500">2 items • $24.50</p>
-                </div>
-                <span className="rounded-full bg-green-100 px-2 py-1 text-xs text-green-700">
-                  Preparing
-                </span>
-              </div>
-            ))}
-          </div>
         </div>
-
-        <div className="rounded-lg border bg-white p-6">
-          <h3 className="text-lg font-semibold">Popular Items</h3>
-          <p className="text-sm text-gray-500">Most ordered items this week</p>
-          <div className="mt-4 space-y-4">
-            {[
-              { name: "Margherita Pizza", orders: 45 },
-              { name: "Caesar Salad", orders: 32 },
-              { name: "Pasta Carbonara", orders: 28 },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <p className="font-medium">{item.name}</p>
-                <span className="text-sm text-gray-500">
-                  {item.orders} orders
-                </span>
-              </div>
-            ))}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Bell className="h-5 w-5 text-gray-400" />
+            <span className="text-sm text-gray-500">
+              {currentTime.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="mt-8">
-        <div className="rounded-lg border bg-white p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold">Recent Activities</h3>
-              <p className="text-sm text-gray-500">
-                Latest actions and updates in your restaurant
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-sm"
-              onClick={() => (window.location.href = "/dashboard/activity")}
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((stat, index) => (
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.1 }}
+          >
+            <Card
+              className={cn(
+                "border",
+                stat.color === "green" && "bg-green-50 border-green-200",
+                stat.color === "amber" && "bg-amber-50 border-amber-200",
+                stat.color === "blue" && "bg-blue-50 border-blue-200",
+                stat.color === "red" && "bg-red-50 border-red-200"
+              )}
             >
-              View All
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-4">
-            {recentActivities.map((activity) => (
-              <div
-                key={activity.id}
-                className="flex items-center justify-between border-b pb-4 last:border-0"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      activity.status === "new"
-                        ? "bg-blue-100 text-blue-600"
-                        : activity.status === "update"
-                        ? "bg-amber-100 text-amber-600"
-                        : activity.status === "success"
-                        ? "bg-green-100 text-green-600"
-                        : "bg-gray-100 text-gray-600"
-                    }`}
-                  >
-                    <Clock className="h-4 w-4" />
-                  </div>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-gray-900">
-                      {activity.description}
+                    <p
+                      className={cn(
+                        "text-sm font-medium",
+                        stat.color === "green" && "text-green-800",
+                        stat.color === "amber" && "text-amber-800",
+                        stat.color === "blue" && "text-blue-800",
+                        stat.color === "red" && "text-red-800"
+                      )}
+                    >
+                      {stat.title}
                     </p>
-                    <p className="text-sm text-gray-500">{activity.time}</p>
+                    <p
+                      className={cn(
+                        "text-2xl font-bold",
+                        stat.color === "green" && "text-green-900",
+                        stat.color === "amber" && "text-amber-900",
+                        stat.color === "blue" && "text-blue-900",
+                        stat.color === "red" && "text-red-900"
+                      )}
+                    >
+                      {stat.value}
+                    </p>
+                  </div>
+                  <stat.icon
+                    className={cn(
+                      "h-8 w-8",
+                      stat.color === "green" && "text-green-600",
+                      stat.color === "amber" && "text-amber-600",
+                      stat.color === "blue" && "text-blue-600",
+                      stat.color === "red" && "text-red-600"
+                    )}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-sm text-gray-500">{stat.description}</p>
+                  <div
+                    className={cn(
+                      "flex items-center text-xs font-medium",
+                      stat.trend.isPositive ? "text-green-600" : "text-red-600"
+                    )}
+                  >
+                    {stat.trend.isPositive ? (
+                      <ArrowUpIcon className="w-3 h-3 mr-1" />
+                    ) : (
+                      <ArrowDownIcon className="w-3 h-3 mr-1" />
+                    )}
+                    {stat.trend.value}%
                   </div>
                 </div>
-                <Badge
-                  className={`${
-                    activity.status === "new"
-                      ? "bg-blue-100 text-blue-600"
-                      : activity.status === "update"
-                      ? "bg-amber-100 text-amber-600"
-                      : activity.status === "success"
-                      ? "bg-green-100 text-green-600"
-                      : "bg-gray-100 text-gray-600"
-                  }`}
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Recent Orders */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.4 }}
+        >
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Recent Orders</CardTitle>
+                  <CardDescription>
+                    Latest orders from your restaurant
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-green-600 border-green-200 hover:bg-green-50"
                 >
-                  {activity.type}
-                </Badge>
+                  View all
+                  <ChevronRight className="ml-1 w-4 h-4" />
+                </Button>
               </div>
-            ))}
-          </div>
-        </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {recentOrders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between py-4 border-b last:border-0"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{order.table}</p>
+                        <Badge
+                          variant={
+                            order.status === "Preparing"
+                              ? "default"
+                              : order.status === "Ready"
+                              ? "outline"
+                              : "secondary"
+                          }
+                          className={cn(
+                            order.status === "Preparing" &&
+                              "bg-amber-100 text-amber-800 border-amber-200",
+                            order.status === "Ready" &&
+                              "bg-green-100 text-green-800 border-green-200",
+                            order.status === "Served" &&
+                              "bg-blue-100 text-blue-800 border-blue-200"
+                          )}
+                        >
+                          {order.status}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="w-3 h-3" />
+                        {order.time}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{order.total}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {order.items} items
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Recent Payments */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.5 }}
+        >
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Recent Payments</CardTitle>
+                  <CardDescription>
+                    Latest transactions from customers
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-green-600 border-green-200 hover:bg-green-50"
+                >
+                  View all
+                  <ChevronRight className="ml-1 w-4 h-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {recentPayments.map((payment) => (
+                  <div
+                    key={payment.id}
+                    className="flex items-center justify-between py-4 border-b last:border-0"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{payment.customer}</p>
+                        <Badge
+                          variant="outline"
+                          className="bg-green-50 text-green-700 border-green-200"
+                        >
+                          {payment.method}
+                          {payment.last4 && (
+                            <span className="ml-1">•••• {payment.last4}</span>
+                          )}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="w-3 h-3" />
+                        {payment.time}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{payment.amount}</p>
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "text-xs",
+                          payment.status === "Completed"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-amber-100 text-amber-700"
+                        )}
+                      >
+                        {payment.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     </div>
   );

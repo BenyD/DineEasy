@@ -9,6 +9,24 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "./Logo";
 import { SearchCommand } from "./SearchCommand";
 
+interface SubNavItem {
+  href: string;
+  label: string;
+  description: string;
+}
+
+interface NavItemWithDropdown {
+  label: string;
+  items: SubNavItem[];
+}
+
+interface NavItemWithLink {
+  label: string;
+  href: string;
+}
+
+type NavItem = NavItemWithDropdown | NavItemWithLink;
+
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -29,7 +47,7 @@ export function Navbar() {
     setIsOpen(false);
   }, [pathname]);
 
-  const navItems = [
+  const navItems: NavItem[] = [
     {
       label: "Product",
       items: [

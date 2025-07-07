@@ -39,6 +39,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  useRestaurantSettings,
+  CURRENCIES,
+} from "@/lib/store/restaurant-settings";
 
 const DAYS_OF_WEEK = [
   "monday",
@@ -59,6 +63,7 @@ const RESTAURANT_TYPES = [
 
 export default function SettingsPage() {
   const [isEditing, setIsEditing] = useState(false);
+  const { currency, setCurrency } = useRestaurantSettings();
   const [restaurantInfo, setRestaurantInfo] = useState({
     name: "Bella Vista",
     email: "info@bellavista.ch",
@@ -71,6 +76,7 @@ export default function SettingsPage() {
     website: "https://bellavista.ch",
     cuisine: "Italian",
     type: "restaurant",
+    currency: currency.value,
     openingHours: {
       monday: { open: "11:00", close: "22:00" },
       tuesday: { open: "11:00", close: "22:00" },
@@ -98,6 +104,14 @@ export default function SettingsPage() {
   });
 
   const handleSave = () => {
+    // Update currency in the store
+    const selectedCurrency = CURRENCIES.find(
+      (c) => c.value === restaurantInfo.currency
+    );
+    if (selectedCurrency) {
+      setCurrency(selectedCurrency);
+    }
+
     // Here you would typically save the changes to your backend
     setIsEditing(false);
   };
@@ -328,6 +342,36 @@ export default function SettingsPage() {
                           {priceRanges.map((range) => (
                             <SelectItem key={range.value} value={range.value}>
                               {range.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="currency" className="text-base">
+                        Currency
+                      </Label>
+                      <Select
+                        value={restaurantInfo.currency}
+                        onValueChange={(value) =>
+                          setRestaurantInfo({
+                            ...restaurantInfo,
+                            currency: value,
+                          })
+                        }
+                        disabled={!isEditing}
+                      >
+                        <SelectTrigger className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                          <SelectValue placeholder="Select currency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CURRENCIES.map((currency) => (
+                            <SelectItem
+                              key={currency.value}
+                              value={currency.value}
+                            >
+                              {currency.label}
                             </SelectItem>
                           ))}
                         </SelectContent>

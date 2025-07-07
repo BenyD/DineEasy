@@ -13,7 +13,6 @@ import {
   Phone,
 } from "lucide-react";
 import { Button } from "../ui/button";
-import { CookieConsent } from "@/components/elements/CookieConsent";
 
 const navigation = {
   product: [
