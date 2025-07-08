@@ -197,7 +197,7 @@ export function KitchenDndContext({
                   onStatusChange={handleStatusChange}
                 />
               ))}
-            </div>
+                </div>
           </div>
         ))}
       </div>
@@ -249,8 +249,8 @@ export function KitchenDndContext({
                   {...activeOrder}
                   onStatusChange={handleStatusChange}
                 />
-              </div>
-            ) : null}
+          </div>
+        ) : null}
           </DragOverlay>,
           document.body
         )}

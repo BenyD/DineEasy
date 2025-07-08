@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Clock, CheckCircle, AlertCircle, Timer, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -120,10 +121,63 @@ const formatTime = (date: Date) => {
   }).format(date);
 };
 
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, scale: 0.8 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: {
+      type: "spring",
+      stiffness: 200,
+    },
+  },
+};
+
+const iconVariants = {
+  hidden: { opacity: 0, rotate: -180 },
+  visible: {
+    opacity: 1,
+    rotate: 0,
+    transition: {
+      type: "spring",
+      stiffness: 200,
+    },
+  },
+};
+
 export default function KitchenPage() {
-  const [orders, setOrders] = useState(mockOrders);
-  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const router = useRouter();
+
+  // Initialize orders and time after mount
+  useEffect(() => {
+    setOrders(mockOrders);
+    setCurrentTime(new Date());
+  }, []);
 
   // Update current time every minute
   useEffect(() => {
@@ -136,6 +190,8 @@ export default function KitchenPage() {
 
   // Play sound for new orders
   useEffect(() => {
+    if (orders.length === 0) return; // Skip if orders not initialized
+
     const audio = new Audio("/notification-sound.mp3");
     const newOrders = orders.filter((order) => order.status === "new");
 
@@ -145,10 +201,11 @@ export default function KitchenPage() {
   }, [orders]);
 
   const getTimeSinceOrder = (orderTime: Date) => {
+    if (!currentTime) return ""; // Return empty string if time not initialized
     const diffInMinutes = Math.floor(
       (currentTime.getTime() - orderTime.getTime()) / (1000 * 60)
     );
-    return diffInMinutes;
+    return `${diffInMinutes}m ago`;
   };
 
   const getStatusColor = (status: string) => {
@@ -185,107 +242,148 @@ export default function KitchenPage() {
     setOrders(sortedOrders);
   };
 
-  const newOrders = orders.filter((order) => order.status === "new");
-  const preparingOrders = orders.filter(
-    (order) => order.status === "preparing"
-  );
-  const readyOrders = orders.filter((order) => order.status === "ready");
+  // Only show content after time is initialized
+  if (!currentTime) {
+    return null; // Or return a loading skeleton
+  }
 
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+    <motion.div
+      className="p-4 md:p-6 space-y-4 md:space-y-6"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <motion.div
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        variants={itemVariants}
+      >
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Kitchen Display</h1>
           <p className="text-sm text-gray-500">Real-time order management</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg">
-            <Clock className="h-4 w-4 text-gray-500" />
+        <motion.div className="flex items-center gap-3" variants={itemVariants}>
+          <motion.div
+            className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg"
+            variants={cardVariants}
+          >
+            <motion.div variants={iconVariants}>
+              <Clock className="h-4 w-4 text-gray-500" />
+            </motion.div>
             <span className="text-sm font-medium text-gray-700">
               {formatTime(currentTime)}
             </span>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2"
-            onClick={() => router.push("/dashboard/orders")}
-          >
-            Orders View
-          </Button>
-        </div>
-      </div>
+          </motion.div>
+          <motion.div variants={cardVariants}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+              onClick={() => router.push("/dashboard/orders")}
+            >
+              Orders View
+            </Button>
+          </motion.div>
+        </motion.div>
+      </motion.div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <Card className="bg-red-50 border-red-200">
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-red-800">
-                  New Orders
-                </p>
-                <p className="text-xl md:text-2xl font-bold text-red-900">
-                  {newOrders.length}
-                </p>
+      <motion.div
+        className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4"
+        variants={itemVariants}
+      >
+        <motion.div variants={cardVariants}>
+          <Card className="bg-red-50 border-red-200">
+            <CardContent className="p-3 md:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs md:text-sm font-medium text-red-800">
+                    New Orders
+                  </p>
+                  <p className="text-xl md:text-2xl font-bold text-red-900">
+                    {orders.filter((order) => order.status === "new").length}
+                  </p>
+                </div>
+                <motion.div variants={iconVariants}>
+                  <AlertCircle className="h-6 w-6 md:h-8 md:w-8 text-red-600" />
+                </motion.div>
               </div>
-              <AlertCircle className="h-6 w-6 md:h-8 md:w-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="bg-amber-50 border-amber-200">
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-amber-800">
-                  Preparing
-                </p>
-                <p className="text-xl md:text-2xl font-bold text-amber-900">
-                  {preparingOrders.length}
-                </p>
+        <motion.div variants={cardVariants}>
+          <Card className="bg-amber-50 border-amber-200">
+            <CardContent className="p-3 md:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs md:text-sm font-medium text-amber-800">
+                    Preparing
+                  </p>
+                  <p className="text-xl md:text-2xl font-bold text-amber-900">
+                    {
+                      orders.filter((order) => order.status === "preparing")
+                        .length
+                    }
+                  </p>
+                </div>
+                <motion.div variants={iconVariants}>
+                  <Timer className="h-6 w-6 md:h-8 md:w-8 text-amber-600" />
+                </motion.div>
               </div>
-              <Timer className="h-6 w-6 md:h-8 md:w-8 text-amber-600" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="bg-green-50 border-green-200">
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-green-800">
-                  Ready
-                </p>
-                <p className="text-xl md:text-2xl font-bold text-green-900">
-                  {readyOrders.length}
-                </p>
+        <motion.div variants={cardVariants}>
+          <Card className="bg-green-50 border-green-200">
+            <CardContent className="p-3 md:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs md:text-sm font-medium text-green-800">
+                    Ready
+                  </p>
+                  <p className="text-xl md:text-2xl font-bold text-green-900">
+                    {orders.filter((order) => order.status === "ready").length}
+                  </p>
+                </div>
+                <motion.div variants={iconVariants}>
+                  <CheckCircle className="h-6 w-6 md:h-8 md:w-8 text-green-600" />
+                </motion.div>
               </div>
-              <CheckCircle className="h-6 w-6 md:h-8 md:w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-blue-800">
-                  Total Active
-                </p>
-                <p className="text-xl md:text-2xl font-bold text-blue-900">
-                  {orders.length}
-                </p>
+        <motion.div variants={cardVariants}>
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="p-3 md:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs md:text-sm font-medium text-blue-800">
+                    Total Active
+                  </p>
+                  <p className="text-xl md:text-2xl font-bold text-blue-900">
+                    {orders.length}
+                  </p>
+                </div>
+                <motion.div variants={iconVariants}>
+                  <Clock className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
+                </motion.div>
               </div>
-              <Clock className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </motion.div>
 
       {/* Orders Grid */}
-      <KitchenDndContext orders={orders} onOrdersChange={handleOrdersChange} />
-    </div>
+      <motion.div variants={itemVariants}>
+        <KitchenDndContext
+          orders={orders}
+          onOrdersChange={handleOrdersChange}
+        />
+      </motion.div>
+    </motion.div>
   );
 }

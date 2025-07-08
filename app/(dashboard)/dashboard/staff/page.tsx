@@ -59,6 +59,48 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDate } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
+const cardHoverVariants = {
+  hover: {
+    scale: 1.02,
+    transition: {
+      type: "spring",
+      stiffness: 400,
+    },
+  },
+};
+
+const buttonHoverVariants = {
+  hover: { scale: 1.05 },
+  tap: { scale: 0.95 },
+};
+
+const badgeHoverVariants = {
+  hover: { scale: 1.1 },
+};
+
 // Mock staff data
 const mockStaff = [
   {
@@ -489,9 +531,17 @@ export default function StaffPage() {
   };
 
   return (
-    <div className="flex-1 space-y-6 p-6">
+    <motion.div
+      className="flex-1 space-y-6 p-6"
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <motion.div
+        className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+        variants={itemVariants}
+      >
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
             Staff Management
@@ -501,266 +551,355 @@ export default function StaffPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-          <Button
-            className="bg-green-600 hover:bg-green-700"
-            onClick={() => router.push("/dashboard/staff/add")}
+          <motion.div
+            whileHover={buttonHoverVariants.hover}
+            whileTap={buttonHoverVariants.tap}
           >
-            <UserPlus className="w-4 h-4 mr-2" />
-            Add Staff
-          </Button>
+            <Button variant="outline" size="sm">
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+          </motion.div>
+          <motion.div
+            whileHover={buttonHoverVariants.hover}
+            whileTap={buttonHoverVariants.tap}
+          >
+            <Button
+              className="bg-green-600 hover:bg-green-700"
+              onClick={() => router.push("/dashboard/staff/add")}
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              Add Staff
+            </Button>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Filters Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters & Search
-          </CardTitle>
-          <CardDescription>
-            Filter and search through staff members
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Search Input */}
-            <div className="relative col-span-full lg:col-span-2">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-              <Input
-                placeholder="Search staff..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Filters & Search
+            </CardTitle>
+            <CardDescription>
+              Filter and search through staff members
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <motion.div
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+              variants={itemVariants}
+            >
+              {/* Search Input */}
+              <motion.div
+                className="relative col-span-full lg:col-span-2"
+                whileHover={{ scale: 1.01 }}
+              >
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                <Input
+                  placeholder="Search staff..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </motion.div>
 
-            {/* Time Range Filter */}
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Last Active" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="24h">Last 24 Hours</SelectItem>
-                <SelectItem value="7d">Last 7 Days</SelectItem>
-                <SelectItem value="30d">Last 30 Days</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Status Filter */}
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <Select
-                  value={selectedStatus}
-                  onValueChange={setSelectedStatus}
-                >
+              {/* Time Range Filter */}
+              <motion.div whileHover={{ scale: 1.01 }}>
+                <Select value={timeRange} onValueChange={setTimeRange}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Status" />
+                    <SelectValue placeholder="Last Active" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="24h">Last 24 Hours</SelectItem>
+                    <SelectItem value="7d">Last 7 Days</SelectItem>
+                    <SelectItem value="30d">Last 30 Days</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <Button
-                variant="outline"
-                onClick={resetFilters}
-                className="shrink-0"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Reset
-              </Button>
-            </div>
-          </div>
+              </motion.div>
 
-          <Separator />
+              {/* Status Filter */}
+              <motion.div className="flex gap-2" whileHover={{ scale: 1.01 }}>
+                <div className="flex-1">
+                  <Select
+                    value={selectedStatus}
+                    onValueChange={setSelectedStatus}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <motion.div
+                  whileHover={buttonHoverVariants.hover}
+                  whileTap={buttonHoverVariants.tap}
+                >
+                  <Button
+                    variant="outline"
+                    onClick={resetFilters}
+                    className="shrink-0"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Reset
+                  </Button>
+                </motion.div>
+              </motion.div>
+            </motion.div>
 
-          {/* Role Filters */}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={selectedRole === "all" ? "default" : "outline"}
-              onClick={() => setSelectedRole("all")}
-              className={`flex-1 md:flex-none ${
-                selectedRole === "all" ? "bg-green-600 hover:bg-green-700" : ""
-              }`}
+            <Separator />
+
+            {/* Role Filters */}
+            <motion.div
+              className="flex flex-wrap gap-2"
+              variants={itemVariants}
             >
-              <Users className="w-4 h-4 mr-2" />
-              All Roles
-            </Button>
-            {roles.map((role) => {
-              const Icon = role.icon;
-              return (
+              <motion.div
+                whileHover={buttonHoverVariants.hover}
+                whileTap={buttonHoverVariants.tap}
+              >
                 <Button
-                  key={role.value}
-                  variant={selectedRole === role.value ? "default" : "outline"}
-                  onClick={() =>
-                    setSelectedRole(
-                      role.value === selectedRole ? "all" : role.value
-                    )
-                  }
+                  variant={selectedRole === "all" ? "default" : "outline"}
+                  onClick={() => setSelectedRole("all")}
                   className={`flex-1 md:flex-none ${
-                    selectedRole === role.value
+                    selectedRole === "all"
                       ? "bg-green-600 hover:bg-green-700"
                       : ""
                   }`}
                 >
-                  <Icon className="w-4 h-4 mr-2" />
-                  {role.label}
+                  <Users className="w-4 h-4 mr-2" />
+                  All Roles
                 </Button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+              </motion.div>
+              {roles.map((role) => {
+                const Icon = role.icon;
+                return (
+                  <motion.div
+                    key={role.value}
+                    whileHover={buttonHoverVariants.hover}
+                    whileTap={buttonHoverVariants.tap}
+                  >
+                    <Button
+                      variant={
+                        selectedRole === role.value ? "default" : "outline"
+                      }
+                      onClick={() =>
+                        setSelectedRole(
+                          role.value === selectedRole ? "all" : role.value
+                        )
+                      }
+                      className={`flex-1 md:flex-none ${
+                        selectedRole === role.value
+                          ? "bg-green-600 hover:bg-green-700"
+                          : ""
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 mr-2" />
+                      {role.label}
+                    </Button>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Staff List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Staff Members</CardTitle>
-          <CardDescription>
-            Showing {filteredStaff.length} of {mockStaff.length} staff members
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredStaff.length === 0 ? (
-              <div className="text-center py-8">
-                <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  No staff members found
-                </h3>
-                <p className="text-gray-500">
-                  Try adjusting your filters or search terms
-                </p>
-              </div>
-            ) : (
-              filteredStaff.map((staff) => {
-                const roleData = roles.find((r) => r.value === staff.role);
-                return (
-                  <div
-                    key={staff.id}
-                    className="flex items-start space-x-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Staff Members</CardTitle>
+            <CardDescription>
+              Showing {filteredStaff.length} of {mockStaff.length} staff members
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AnimatePresence mode="wait">
+              {filteredStaff.length === 0 ? (
+                <motion.div
+                  key="no-staff"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="text-center py-8"
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 200 }}
                   >
-                    <Avatar className="w-10 h-10">
-                      <AvatarFallback>
-                        {staff.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-medium">{staff.name}</h3>
-                          <div className="flex items-center gap-2 text-sm text-gray-500">
-                            <Mail className="w-3 h-3" />
-                            {staff.email}
-                            {staff.phone && (
-                              <>
-                                <span className="mx-1">•</span>
-                                <Phone className="w-3 h-3" />
-                                {staff.phone}
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {roleData && (
-                            <Badge
-                              variant="outline"
-                              className={`flex items-center gap-1 ${roleData.color}`}
-                            >
-                              <roleData.icon className="w-3 h-3" />
-                              {roleData.label}
-                            </Badge>
-                          )}
-                          <Badge
-                            variant={
-                              staff.status === "active"
-                                ? "outline"
-                                : staff.status === "inactive"
-                                ? "secondary"
-                                : "outline"
-                            }
-                            className={
-                              staff.status === "active"
-                                ? "bg-green-100 text-green-700"
-                                : staff.status === "inactive"
-                                ? "bg-gray-100 text-gray-700"
-                                : "bg-amber-100 text-amber-700"
-                            }
-                          >
-                            {staff.status.charAt(0).toUpperCase() +
-                              staff.status.slice(1)}
-                          </Badge>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  router.push(
-                                    `/dashboard/staff/edit?id=${staff.id}`
-                                  )
-                                }
+                    <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  </motion.div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No staff members found
+                  </h3>
+                  <p className="text-gray-500">
+                    Try adjusting your filters or search terms
+                  </p>
+                </motion.div>
+              ) : (
+                <motion.div className="space-y-4" variants={containerVariants}>
+                  {filteredStaff.map((staff, index) => {
+                    const roleData = roles.find((r) => r.value === staff.role);
+                    return (
+                      <motion.div
+                        key={staff.id}
+                        variants={itemVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ delay: index * 0.05 }}
+                        whileHover={cardHoverVariants.hover}
+                        className="flex items-start space-x-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <motion.div whileHover={{ scale: 1.1 }}>
+                          <Avatar className="w-10 h-10">
+                            <AvatarFallback>
+                              {staff.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")}
+                            </AvatarFallback>
+                          </Avatar>
+                        </motion.div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-medium">{staff.name}</h3>
+                              <motion.div
+                                className="flex items-center gap-2 text-sm text-gray-500"
+                                whileHover={{ scale: 1.01 }}
                               >
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  toggleStaffStatus(staff.id, staff.status)
-                                }
-                              >
-                                {staff.status === "active" ? (
+                                <Mail className="w-3 h-3" />
+                                {staff.email}
+                                {staff.phone && (
                                   <>
-                                    <AlertCircle className="w-4 h-4 mr-2 text-amber-600" />
-                                    <span className="text-amber-600">
-                                      Make Inactive
-                                    </span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <ShieldCheck className="w-4 h-4 mr-2 text-green-600" />
-                                    <span className="text-green-600">
-                                      Make Active
-                                    </span>
+                                    <span className="mx-1">•</span>
+                                    <Phone className="w-3 h-3" />
+                                    {staff.phone}
                                   </>
                                 )}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-red-600">
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete Staff
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                              </motion.div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {roleData && (
+                                <motion.div
+                                  whileHover={badgeHoverVariants.hover}
+                                >
+                                  <Badge
+                                    variant="outline"
+                                    className={`flex items-center gap-1 ${roleData.color}`}
+                                  >
+                                    <roleData.icon className="w-3 h-3" />
+                                    {roleData.label}
+                                  </Badge>
+                                </motion.div>
+                              )}
+                              <motion.div whileHover={badgeHoverVariants.hover}>
+                                <Badge
+                                  variant={
+                                    staff.status === "active"
+                                      ? "outline"
+                                      : staff.status === "inactive"
+                                      ? "secondary"
+                                      : "outline"
+                                  }
+                                  className={
+                                    staff.status === "active"
+                                      ? "bg-green-100 text-green-700"
+                                      : staff.status === "inactive"
+                                      ? "bg-gray-100 text-gray-700"
+                                      : "bg-amber-100 text-amber-700"
+                                  }
+                                >
+                                  {staff.status.charAt(0).toUpperCase() +
+                                    staff.status.slice(1)}
+                                </Badge>
+                              </motion.div>
+                              <motion.div
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.95 }}
+                              >
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm">
+                                      <MoreHorizontal className="w-4 h-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent
+                                    align="end"
+                                    className="w-48"
+                                  >
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        router.push(
+                                          `/dashboard/staff/edit?id=${staff.id}`
+                                        )
+                                      }
+                                    >
+                                      <Edit className="w-4 h-4 mr-2" />
+                                      Edit Details
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        toggleStaffStatus(
+                                          staff.id,
+                                          staff.status
+                                        )
+                                      }
+                                    >
+                                      {staff.status === "active" ? (
+                                        <>
+                                          <AlertCircle className="w-4 h-4 mr-2 text-amber-600" />
+                                          <span className="text-amber-600">
+                                            Make Inactive
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ShieldCheck className="w-4 h-4 mr-2 text-green-600" />
+                                          <span className="text-green-600">
+                                            Make Active
+                                          </span>
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-red-600">
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Delete Staff
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </motion.div>
+                            </div>
+                          </div>
+                          <motion.div
+                            className="mt-2 text-sm text-gray-500 flex items-center gap-1"
+                            whileHover={{ scale: 1.01 }}
+                          >
+                            <Clock className="w-3 h-3" />
+                            Last active: {formatDate(new Date(staff.lastLogin))}
+                          </motion.div>
                         </div>
-                      </div>
-                      <div className="mt-2 text-sm text-gray-500 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Last active: {formatDate(new Date(staff.lastLogin))}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+                      </motion.div>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </motion.div>
   );
 }

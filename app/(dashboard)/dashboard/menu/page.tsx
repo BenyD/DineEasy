@@ -235,6 +235,54 @@ const ACCEPTED_IMAGE_TYPES = {
   "image/webp": [".webp"],
 };
 
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
+const cardHoverVariants = {
+  hover: {
+    scale: 1.02,
+    transition: {
+      type: "spring",
+      stiffness: 400,
+    },
+  },
+};
+
+const buttonHoverVariants = {
+  hover: { scale: 1.05 },
+  tap: { scale: 0.95 },
+};
+
+const imageHoverVariants = {
+  hover: {
+    scale: 1.05,
+    transition: {
+      type: "spring",
+      stiffness: 300,
+    },
+  },
+};
+
 export default function MenuPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
@@ -812,14 +860,25 @@ export default function MenuPage() {
             !item.available && "opacity-75"
           )}
         >
-          <div className="relative aspect-[4/3]">
-            <img
+          <motion.div className="relative aspect-[4/3]" whileHover="hover">
+            <motion.img
               src={item.image}
               alt={item.name}
               className="w-full h-full object-cover"
+              variants={imageHoverVariants}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"
+              initial={{ opacity: 0 }}
+              whileHover={{ opacity: 1 }}
+              transition={{ duration: 0.2 }}
+            />
+            <motion.div
+              className="absolute top-3 left-3 flex flex-col gap-1.5"
+              initial={{ opacity: 0, x: -20 }}
+              whileHover={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.2 }}
+            >
               {item.popular && (
                 <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-none">
                   Popular
@@ -836,26 +895,45 @@ export default function MenuPage() {
               >
                 {item.available ? "Available" : "Unavailable"}
               </Badge>
-            </div>
-            <div className="absolute bottom-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            </motion.div>
+            <motion.div
+              className="absolute bottom-3 right-3 flex gap-2"
+              initial={{ opacity: 0, y: 20 }}
+              whileHover={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+            >
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => onEdit(item)}
                 className="bg-white hover:bg-gray-100 h-8 w-8 p-0"
+                asChild
               >
-                <Edit className="w-4 h-4" />
+                <motion.div
+                  variants={buttonHoverVariants}
+                  whileHover="hover"
+                  whileTap="tap"
+                >
+                  <Edit className="w-4 h-4" />
+                </motion.div>
               </Button>
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => onDelete(item)}
                 className="bg-white hover:bg-gray-100 h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                asChild
               >
-                <Trash2 className="w-4 h-4" />
+                <motion.div
+                  variants={buttonHoverVariants}
+                  whileHover="hover"
+                  whileTap="tap"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </motion.div>
               </Button>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
           <CardContent className="p-4">
             <div className="space-y-3">
               <div>
@@ -1013,9 +1091,17 @@ export default function MenuPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <motion.div
+      className="p-6 space-y-6"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <motion.div
+        className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+        variants={itemVariants}
+      >
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Menu Management</h1>
           <p className="text-muted-foreground">
@@ -1025,9 +1111,16 @@ export default function MenuPage() {
         <div className="flex items-center gap-2">
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-green-600 hover:bg-green-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Menu Item
+              <Button className="bg-green-600 hover:bg-green-700" asChild>
+                <motion.div
+                  variants={buttonHoverVariants}
+                  whileHover="hover"
+                  whileTap="tap"
+                  className="flex items-center"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Menu Item
+                </motion.div>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-3xl">
@@ -1040,140 +1133,191 @@ export default function MenuPage() {
               <MenuItemForm onClose={() => setIsAddDialogOpen(false)} />
             </DialogContent>
           </Dialog>
-          <Button variant="outline" size="icon">
-            <MoreHorizontal className="w-4 h-4" />
+          <Button variant="outline" size="icon" asChild>
+            <motion.div
+              variants={buttonHoverVariants}
+              whileHover="hover"
+              whileTap="tap"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </motion.div>
           </Button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Alert for unavailable items */}
-      {mockMenuItems.some((item) => !item.available) && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Unavailable Items</AlertTitle>
-          <AlertDescription>
-            Some menu items are marked as unavailable and won't be shown to
-            customers.
-          </AlertDescription>
-        </Alert>
-      )}
+      <AnimatePresence>
+        {mockMenuItems.some((item) => !item.available) && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Unavailable Items</AlertTitle>
+              <AlertDescription>
+                Some menu items are marked as unavailable and won't be shown to
+                customers.
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Filters Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters & Search
-          </CardTitle>
-          <CardDescription>
-            Filter and search through menu items
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Search Input */}
-            <div className="relative col-span-full lg:col-span-2">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-              <Input
-                placeholder="Search menu items..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-
-            {/* Category Filter */}
-            <Select value={activeCategory} onValueChange={setActiveCategory}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* View Mode & Reset */}
-            <div className="flex gap-2">
-              <Select
-                value={viewMode}
-                onValueChange={(value: "grid" | "list") => setViewMode(value)}
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <motion.div
+                animate={{
+                  rotate: searchTerm || activeCategory !== "all" ? 360 : 0,
+                }}
+                transition={{ duration: 0.5 }}
               >
+                <Filter className="h-5 w-5" />
+              </motion.div>
+              Filters & Search
+            </CardTitle>
+            <CardDescription>
+              Filter and search through menu items
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <motion.div
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+              variants={itemVariants}
+            >
+              {/* Search Input */}
+              <div className="relative col-span-full lg:col-span-2">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                <Input
+                  placeholder="Search menu items..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+
+              {/* Category Filter */}
+              <Select value={activeCategory} onValueChange={setActiveCategory}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="View Mode" />
+                  <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="list">List View</SelectItem>
-                  <SelectItem value="grid">Grid View</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSearchTerm("");
-                  setActiveCategory("all");
-                  setShowUnavailable(true);
-                }}
-                className="shrink-0"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Reset
-              </Button>
-            </div>
-          </div>
 
-          <Separator />
+              {/* View Mode & Reset */}
+              <div className="flex gap-2">
+                <Select
+                  value={viewMode}
+                  onValueChange={(value: "grid" | "list") => setViewMode(value)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="View Mode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="list">List View</SelectItem>
+                    <SelectItem value="grid">Grid View</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setActiveCategory("all");
+                    setShowUnavailable(true);
+                  }}
+                  className="shrink-0"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Reset
+                </Button>
+              </div>
+            </motion.div>
 
-          {/* Additional Filters */}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={showUnavailable ? "default" : "outline"}
-              onClick={() => setShowUnavailable(!showUnavailable)}
-              className={`flex-1 md:flex-none ${
-                showUnavailable ? "bg-green-600 hover:bg-green-700" : ""
-              }`}
+            <Separator />
+
+            {/* Additional Filters */}
+            <motion.div
+              className="flex flex-wrap gap-2"
+              variants={itemVariants}
             >
-              <Eye className="w-4 h-4 mr-2" />
-              Show Unavailable
-            </Button>
-            {categories.slice(1).map((category) => (
               <Button
-                key={category.id}
-                variant={activeCategory === category.id ? "default" : "outline"}
-                onClick={() => setActiveCategory(category.id)}
+                variant={showUnavailable ? "default" : "outline"}
+                onClick={() => setShowUnavailable(!showUnavailable)}
                 className={`flex-1 md:flex-none ${
-                  activeCategory === category.id
-                    ? "bg-green-600 hover:bg-green-700"
-                    : ""
+                  showUnavailable ? "bg-green-600 hover:bg-green-700" : ""
                 }`}
+                asChild
               >
-                {category.name}
-                <Badge variant="secondary" className="ml-2">
-                  {category.count}
-                </Badge>
+                <motion.div
+                  variants={buttonHoverVariants}
+                  whileHover="hover"
+                  whileTap="tap"
+                  className="flex items-center justify-center"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Show Unavailable
+                </motion.div>
               </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              {categories.slice(1).map((category) => (
+                <Button
+                  key={category.id}
+                  variant={
+                    activeCategory === category.id ? "default" : "outline"
+                  }
+                  onClick={() => setActiveCategory(category.id)}
+                  className={`flex-1 md:flex-none ${
+                    activeCategory === category.id
+                      ? "bg-green-600 hover:bg-green-700"
+                      : ""
+                  }`}
+                  asChild
+                >
+                  <motion.div
+                    variants={buttonHoverVariants}
+                    whileHover="hover"
+                    whileTap="tap"
+                    className="flex items-center justify-center"
+                  >
+                    {category.name}
+                    <Badge variant="secondary" className="ml-2">
+                      {category.count}
+                    </Badge>
+                  </motion.div>
+                </Button>
+              ))}
+            </motion.div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Menu Items */}
-      <div
+      <motion.div
         className={
           viewMode === "grid"
             ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
             : "space-y-4"
         }
+        variants={itemVariants}
       >
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {filteredItems.map((item, index) => (
             <motion.div
               key={item.id}
+              variants={cardHoverVariants}
+              whileHover="hover"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3, delay: index * 0.05 }}
             >
               <MenuItemCard
@@ -1188,24 +1332,41 @@ export default function MenuPage() {
           ))}
         </AnimatePresence>
 
-        {filteredItems.length === 0 && (
-          <Card className="col-span-full">
-            <CardContent className="p-6 text-center">
-              <div className="flex flex-col items-center gap-2">
-                <Search className="w-12 h-12 text-gray-400" />
-                <h3 className="font-semibold text-lg">No menu items found</h3>
-                <p className="text-sm text-muted-foreground">
-                  {searchTerm
-                    ? "Try adjusting your search or filters"
-                    : `No ${
-                        activeCategory === "all" ? "" : activeCategory
-                      } items available`}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+        {/* Empty State */}
+        <AnimatePresence>
+          {filteredItems.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="col-span-full"
+            >
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <motion.div
+                    className="flex flex-col items-center gap-2"
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 200 }}
+                  >
+                    <Search className="w-12 h-12 text-gray-400" />
+                    <h3 className="font-semibold text-lg">
+                      No menu items found
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {searchTerm
+                        ? "Try adjusting your search or filters"
+                        : `No ${
+                            activeCategory === "all" ? "" : activeCategory
+                          } items available`}
+                    </p>
+                  </motion.div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
 
       {/* Edit Dialog */}
       <Dialog
@@ -1270,6 +1431,6 @@ export default function MenuPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </motion.div>
   );
 }

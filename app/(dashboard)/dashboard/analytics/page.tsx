@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
   TrendingUp,
@@ -121,6 +121,53 @@ const mockAnalytics = {
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
+const cardHoverVariants = {
+  hover: {
+    scale: 1.02,
+    transition: {
+      type: "spring",
+      stiffness: 400,
+    },
+  },
+};
+
+const buttonHoverVariants = {
+  hover: { scale: 1.05 },
+  tap: { scale: 0.95 },
+};
+
+const iconRotateVariants = {
+  hover: {
+    rotate: 360,
+    transition: {
+      duration: 0.5,
+    },
+  },
+};
+
 const StatCard = ({
   title,
   value,
@@ -138,30 +185,41 @@ const StatCard = ({
   const isPositive = percentageChange > 0;
 
   return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between space-y-0">
-          <h3 className="text-sm font-medium tracking-tight text-gray-500">
-            {title}
-          </h3>
-          {icon}
-        </div>
-        <div className="mt-2">
-          <div className="text-2xl font-bold">{formatter(value)}</div>
-          <p className="text-xs text-gray-500">
-            vs. yesterday
-            <span
-              className={`ml-2 font-medium ${
-                isPositive ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {isPositive ? "+" : ""}
-              {percentageChange.toFixed(1)}%
-            </span>
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+    <motion.div whileHover={cardHoverVariants.hover}>
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between space-y-0">
+            <h3 className="text-sm font-medium tracking-tight text-gray-500">
+              {title}
+            </h3>
+            <motion.div whileHover={iconRotateVariants.hover}>
+              {icon}
+            </motion.div>
+          </div>
+          <motion.div
+            className="mt-2"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: "spring", stiffness: 200 }}
+          >
+            <div className="text-2xl font-bold">{formatter(value)}</div>
+            <p className="text-xs text-gray-500">
+              vs. yesterday
+              <motion.span
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className={`ml-2 font-medium ${
+                  isPositive ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {isPositive ? "+" : ""}
+                {percentageChange.toFixed(1)}%
+              </motion.span>
+            </p>
+          </motion.div>
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 };
 
@@ -184,196 +242,246 @@ export default function AnalyticsPage() {
   };
 
   return (
-    <div className="flex-1 space-y-6 p-6">
+    <motion.div
+      className="flex-1 space-y-6 p-6"
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <motion.div
+        className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+        variants={itemVariants}
+      >
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
           <p className="text-muted-foreground">
             Track your restaurant's performance and insights
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <motion.div
+          className="flex items-center gap-2"
+          whileHover={buttonHoverVariants.hover}
+          whileTap={buttonHoverVariants.tap}
+        >
           <Button variant="outline" size="sm" onClick={handleExportReport}>
             <Download className="w-4 h-4 mr-2" />
             Export Data
           </Button>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Filters Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters & Analytics
-          </CardTitle>
-          <CardDescription>
-            Customize your analytics view and reporting preferences
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Time Period Filter */}
-            <div className="space-y-2">
-              <Label>Time Period</Label>
-              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="yesterday">Yesterday</SelectItem>
-                  <SelectItem value="thisWeek">This Week</SelectItem>
-                  <SelectItem value="lastWeek">Last Week</SelectItem>
-                  <SelectItem value="thisMonth">This Month</SelectItem>
-                  <SelectItem value="lastMonth">Last Month</SelectItem>
-                  <SelectItem value="thisYear">This Year</SelectItem>
-                  <SelectItem value="lastYear">Last Year</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Metrics Selection */}
-          <div>
-            <Label className="mb-3 block">Metrics to Display</Label>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { id: "revenue", label: "Revenue", icon: DollarSign },
-                { id: "orders", label: "Orders", icon: ShoppingCart },
-                { id: "customers", label: "Customers", icon: Users },
-                {
-                  id: "avgOrderValue",
-                  label: "Avg Order Value",
-                  icon: TrendingUp,
-                },
-              ].map(({ id, label, icon: Icon }) => (
-                <Button
-                  key={id}
-                  variant={selectedMetrics.includes(id) ? "default" : "outline"}
-                  onClick={() => {
-                    if (selectedMetrics.includes(id)) {
-                      setSelectedMetrics(
-                        selectedMetrics.filter((m) => m !== id)
-                      );
-                    } else {
-                      setSelectedMetrics([...selectedMetrics, id]);
-                    }
-                  }}
-                  className={
-                    selectedMetrics.includes(id)
-                      ? "bg-green-600 hover:bg-green-700"
-                      : ""
-                  }
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Filters & Analytics
+            </CardTitle>
+            <CardDescription>
+              Customize your analytics view and reporting preferences
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <motion.div
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+              variants={itemVariants}
+            >
+              {/* Time Period Filter */}
+              <motion.div className="space-y-2" whileHover={{ scale: 1.01 }}>
+                <Label>Time Period</Label>
+                <Select
+                  value={selectedPeriod}
+                  onValueChange={setSelectedPeriod}
                 >
-                  <Icon className="w-4 h-4 mr-2" />
-                  {label}
-                </Button>
-              ))}
-              <Button
-                variant="outline"
-                onClick={resetFilters}
-                className="ml-auto"
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="yesterday">Yesterday</SelectItem>
+                    <SelectItem value="thisWeek">This Week</SelectItem>
+                    <SelectItem value="lastWeek">Last Week</SelectItem>
+                    <SelectItem value="thisMonth">This Month</SelectItem>
+                    <SelectItem value="lastMonth">Last Month</SelectItem>
+                    <SelectItem value="thisYear">This Year</SelectItem>
+                    <SelectItem value="lastYear">Last Year</SelectItem>
+                  </SelectContent>
+                </Select>
+              </motion.div>
+            </motion.div>
+
+            <Separator />
+
+            {/* Metrics Selection */}
+            <motion.div variants={itemVariants}>
+              <Label className="mb-3 block">Metrics to Display</Label>
+              <motion.div
+                className="flex flex-wrap gap-2"
+                variants={containerVariants}
               >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Reset
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+                {[
+                  { id: "revenue", label: "Revenue", icon: DollarSign },
+                  { id: "orders", label: "Orders", icon: ShoppingCart },
+                  { id: "customers", label: "Customers", icon: Users },
+                  {
+                    id: "avgOrderValue",
+                    label: "Avg Order Value",
+                    icon: TrendingUp,
+                  },
+                ].map(({ id, label, icon: Icon }) => (
+                  <motion.div
+                    key={id}
+                    whileHover={buttonHoverVariants.hover}
+                    whileTap={buttonHoverVariants.tap}
+                  >
+                    <Button
+                      variant={
+                        selectedMetrics.includes(id) ? "default" : "outline"
+                      }
+                      onClick={() => {
+                        if (selectedMetrics.includes(id)) {
+                          setSelectedMetrics(
+                            selectedMetrics.filter((m) => m !== id)
+                          );
+                        } else {
+                          setSelectedMetrics([...selectedMetrics, id]);
+                        }
+                      }}
+                      className={
+                        selectedMetrics.includes(id)
+                          ? "bg-green-600 hover:bg-green-700"
+                          : ""
+                      }
+                    >
+                      <Icon className="w-4 h-4 mr-2" />
+                      {label}
+                    </Button>
+                  </motion.div>
+                ))}
+                <motion.div
+                  whileHover={buttonHoverVariants.hover}
+                  whileTap={buttonHoverVariants.tap}
+                >
+                  <Button
+                    variant="outline"
+                    onClick={resetFilters}
+                    className="ml-auto"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Reset
+                  </Button>
+                </motion.div>
+              </motion.div>
+            </motion.div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Key Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {selectedMetrics.includes("revenue") && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <StatCard
-              title="Revenue"
-              value={
-                mockAnalytics.revenue[
-                  selectedPeriod as keyof typeof mockAnalytics.revenue
-                ]
-              }
-              previousValue={mockAnalytics.revenue.yesterday}
-              icon={<DollarSign className="w-6 h-6 text-green-600" />}
-              formatter={(val) => `CHF ${val.toFixed(2)}`}
-            />
-          </motion.div>
-        )}
+      <AnimatePresence mode="wait">
+        <motion.div
+          className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+          variants={containerVariants}
+        >
+          {selectedMetrics.includes("revenue") && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              layout
+            >
+              <StatCard
+                title="Revenue"
+                value={
+                  mockAnalytics.revenue[
+                    selectedPeriod as keyof typeof mockAnalytics.revenue
+                  ]
+                }
+                previousValue={mockAnalytics.revenue.yesterday}
+                icon={<DollarSign className="w-6 h-6 text-green-600" />}
+                formatter={(val) => `CHF ${val.toFixed(2)}`}
+              />
+            </motion.div>
+          )}
 
-        {selectedMetrics.includes("orders") && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-          >
-            <StatCard
-              title="Orders"
-              value={
-                mockAnalytics.orders[
-                  selectedPeriod as keyof typeof mockAnalytics.orders
-                ]
-              }
-              previousValue={mockAnalytics.orders.yesterday}
-              icon={<ShoppingCart className="w-6 h-6 text-blue-600" />}
-            />
-          </motion.div>
-        )}
+          {selectedMetrics.includes("orders") && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+              layout
+            >
+              <StatCard
+                title="Orders"
+                value={
+                  mockAnalytics.orders[
+                    selectedPeriod as keyof typeof mockAnalytics.orders
+                  ]
+                }
+                previousValue={mockAnalytics.orders.yesterday}
+                icon={<ShoppingCart className="w-6 h-6 text-blue-600" />}
+              />
+            </motion.div>
+          )}
 
-        {selectedMetrics.includes("customers") && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
-          >
-            <StatCard
-              title="Customers"
-              value={
-                mockAnalytics.customers[
-                  selectedPeriod as keyof typeof mockAnalytics.customers
-                ]
-              }
-              previousValue={mockAnalytics.customers.yesterday}
-              icon={<Users className="w-6 h-6 text-purple-600" />}
-            />
-          </motion.div>
-        )}
+          {selectedMetrics.includes("customers") && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+              layout
+            >
+              <StatCard
+                title="Customers"
+                value={
+                  mockAnalytics.customers[
+                    selectedPeriod as keyof typeof mockAnalytics.customers
+                  ]
+                }
+                previousValue={mockAnalytics.customers.yesterday}
+                icon={<Users className="w-6 h-6 text-purple-600" />}
+              />
+            </motion.div>
+          )}
 
-        {selectedMetrics.includes("avgOrderValue") && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.3 }}
-          >
-            <StatCard
-              title="Avg Order Value"
-              value={
-                mockAnalytics.avgOrderValue[
-                  selectedPeriod as keyof typeof mockAnalytics.avgOrderValue
-                ]
-              }
-              previousValue={mockAnalytics.avgOrderValue.yesterday}
-              icon={<TrendingUp className="w-6 h-6 text-amber-600" />}
-              formatter={(val) => `CHF ${val.toFixed(2)}`}
-            />
-          </motion.div>
-        )}
-      </div>
+          {selectedMetrics.includes("avgOrderValue") && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, delay: 0.3 }}
+              layout
+            >
+              <StatCard
+                title="Avg Order Value"
+                value={
+                  mockAnalytics.avgOrderValue[
+                    selectedPeriod as keyof typeof mockAnalytics.avgOrderValue
+                  ]
+                }
+                previousValue={mockAnalytics.avgOrderValue.yesterday}
+                icon={<TrendingUp className="w-6 h-6 text-amber-600" />}
+                formatter={(val) => `CHF ${val.toFixed(2)}`}
+              />
+            </motion.div>
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <motion.div
+        className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+        variants={containerVariants}
+      >
         {/* Weekly Revenue Trend */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.4 }}
+          variants={itemVariants}
+          whileHover={cardHoverVariants.hover}
         >
           <Card>
             <CardHeader>
@@ -383,7 +491,12 @@ export default function AnalyticsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px] w-full">
+              <motion.div
+                className="h-[300px] w-full"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={mockAnalytics.weeklyData}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -401,16 +514,15 @@ export default function AnalyticsPage() {
                     />
                   </LineChart>
                 </ResponsiveContainer>
-              </div>
+              </motion.div>
             </CardContent>
           </Card>
         </motion.div>
 
         {/* Hourly Orders Distribution */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.5 }}
+          variants={itemVariants}
+          whileHover={cardHoverVariants.hover}
         >
           <Card>
             <CardHeader>
@@ -420,7 +532,12 @@ export default function AnalyticsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px] w-full">
+              <motion.div
+                className="h-[300px] w-full"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={mockAnalytics.hourlyData}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -431,16 +548,15 @@ export default function AnalyticsPage() {
                     <Bar dataKey="orders" fill="#6366f1" name="Orders" />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
+              </motion.div>
             </CardContent>
           </Card>
         </motion.div>
 
         {/* Top Menu Items */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.6 }}
+          variants={itemVariants}
+          whileHover={cardHoverVariants.hover}
         >
           <Card>
             <CardHeader>
@@ -450,7 +566,12 @@ export default function AnalyticsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px] w-full">
+              <motion.div
+                className="h-[300px] w-full"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -476,16 +597,15 @@ export default function AnalyticsPage() {
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
-              </div>
+              </motion.div>
             </CardContent>
           </Card>
         </motion.div>
 
         {/* Weekly Performance */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.7 }}
+          variants={itemVariants}
+          whileHover={cardHoverVariants.hover}
         >
           <Card>
             <CardHeader>
@@ -495,7 +615,12 @@ export default function AnalyticsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px] w-full">
+              <motion.div
+                className="h-[300px] w-full"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={mockAnalytics.weeklyData}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -528,11 +653,11 @@ export default function AnalyticsPage() {
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
-              </div>
+              </motion.div>
             </CardContent>
           </Card>
         </motion.div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

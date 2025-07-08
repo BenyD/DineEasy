@@ -177,6 +177,64 @@ const formatTime = (date: Date) => {
   return `${hours}:${minutes} ${ampm}`;
 };
 
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
+const filterVariants = {
+  hidden: { opacity: 0, x: -20 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
+const iconVariants = {
+  hidden: { scale: 0 },
+  visible: {
+    scale: 1,
+    transition: {
+      type: "spring",
+      stiffness: 200,
+    },
+  },
+};
+
 export default function ActiveOrdersPage() {
   const router = useRouter();
   const { currency } = useRestaurantSettings();
@@ -314,9 +372,17 @@ export default function ActiveOrdersPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <motion.div
+      className="p-4 md:p-6 space-y-6"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <motion.div
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        variants={itemVariants}
+      >
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Active Orders</h1>
           <p className="text-sm text-gray-500">
@@ -324,12 +390,17 @@ export default function ActiveOrdersPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg">
-            <Clock className="h-4 w-4 text-gray-500" />
+          <motion.div
+            className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg"
+            variants={cardVariants}
+          >
+            <motion.div variants={iconVariants}>
+              <Clock className="h-4 w-4 text-gray-500" />
+            </motion.div>
             <span className="text-sm font-medium text-gray-700">
               {formatTime(currentTime)}
             </span>
-          </div>
+          </motion.div>
           <Button
             variant="outline"
             size="sm"
@@ -339,516 +410,590 @@ export default function ActiveOrdersPage() {
             Kitchen View
           </Button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <Card className="bg-red-50 border-red-200">
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-red-800">
-                  New Orders
-                </p>
-                <p className="text-xl md:text-2xl font-bold text-red-900">
-                  {newOrders.length}
-                </p>
+      <motion.div
+        className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4"
+        variants={itemVariants}
+      >
+        <motion.div variants={cardVariants}>
+          <Card className="bg-red-50 border-red-200">
+            <CardContent className="p-3 md:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs md:text-sm font-medium text-red-800">
+                    New Orders
+                  </p>
+                  <p className="text-xl md:text-2xl font-bold text-red-900">
+                    {newOrders.length}
+                  </p>
+                </div>
+                <motion.div variants={iconVariants}>
+                  <AlertCircle className="h-6 w-6 md:h-8 md:w-8 text-red-600" />
+                </motion.div>
               </div>
-              <AlertCircle className="h-6 w-6 md:h-8 md:w-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="bg-amber-50 border-amber-200">
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-amber-800">
-                  Preparing
-                </p>
-                <p className="text-xl md:text-2xl font-bold text-amber-900">
-                  {preparingOrders.length}
-                </p>
+        <motion.div variants={cardVariants}>
+          <Card className="bg-amber-50 border-amber-200">
+            <CardContent className="p-3 md:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs md:text-sm font-medium text-amber-800">
+                    Preparing
+                  </p>
+                  <p className="text-xl md:text-2xl font-bold text-amber-900">
+                    {preparingOrders.length}
+                  </p>
+                </div>
+                <motion.div variants={iconVariants}>
+                  <Timer className="h-6 w-6 md:h-8 md:w-8 text-amber-600" />
+                </motion.div>
               </div>
-              <Timer className="h-6 w-6 md:h-8 md:w-8 text-amber-600" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="bg-green-50 border-green-200">
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-green-800">
-                  Ready
-                </p>
-                <p className="text-xl md:text-2xl font-bold text-green-900">
-                  {readyOrders.length}
-                </p>
+        <motion.div variants={cardVariants}>
+          <Card className="bg-green-50 border-green-200">
+            <CardContent className="p-3 md:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs md:text-sm font-medium text-green-800">
+                    Ready
+                  </p>
+                  <p className="text-xl md:text-2xl font-bold text-green-900">
+                    {readyOrders.length}
+                  </p>
+                </div>
+                <motion.div variants={iconVariants}>
+                  <CheckCircle className="h-6 w-6 md:h-8 md:w-8 text-green-600" />
+                </motion.div>
               </div>
-              <CheckCircle className="h-6 w-6 md:h-8 md:w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-blue-800">
-                  Total Active
-                </p>
-                <p className="text-xl md:text-2xl font-bold text-blue-900">
-                  {filteredOrders.length}
-                </p>
+        <motion.div variants={cardVariants}>
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="p-3 md:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs md:text-sm font-medium text-blue-800">
+                    Total Active
+                  </p>
+                  <p className="text-xl md:text-2xl font-bold text-blue-900">
+                    {filteredOrders.length}
+                  </p>
+                </div>
+                <motion.div variants={iconVariants}>
+                  <Bell className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
+                </motion.div>
               </div>
-              <Bell className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </motion.div>
 
       {/* Filters Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters & Search
-          </CardTitle>
-          <CardDescription>
-            Filter and search through active orders
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Search Input */}
-            <div className="relative col-span-full lg:col-span-2">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-              <Input
-                placeholder="Search orders..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8"
-              />
-            </div>
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <motion.div variants={iconVariants}>
+                <Filter className="h-5 w-5" />
+              </motion.div>
+              Filters & Search
+            </CardTitle>
+            <CardDescription>
+              Filter and search through active orders
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <motion.div
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+              variants={filterVariants}
+            >
+              {/* Search Input */}
+              <div className="relative col-span-full lg:col-span-2">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                <Input
+                  placeholder="Search orders..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
 
-            {/* Time Range Filter */}
-            <Select value={timeFilter} onValueChange={setTimeFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Time Range" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="15m">Last 15 Minutes</SelectItem>
-                <SelectItem value="30m">Last 30 Minutes</SelectItem>
-                <SelectItem value="1h">Last Hour</SelectItem>
-              </SelectContent>
-            </Select>
+              {/* Time Range Filter */}
+              <Select value={timeFilter} onValueChange={setTimeFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Time Range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="15m">Last 15 Minutes</SelectItem>
+                  <SelectItem value="30m">Last 30 Minutes</SelectItem>
+                  <SelectItem value="1h">Last Hour</SelectItem>
+                </SelectContent>
+              </Select>
 
-            {/* Reset Button */}
-            <div className="flex justify-end">
+              {/* Reset Button */}
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={resetFilters}
+                  className="shrink-0"
+                >
+                  <RefreshCcw className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+              </div>
+            </motion.div>
+
+            <Separator />
+
+            {/* Status Filters */}
+            <motion.div
+              className="flex flex-wrap gap-2"
+              variants={filterVariants}
+            >
               <Button
-                variant="outline"
-                onClick={resetFilters}
-                className="shrink-0"
+                variant={statusFilter === null ? "default" : "outline"}
+                onClick={() => setStatusFilter(null)}
+                className={
+                  statusFilter === null ? "bg-green-600 hover:bg-green-700" : ""
+                }
               >
-                <RefreshCcw className="h-4 w-4 mr-2" />
-                Reset
+                All Status
               </Button>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Status Filters */}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={statusFilter === null ? "default" : "outline"}
-              onClick={() => setStatusFilter(null)}
-              className={
-                statusFilter === null ? "bg-green-600 hover:bg-green-700" : ""
-              }
-            >
-              All Status
-            </Button>
-            <Button
-              variant={statusFilter === "new" ? "default" : "outline"}
-              onClick={() =>
-                setStatusFilter(statusFilter === "new" ? null : "new")
-              }
-              className={
-                statusFilter === "new" ? "bg-red-600 hover:bg-red-700" : ""
-              }
-            >
-              New Orders
-            </Button>
-            <Button
-              variant={statusFilter === "preparing" ? "default" : "outline"}
-              onClick={() =>
-                setStatusFilter(
-                  statusFilter === "preparing" ? null : "preparing"
-                )
-              }
-              className={
-                statusFilter === "preparing"
-                  ? "bg-amber-600 hover:bg-amber-700"
-                  : ""
-              }
-            >
-              Preparing
-            </Button>
-            <Button
-              variant={statusFilter === "ready" ? "default" : "outline"}
-              onClick={() =>
-                setStatusFilter(statusFilter === "ready" ? null : "ready")
-              }
-              className={
-                statusFilter === "ready"
-                  ? "bg-green-600 hover:bg-green-700"
-                  : ""
-              }
-            >
-              Ready
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+              <Button
+                variant={statusFilter === "new" ? "default" : "outline"}
+                onClick={() =>
+                  setStatusFilter(statusFilter === "new" ? null : "new")
+                }
+                className={
+                  statusFilter === "new" ? "bg-red-600 hover:bg-red-700" : ""
+                }
+              >
+                New Orders
+              </Button>
+              <Button
+                variant={statusFilter === "preparing" ? "default" : "outline"}
+                onClick={() =>
+                  setStatusFilter(
+                    statusFilter === "preparing" ? null : "preparing"
+                  )
+                }
+                className={
+                  statusFilter === "preparing"
+                    ? "bg-amber-600 hover:bg-amber-700"
+                    : ""
+                }
+              >
+                Preparing
+              </Button>
+              <Button
+                variant={statusFilter === "ready" ? "default" : "outline"}
+                onClick={() =>
+                  setStatusFilter(statusFilter === "ready" ? null : "ready")
+                }
+                className={
+                  statusFilter === "ready"
+                    ? "bg-green-600 hover:bg-green-700"
+                    : ""
+                }
+              >
+                Ready
+              </Button>
+            </motion.div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Orders List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Active Orders</CardTitle>
-          <CardDescription>
-            Showing {filteredOrders.length} of {orders.length} orders
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredOrders.length === 0 ? (
-              <div className="text-center py-8">
-                <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  No orders found
-                </h3>
-                <p className="text-gray-500">
-                  Try adjusting your filters or search terms
-                </p>
-              </div>
-            ) : (
-              filteredOrders.map((order) => (
-                <Card key={order.id} className="overflow-hidden">
-                  <CardContent className="p-6">
-                    {/* Order Header */}
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-3">
-                            <span className="text-lg font-semibold">
-                              {order.id}
-                            </span>
-                            <Badge className={getStatusColor(order.status)}>
-                              {getStatusIcon(order.status)}
-                              <span className="ml-1 capitalize">
-                                {order.status}
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Active Orders</CardTitle>
+            <CardDescription>
+              Showing {filteredOrders.length} of {orders.length} orders
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${statusFilter}-${timeFilter}-${searchQuery}`}
+                className="space-y-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {filteredOrders.length === 0 ? (
+                  <motion.div
+                    className="text-center py-8"
+                    variants={itemVariants}
+                  >
+                    <motion.div variants={iconVariants}>
+                      <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    </motion.div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      No orders found
+                    </h3>
+                    <p className="text-gray-500">
+                      Try adjusting your filters or search terms
+                    </p>
+                  </motion.div>
+                ) : (
+                  filteredOrders.map((order, index) => (
+                    <motion.div
+                      key={order.id}
+                      variants={cardVariants}
+                      initial="hidden"
+                      animate="visible"
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <Card key={order.id} className="overflow-hidden">
+                        <CardContent className="p-6">
+                          {/* Order Header */}
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-lg font-semibold">
+                                    {order.id}
+                                  </span>
+                                  <Badge
+                                    className={getStatusColor(order.status)}
+                                  >
+                                    {getStatusIcon(order.status)}
+                                    <span className="ml-1 capitalize">
+                                      {order.status}
+                                    </span>
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                                  <span>Table {order.tableNumber}</span>
+                                  <span>•</span>
+                                  <span>{order.customerName}</span>
+                                  <span>•</span>
+                                  <span>
+                                    {getTimeAgo(order.time.toISOString())}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                variant="outline"
+                                className={getPaymentStatusColor(
+                                  order.paymentStatus
+                                )}
+                              >
+                                {order.paymentStatus.charAt(0).toUpperCase() +
+                                  order.paymentStatus.slice(1)}
+                              </Badge>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  align="end"
+                                  className="w-48"
+                                >
+                                  <DropdownMenuItem
+                                    onClick={() => setSelectedOrder(order)}
+                                  >
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      // Implement print functionality
+                                      console.log("Print order:", order.id);
+                                    }}
+                                  >
+                                    <Printer className="h-4 w-4 mr-2" />
+                                    Print Order
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  {order.paymentStatus === "paid" && (
+                                    <DropdownMenuItem
+                                      className="text-purple-600"
+                                      onClick={() => {
+                                        // Update order status to refunded
+                                        const updatedOrders = orders.map((o) =>
+                                          o.id === order.id
+                                            ? { ...o, status: "refunded" }
+                                            : o
+                                        );
+                                        setOrders(updatedOrders);
+                                      }}
+                                    >
+                                      <RefreshCcw className="h-4 w-4 mr-2" />
+                                      Refund Order
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem
+                                    className="text-red-600"
+                                    onClick={() => {
+                                      // Implement cancel functionality
+                                      console.log("Cancel order:", order.id);
+                                    }}
+                                  >
+                                    <Ban className="h-4 w-4 mr-2" />
+                                    Cancel Order
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+
+                          {/* Order Items */}
+                          <div className="space-y-2 mb-4">
+                            {order.items.map((item, index) => (
+                              <div
+                                key={index}
+                                className="flex items-start justify-between"
+                              >
+                                <div className="flex-1">
+                                  <div className="flex items-center">
+                                    <span className="font-medium">
+                                      {item.quantity}x
+                                    </span>
+                                    <span className="ml-2">{item.name}</span>
+                                  </div>
+                                  {item.modifiers.length > 0 && (
+                                    <p className="text-sm text-gray-500 mt-0.5">
+                                      {item.modifiers.join(", ")}
+                                    </p>
+                                  )}
+                                </div>
+                                <span className="text-gray-600">
+                                  {formatCurrency(item.quantity * item.price)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Order Footer */}
+                          <div className="flex items-center justify-between pt-4 border-t">
+                            <div className="flex items-center gap-2">
+                              <Timer className="h-4 w-4 text-gray-500" />
+                              <span className="text-sm text-gray-600">
+                                Est. Time: {order.estimatedTime} mins
                               </span>
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                            <span>Table {order.tableNumber}</span>
-                            <span>•</span>
-                            <span>{order.customerName}</span>
-                            <span>•</span>
-                            <span>{getTimeAgo(order.time.toISOString())}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className={getPaymentStatusColor(order.paymentStatus)}
-                        >
-                          {order.paymentStatus.charAt(0).toUpperCase() +
-                            order.paymentStatus.slice(1)}
-                        </Badge>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem
-                              onClick={() => setSelectedOrder(order)}
-                            >
-                              <Eye className="h-4 w-4 mr-2" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                // Implement print functionality
-                                console.log("Print order:", order.id);
-                              }}
-                            >
-                              <Printer className="h-4 w-4 mr-2" />
-                              Print Order
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {order.paymentStatus === "paid" && (
-                              <DropdownMenuItem
-                                className="text-purple-600"
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="font-medium">
+                                Total: {formatCurrency(order.total)}
+                              </span>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
                                 onClick={() => {
-                                  // Update order status to refunded
-                                  const updatedOrders = orders.map((o) =>
-                                    o.id === order.id
-                                      ? { ...o, status: "refunded" }
-                                      : o
-                                  );
-                                  setOrders(updatedOrders);
+                                  const nextStatus = {
+                                    new: "preparing",
+                                    preparing: "ready",
+                                    ready: "completed",
+                                  }[order.status];
+                                  if (nextStatus) {
+                                    const updatedOrders = orders.map((o) =>
+                                      o.id === order.id
+                                        ? { ...o, status: nextStatus }
+                                        : o
+                                    );
+                                    setOrders(updatedOrders);
+                                  }
                                 }}
                               >
-                                <RefreshCcw className="h-4 w-4 mr-2" />
-                                Refund Order
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem
-                              className="text-red-600"
-                              onClick={() => {
-                                // Implement cancel functionality
-                                console.log("Cancel order:", order.id);
-                              }}
-                            >
-                              <Ban className="h-4 w-4 mr-2" />
-                              Cancel Order
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
+                                {order.status === "new" && "Start Preparing"}
+                                {order.status === "preparing" && "Mark Ready"}
+                                {order.status === "ready" && "Complete Order"}
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </CardContent>
+        </Card>
+      </motion.div>
 
-                    {/* Order Items */}
-                    <div className="space-y-2 mb-4">
-                      {order.items.map((item, index) => (
-                        <div
-                          key={index}
-                          className="flex items-start justify-between"
-                        >
-                          <div className="flex-1">
+      {/* Order Details Dialog */}
+      <AnimatePresence>
+        {selectedOrder && (
+          <Dialog
+            open={!!selectedOrder}
+            onOpenChange={() => setSelectedOrder(null)}
+          >
+            <DialogContent className="max-w-md">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+              >
+                <DialogHeader className="space-y-2">
+                  <DialogTitle>Order {selectedOrder.id}</DialogTitle>
+                  <div className="flex items-center gap-2">
+                    <Badge className={getStatusColor(selectedOrder.status)}>
+                      {getStatusIcon(selectedOrder.status)}
+                      <span className="ml-1 capitalize">
+                        {selectedOrder.status}
+                      </span>
+                    </Badge>
+                    <span className="text-sm text-gray-500">•</span>
+                    <span className="text-sm text-gray-500">
+                      {getTimeAgo(selectedOrder.time.toISOString())}
+                    </span>
+                  </div>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500">Table</p>
+                      <p className="font-semibold">
+                        Table {selectedOrder.tableNumber}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Customer</p>
+                      <p className="font-semibold">
+                        {selectedOrder.customerName}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Payment</p>
+                      <Badge
+                        variant="outline"
+                        className={
+                          selectedOrder.paymentStatus === "paid"
+                            ? "text-green-600"
+                            : "text-amber-600"
+                        }
+                      >
+                        {selectedOrder.paymentStatus.charAt(0).toUpperCase() +
+                          selectedOrder.paymentStatus.slice(1)}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h4 className="font-semibold mb-2">Items</h4>
+                    <div className="space-y-3">
+                      {selectedOrder.items.map((item: any, index: number) => (
+                        <div key={index} className="flex justify-between">
+                          <div>
                             <div className="flex items-center">
                               <span className="font-medium">
-                                {item.quantity}x
+                                {item.quantity}x {item.name}
                               </span>
-                              <span className="ml-2">{item.name}</span>
                             </div>
                             {item.modifiers.length > 0 && (
-                              <p className="text-sm text-gray-500 mt-0.5">
-                                {item.modifiers.join(", ")}
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                ({item.modifiers.join(", ")})
                               </p>
                             )}
                           </div>
-                          <span className="text-gray-600">
+                          <span>
                             {formatCurrency(item.quantity * item.price)}
                           </span>
                         </div>
                       ))}
                     </div>
-
-                    {/* Order Footer */}
-                    <div className="flex items-center justify-between pt-4 border-t">
-                      <div className="flex items-center gap-2">
-                        <Timer className="h-4 w-4 text-gray-500" />
-                        <span className="text-sm text-gray-600">
-                          Est. Time: {order.estimatedTime} mins
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-medium">
-                          Total: {formatCurrency(order.total)}
-                        </span>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => {
-                            const nextStatus = {
-                              new: "preparing",
-                              preparing: "ready",
-                              ready: "completed",
-                            }[order.status];
-                            if (nextStatus) {
-                              const updatedOrders = orders.map((o) =>
-                                o.id === order.id
-                                  ? { ...o, status: nextStatus }
-                                  : o
-                              );
-                              setOrders(updatedOrders);
-                            }
-                          }}
-                        >
-                          {order.status === "new" && "Start Preparing"}
-                          {order.status === "preparing" && "Mark Ready"}
-                          {order.status === "ready" && "Complete Order"}
-                        </Button>
-                      </div>
+                    <div className="border-t mt-3 pt-2 flex justify-between font-semibold">
+                      <span>Total</span>
+                      <span>{formatCurrency(selectedOrder.total)}</span>
                     </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Order Details Dialog */}
-      <Dialog
-        open={!!selectedOrder}
-        onOpenChange={() => setSelectedOrder(null)}
-      >
-        {selectedOrder && (
-          <DialogContent className="max-w-md">
-            <DialogHeader className="space-y-2">
-              <DialogTitle>Order {selectedOrder.id}</DialogTitle>
-              <div className="flex items-center gap-2">
-                <Badge className={getStatusColor(selectedOrder.status)}>
-                  {getStatusIcon(selectedOrder.status)}
-                  <span className="ml-1 capitalize">
-                    {selectedOrder.status}
-                  </span>
-                </Badge>
-                <span className="text-sm text-gray-500">•</span>
-                <span className="text-sm text-gray-500">
-                  {getTimeAgo(selectedOrder.time.toISOString())}
-                </span>
-              </div>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">Table</p>
-                  <p className="font-semibold">
-                    Table {selectedOrder.tableNumber}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Customer</p>
-                  <p className="font-semibold">{selectedOrder.customerName}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Payment</p>
-                  <Badge
-                    variant="outline"
-                    className={
-                      selectedOrder.paymentStatus === "paid"
-                        ? "text-green-600"
-                        : "text-amber-600"
-                    }
-                  >
-                    {selectedOrder.paymentStatus.charAt(0).toUpperCase() +
-                      selectedOrder.paymentStatus.slice(1)}
-                  </Badge>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div>
-                <h4 className="font-semibold mb-2">Items</h4>
-                <div className="space-y-3">
-                  {selectedOrder.items.map((item: any, index: number) => (
-                    <div key={index} className="flex justify-between">
-                      <div>
-                        <div className="flex items-center">
-                          <span className="font-medium">
-                            {item.quantity}x {item.name}
-                          </span>
-                        </div>
-                        {item.modifiers.length > 0 && (
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            ({item.modifiers.join(", ")})
-                          </p>
-                        )}
-                      </div>
-                      <span>{formatCurrency(item.quantity * item.price)}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="border-t mt-3 pt-2 flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span>{formatCurrency(selectedOrder.total)}</span>
-                </div>
-              </div>
-
-              {selectedOrder.notes && (
-                <>
-                  <Separator />
-                  <div>
-                    <h4 className="font-semibold mb-2">Customer Notes</h4>
-                    <p className="text-sm bg-gray-50 p-2 rounded">
-                      {selectedOrder.notes}
-                    </p>
                   </div>
-                </>
-              )}
 
-              <div className="flex justify-end gap-2 pt-2">
-                {selectedOrder.status === "new" && (
-                  <Button
-                    onClick={() => {
-                      const updatedOrders = orders.map((o) =>
-                        o.id === selectedOrder.id
-                          ? { ...o, status: "preparing" }
-                          : o
-                      );
-                      setOrders(updatedOrders);
-                      setSelectedOrder(null);
-                    }}
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    Start Preparing
-                  </Button>
-                )}
-                {selectedOrder.status === "preparing" && (
-                  <Button
-                    onClick={() => {
-                      const updatedOrders = orders.map((o) =>
-                        o.id === selectedOrder.id
-                          ? { ...o, status: "ready" }
-                          : o
-                      );
-                      setOrders(updatedOrders);
-                      setSelectedOrder(null);
-                    }}
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    Mark Ready
-                  </Button>
-                )}
-                {selectedOrder.status === "ready" && (
-                  <Button
-                    onClick={() => {
-                      const updatedOrders = orders.map((o) =>
-                        o.id === selectedOrder.id
-                          ? { ...o, status: "completed" }
-                          : o
-                      );
-                      setOrders(updatedOrders);
-                      setSelectedOrder(null);
-                    }}
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    Complete
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedOrder(null)}
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
+                  {selectedOrder.notes && (
+                    <>
+                      <Separator />
+                      <div>
+                        <h4 className="font-semibold mb-2">Customer Notes</h4>
+                        <p className="text-sm bg-gray-50 p-2 rounded">
+                          {selectedOrder.notes}
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    {selectedOrder.status === "new" && (
+                      <Button
+                        onClick={() => {
+                          const updatedOrders = orders.map((o) =>
+                            o.id === selectedOrder.id
+                              ? { ...o, status: "preparing" }
+                              : o
+                          );
+                          setOrders(updatedOrders);
+                          setSelectedOrder(null);
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        Start Preparing
+                      </Button>
+                    )}
+                    {selectedOrder.status === "preparing" && (
+                      <Button
+                        onClick={() => {
+                          const updatedOrders = orders.map((o) =>
+                            o.id === selectedOrder.id
+                              ? { ...o, status: "ready" }
+                              : o
+                          );
+                          setOrders(updatedOrders);
+                          setSelectedOrder(null);
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        Mark Ready
+                      </Button>
+                    )}
+                    {selectedOrder.status === "ready" && (
+                      <Button
+                        onClick={() => {
+                          const updatedOrders = orders.map((o) =>
+                            o.id === selectedOrder.id
+                              ? { ...o, status: "completed" }
+                              : o
+                          );
+                          setOrders(updatedOrders);
+                          setSelectedOrder(null);
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        Complete
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() => setSelectedOrder(null)}
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            </DialogContent>
+          </Dialog>
         )}
-      </Dialog>
-    </div>
+      </AnimatePresence>
+    </motion.div>
   );
 }

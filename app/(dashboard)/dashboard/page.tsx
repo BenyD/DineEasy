@@ -164,12 +164,12 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
         className="flex items-center justify-between"
-      >
+        >
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-500">
@@ -183,16 +183,16 @@ export default function DashboardPage() {
               {formatTime(currentTime)}
             </span>
           </div>
-        </div>
-      </motion.div>
+            </div>
+        </motion.div>
 
       {/* Stats Grid */}
-      <motion.div
+        <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="show"
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-      >
+        >
         {stats.map((stat, index) => (
           <motion.div
             key={index}
@@ -220,7 +220,7 @@ export default function DashboardPage() {
                         stat.color === "blue" && "text-blue-800",
                         stat.color === "red" && "text-red-800"
                       )}
-                    >
+              >
                       {stat.title}
                     </p>
                     <p
@@ -242,9 +242,9 @@ export default function DashboardPage() {
                       stat.color === "amber" && "text-amber-600",
                       stat.color === "blue" && "text-blue-600",
                       stat.color === "red" && "text-red-600"
-                    )}
+                )}
                   />
-                </div>
+            </div>
                 <div className="mt-2 flex items-center justify-between">
                   <p className="text-sm text-gray-500">{stat.description}</p>
                   <div
@@ -259,8 +259,8 @@ export default function DashboardPage() {
                       <ArrowDownIcon className="w-3 h-3 mr-1" />
                     )}
                     {stat.trend.value}%
-                  </div>
-                </div>
+      </div>
+      </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -336,16 +336,16 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="w-3 h-3" />
                         {order.time}
-                      </div>
-                    </div>
+          </div>
+        </div>
                     <div className="text-right">
                       <p className="font-medium">{order.total}</p>
                       <p className="text-sm text-muted-foreground">
                         {order.items} items
                       </p>
-                    </div>
+              </div>
                   </motion.div>
-                ))}
+            ))}
               </motion.div>
             </CardContent>
           </Card>
@@ -362,22 +362,22 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div>
+            <div>
                   <CardTitle>Recent Payments</CardTitle>
                   <CardDescription>
                     Latest transactions from customers
                   </CardDescription>
-                </div>
-                <Button
+            </div>
+            <Button
                   variant="outline"
-                  size="sm"
+              size="sm"
                   className="gap-2"
                   onClick={() => router.push("/dashboard/payments")}
-                >
-                  View All
+            >
+              View All
                   <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+            </Button>
+          </div>
             </CardHeader>
             <CardContent>
               <motion.div
@@ -392,7 +392,7 @@ export default function DashboardPage() {
                     variants={cardVariants}
                     whileHover={{ x: 5 }}
                     className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
-                  >
+              >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <p className="font-medium">{payment.customer}</p>
@@ -405,15 +405,15 @@ export default function DashboardPage() {
                             <span className="ml-1">•••• {payment.last4}</span>
                           )}
                         </Badge>
-                      </div>
+                  </div>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="w-3 h-3" />
                         {payment.time}
-                      </div>
-                    </div>
+                  </div>
+                </div>
                     <div className="text-right">
                       <p className="font-medium">{payment.amount}</p>
-                      <Badge
+                <Badge
                         variant="secondary"
                         className={cn(
                           "text-xs",
@@ -421,12 +421,12 @@ export default function DashboardPage() {
                             ? "bg-green-100 text-green-700"
                             : "bg-amber-100 text-amber-700"
                         )}
-                      >
+                >
                         {payment.status}
-                      </Badge>
-                    </div>
+                </Badge>
+              </div>
                   </motion.div>
-                ))}
+            ))}
               </motion.div>
             </CardContent>
           </Card>

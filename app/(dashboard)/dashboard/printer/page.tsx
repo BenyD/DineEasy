@@ -13,6 +13,28 @@ import {
 } from "@/components/ui/card";
 import Link from "next/link";
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
 export default function PrinterPage() {
   const [printerSettings, setPrinterSettings] = useState({
     printerName: "",
@@ -49,76 +71,90 @@ export default function PrinterPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <motion.div
+      className="p-6 space-y-6"
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
       {/* Header */}
-      <div>
+      <motion.div variants={itemVariants}>
         <h1 className="text-2xl font-bold text-gray-900">Printer Management</h1>
         <p className="text-gray-500">
           Manage your printer settings and receipt formats
         </p>
-      </div>
+      </motion.div>
 
       {/* Printer Management Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <motion.div
+        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+        variants={containerVariants}
+      >
         {/* Printer Settings */}
-        <Link href="/dashboard/printer/settings">
-          <Card className="hover:border-green-200 transition-colors cursor-pointer">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Printer Settings
-              </CardTitle>
-              <CardDescription>
-                Configure printer connection and setup
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-500">
-                Set up your printer connection, configure network settings, and
-                manage basic printer options
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+        <motion.div variants={itemVariants}>
+          <Link href="/dashboard/printer/settings">
+            <Card className="hover:border-green-200 transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Printer Settings
+                </CardTitle>
+                <CardDescription>
+                  Configure printer connection and setup
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-500">
+                  Set up your printer connection, configure network settings,
+                  and manage basic printer options
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+        </motion.div>
 
         {/* Kitchen Orders */}
-        <Link href="/dashboard/printer/kitchen-orders">
-          <Card className="hover:border-green-200 transition-colors cursor-pointer">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ChefHat className="h-5 w-5" />
-                Kitchen Orders
-              </CardTitle>
-              <CardDescription>Kitchen order ticket settings</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-500">
-                Configure kitchen order ticket format, auto-printing options,
-                and notification settings
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+        <motion.div variants={itemVariants}>
+          <Link href="/dashboard/printer/kitchen-orders">
+            <Card className="hover:border-green-200 transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ChefHat className="h-5 w-5" />
+                  Kitchen Orders
+                </CardTitle>
+                <CardDescription>Kitchen order ticket settings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-500">
+                  Configure kitchen order ticket format, auto-printing options,
+                  and notification settings
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+        </motion.div>
 
         {/* Customer Receipts */}
-        <Link href="/dashboard/printer/customer-receipt">
-          <Card className="hover:border-green-200 transition-colors cursor-pointer">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Receipt className="h-5 w-5" />
-                Customer Receipts
-              </CardTitle>
-              <CardDescription>Customer receipt settings</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-500">
-                Customize receipt layout, configure auto-printing, and manage
-                receipt content options
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
-    </div>
+        <motion.div variants={itemVariants}>
+          <Link href="/dashboard/printer/customer-receipt">
+            <Card className="hover:border-green-200 transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Receipt className="h-5 w-5" />
+                  Customer Receipts
+                </CardTitle>
+                <CardDescription>Customer receipt settings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-500">
+                  Customize receipt layout, configure auto-printing, and manage
+                  receipt content options
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Printer,
   RefreshCw,
@@ -30,6 +30,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
 
 export default function PrinterSettingsPage() {
   const [printerSettings, setPrinterSettings] = useState({
@@ -67,37 +89,45 @@ export default function PrinterSettingsPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <motion.div
+      className="p-6 space-y-6"
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
       {/* Header */}
-      <div>
+      <motion.div variants={itemVariants}>
         <h1 className="text-2xl font-bold text-gray-900">Printer Setup</h1>
         <p className="text-gray-500">
           Configure your receipt printer connection and settings
         </p>
-      </div>
+      </motion.div>
 
       {/* Printer Status Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
+      <motion.div variants={itemVariants}>
         <Card
-          className={
+          className={`transition-colors duration-300 ${
             printerSettings.printerStatus === "connected"
               ? "border-green-200"
               : "border-red-200"
-          }
+          }`}
         >
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div
+              <motion.div
+                className="flex items-center gap-4"
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <motion.div
                   className={`p-3 rounded-full ${
                     printerSettings.printerStatus === "connected"
                       ? "bg-green-100"
                       : "bg-red-100"
                   }`}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
                 >
                   <Printer
                     className={`h-6 w-6 ${
@@ -106,7 +136,7 @@ export default function PrinterSettingsPage() {
                         : "text-red-600"
                     }`}
                   />
-                </div>
+                </motion.div>
                 <div>
                   <h3 className="text-lg font-semibold">
                     {printerSettings.printerStatus === "connected"
@@ -117,54 +147,64 @@ export default function PrinterSettingsPage() {
                     {printerSettings.printerName || "No printer selected"}
                   </p>
                 </div>
-              </div>
+              </motion.div>
 
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setPrinterSettings({
-                      ...printerSettings,
-                      printerStatus:
-                        printerSettings.printerStatus === "connected"
-                          ? "disconnected"
-                          : "connected",
-                    })
-                  }
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleTestPrint}
-                  disabled={
-                    testPrintStatus === "printing" ||
-                    printerSettings.printerStatus !== "connected"
-                  }
-                  className={
-                    testPrintStatus === "success"
-                      ? "bg-green-600 hover:bg-green-700"
-                      : testPrintStatus === "error"
-                      ? "bg-red-600 hover:bg-red-700"
-                      : ""
-                  }
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setPrinterSettings({
+                        ...printerSettings,
+                        printerStatus:
+                          printerSettings.printerStatus === "connected"
+                            ? "disconnected"
+                            : "connected",
+                      })
+                    }
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Refresh
+                  </Button>
+                </motion.div>
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  {testPrintStatus === "printing" && (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                  )}
-                  {testPrintStatus === "success" && (
-                    <Check className="w-4 h-4 mr-2" />
-                  )}
-                  {testPrintStatus === "error" && (
-                    <AlertCircle className="w-4 h-4 mr-2" />
-                  )}
-                  {testPrintStatus === "idle" && "Test Print"}
-                  {testPrintStatus === "printing" && "Printing..."}
-                  {testPrintStatus === "success" && "Print Successful"}
-                  {testPrintStatus === "error" && "Print Failed"}
-                </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleTestPrint}
+                    disabled={
+                      testPrintStatus === "printing" ||
+                      printerSettings.printerStatus !== "connected"
+                    }
+                    className={
+                      testPrintStatus === "success"
+                        ? "bg-green-600 hover:bg-green-700"
+                        : testPrintStatus === "error"
+                        ? "bg-red-600 hover:bg-red-700"
+                        : ""
+                    }
+                  >
+                    {testPrintStatus === "printing" && (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                    )}
+                    {testPrintStatus === "success" && (
+                      <Check className="w-4 h-4 mr-2" />
+                    )}
+                    {testPrintStatus === "error" && (
+                      <AlertCircle className="w-4 h-4 mr-2" />
+                    )}
+                    {testPrintStatus === "idle" && "Test Print"}
+                    {testPrintStatus === "printing" && "Printing..."}
+                    {testPrintStatus === "success" && "Print Successful"}
+                    {testPrintStatus === "error" && "Print Failed"}
+                  </Button>
+                </motion.div>
               </div>
             </div>
           </CardContent>
@@ -172,143 +212,172 @@ export default function PrinterSettingsPage() {
       </motion.div>
 
       {/* Error Alert - Show only when printer is disconnected */}
-      {printerSettings.printerStatus !== "connected" && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-        >
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Printer Connection Error</AlertTitle>
-            <AlertDescription>
-              Your printer is currently disconnected. Please check the
-              connection settings below and ensure the printer is powered on.
-            </AlertDescription>
-          </Alert>
-        </motion.div>
-      )}
+      <AnimatePresence>
+        {printerSettings.printerStatus !== "connected" && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Printer Connection Error</AlertTitle>
+              <AlertDescription>
+                Your printer is currently disconnected. Please check the
+                connection settings below and ensure the printer is powered on.
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Printer Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Printer Configuration</CardTitle>
-          <CardDescription>
-            Set up your receipt printer connection and basic settings
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Connection Type */}
-          <div className="space-y-2">
-            <Label htmlFor="connectionType">Connection Type</Label>
-            <Select
-              value={printerSettings.connectionType}
-              onValueChange={(value) =>
-                setPrinterSettings({
-                  ...printerSettings,
-                  connectionType: value,
-                })
-              }
-            >
-              <SelectTrigger id="connectionType">
-                <SelectValue placeholder="Select connection type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="network">Network Printer</SelectItem>
-                <SelectItem value="usb">USB Printer</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Separator />
-
-          {/* Network Settings */}
-          {printerSettings.connectionType === "network" && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="ipAddress">IP Address</Label>
-                <Input
-                  id="ipAddress"
-                  placeholder="192.168.1.100"
-                  value={printerSettings.ipAddress}
-                  onChange={(e) =>
-                    setPrinterSettings({
-                      ...printerSettings,
-                      ipAddress: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="port">Port</Label>
-                <Input
-                  id="port"
-                  placeholder="9100"
-                  value={printerSettings.port}
-                  onChange={(e) =>
-                    setPrinterSettings({
-                      ...printerSettings,
-                      port: e.target.value,
-                    })
-                  }
-                />
-              </div>
-            </div>
-          )}
-
-          {/* USB Printer Search */}
-          {printerSettings.connectionType === "usb" && (
-            <div className="space-y-4">
-              <Button
-                onClick={handleSearchPrinters}
-                disabled={printerSettings.isSearching}
-                className="w-full"
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Printer Configuration</CardTitle>
+            <CardDescription>
+              Set up your receipt printer connection and basic settings
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Connection Type */}
+            <motion.div className="space-y-2" variants={itemVariants}>
+              <Label htmlFor="connectionType">Connection Type</Label>
+              <Select
+                value={printerSettings.connectionType}
+                onValueChange={(value) =>
+                  setPrinterSettings({
+                    ...printerSettings,
+                    connectionType: value,
+                  })
+                }
               >
-                {printerSettings.isSearching ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                    Searching for printers...
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4 mr-2" />
-                    Search for USB Printers
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
+                <SelectTrigger id="connectionType">
+                  <SelectValue placeholder="Select connection type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="network">Network Printer</SelectItem>
+                  <SelectItem value="usb">USB Printer</SelectItem>
+                </SelectContent>
+              </Select>
+            </motion.div>
 
-          <Separator />
+            <Separator />
 
-          {/* Paper Size */}
-          <div className="space-y-2">
-            <Label htmlFor="paperSize">Paper Size</Label>
-            <Select
-              value={printerSettings.paperSize}
-              onValueChange={(value) =>
-                setPrinterSettings({ ...printerSettings, paperSize: value })
-              }
+            {/* Network Settings */}
+            <AnimatePresence mode="wait">
+              {printerSettings.connectionType === "network" && (
+                <motion.div
+                  className="space-y-4"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="ipAddress">IP Address</Label>
+                    <Input
+                      id="ipAddress"
+                      placeholder="192.168.1.100"
+                      value={printerSettings.ipAddress}
+                      onChange={(e) =>
+                        setPrinterSettings({
+                          ...printerSettings,
+                          ipAddress: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="port">Port</Label>
+                    <Input
+                      id="port"
+                      placeholder="9100"
+                      value={printerSettings.port}
+                      onChange={(e) =>
+                        setPrinterSettings({
+                          ...printerSettings,
+                          port: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </motion.div>
+              )}
+
+              {/* USB Printer Search */}
+              {printerSettings.connectionType === "usb" && (
+                <motion.div
+                  className="space-y-4"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Button
+                      onClick={handleSearchPrinters}
+                      disabled={printerSettings.isSearching}
+                      className="w-full"
+                    >
+                      {printerSettings.isSearching ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                          Searching for printers...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-4 h-4 mr-2" />
+                          Search for USB Printers
+                        </>
+                      )}
+                    </Button>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <Separator />
+
+            {/* Paper Size */}
+            <motion.div className="space-y-2" variants={itemVariants}>
+              <Label htmlFor="paperSize">Paper Size</Label>
+              <Select
+                value={printerSettings.paperSize}
+                onValueChange={(value) =>
+                  setPrinterSettings({ ...printerSettings, paperSize: value })
+                }
+              >
+                <SelectTrigger id="paperSize">
+                  <SelectValue placeholder="Select paper size" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="58mm">58mm</SelectItem>
+                  <SelectItem value="80mm">80mm</SelectItem>
+                  <SelectItem value="A4">A4</SelectItem>
+                </SelectContent>
+              </Select>
+            </motion.div>
+
+            <motion.div
+              className="pt-4"
+              variants={itemVariants}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              <SelectTrigger id="paperSize">
-                <SelectValue placeholder="Select paper size" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="58mm">58mm</SelectItem>
-                <SelectItem value="80mm">80mm</SelectItem>
-                <SelectItem value="A4">A4</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="pt-4">
-            <Button className="w-full bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
-              Save Configuration
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+              <Button className="w-full bg-green-600 hover:bg-green-700">
+                Save Configuration
+              </Button>
+            </motion.div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </motion.div>
   );
 }

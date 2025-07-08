@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
   Search,
@@ -204,6 +205,44 @@ const formatTimeAgo = (date: Date) => {
   return `${diffInDays} day${diffInDays > 1 ? "s" : ""} ago`;
 };
 
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
+const cardHoverVariants = {
+  hover: {
+    scale: 1.02,
+    transition: {
+      type: "spring",
+      stiffness: 400,
+    },
+  },
+};
+
+const buttonHoverVariants = {
+  hover: { scale: 1.05 },
+  tap: { scale: 0.95 },
+};
+
 export default function ActivityLogsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("all");
@@ -256,9 +295,17 @@ export default function ActivityLogsPage() {
   };
 
   return (
-    <div className="flex-1 space-y-6 p-6">
+    <motion.div
+      className="flex-1 space-y-6 p-6"
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <motion.div
+        className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+        variants={itemVariants}
+      >
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Activity Logs</h1>
           <p className="text-muted-foreground">
@@ -266,190 +313,253 @@ export default function ActivityLogsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-          <Button variant="outline" size="sm">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
+          <motion.div
+            whileHover={buttonHoverVariants.hover}
+            whileTap={buttonHoverVariants.tap}
+          >
+            <Button variant="outline" size="sm">
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+          </motion.div>
+          <motion.div
+            whileHover={buttonHoverVariants.hover}
+            whileTap={buttonHoverVariants.tap}
+          >
+            <Button variant="outline" size="sm">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Filters Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters & Search
-          </CardTitle>
-          <CardDescription>
-            Filter and search through activity logs
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Search Input */}
-            <div className="relative col-span-full lg:col-span-2">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-              <Input
-                placeholder="Search activities..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Filters & Search
+            </CardTitle>
+            <CardDescription>
+              Filter and search through activity logs
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <motion.div
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+              variants={itemVariants}
+            >
+              {/* Search Input */}
+              <motion.div
+                className="relative col-span-full lg:col-span-2"
+                whileHover={{ scale: 1.01 }}
+              >
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                <Input
+                  placeholder="Search activities..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </motion.div>
 
-            {/* Time Range Filter */}
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Time Range" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="24h">Last 24 Hours</SelectItem>
-                <SelectItem value="7d">Last 7 Days</SelectItem>
-                <SelectItem value="30d">Last 30 Days</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* User Filter */}
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <Select value={selectedUser} onValueChange={setSelectedUser}>
+              {/* Time Range Filter */}
+              <motion.div whileHover={{ scale: 1.01 }}>
+                <Select value={timeRange} onValueChange={setTimeRange}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select User" />
+                    <SelectValue placeholder="Time Range" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Users</SelectItem>
-                    {uniqueUsers.map((user) => (
-                      <SelectItem key={user} value={user}>
-                        {user}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="24h">Last 24 Hours</SelectItem>
+                    <SelectItem value="7d">Last 7 Days</SelectItem>
+                    <SelectItem value="30d">Last 30 Days</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <Button
-                variant="outline"
-                onClick={resetFilters}
-                className="shrink-0"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Reset
-              </Button>
-            </div>
-          </div>
+              </motion.div>
 
-          <Separator />
-
-          {/* Activity Type Filters */}
-          <div className="flex flex-wrap gap-2">
-            {activityTypes.map((type) => {
-              const Icon = type.icon;
-              return (
-                <Button
-                  key={type.value}
-                  variant={selectedType === type.value ? "default" : "outline"}
-                  onClick={() => setSelectedType(type.value)}
-                  className={`flex-1 md:flex-none ${
-                    selectedType === type.value
-                      ? "bg-green-600 hover:bg-green-700"
-                      : ""
-                  }`}
+              {/* User Filter */}
+              <motion.div className="flex gap-2" whileHover={{ scale: 1.01 }}>
+                <div className="flex-1">
+                  <Select value={selectedUser} onValueChange={setSelectedUser}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select User" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Users</SelectItem>
+                      {uniqueUsers.map((user) => (
+                        <SelectItem key={user} value={user}>
+                          {user}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <motion.div
+                  whileHover={buttonHoverVariants.hover}
+                  whileTap={buttonHoverVariants.tap}
                 >
-                  <Icon className="w-4 h-4 mr-2" />
-                  {type.label}
-                </Button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+                  <Button
+                    variant="outline"
+                    onClick={resetFilters}
+                    className="shrink-0"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Reset
+                  </Button>
+                </motion.div>
+              </motion.div>
+            </motion.div>
+
+            <Separator />
+
+            {/* Activity Type Filters */}
+            <motion.div
+              className="flex flex-wrap gap-2"
+              variants={itemVariants}
+            >
+              {activityTypes.map((type) => {
+                const Icon = type.icon;
+                return (
+                  <motion.div
+                    key={type.value}
+                    whileHover={buttonHoverVariants.hover}
+                    whileTap={buttonHoverVariants.tap}
+                  >
+                    <Button
+                      variant={
+                        selectedType === type.value ? "default" : "outline"
+                      }
+                      onClick={() => setSelectedType(type.value)}
+                      className={`flex-1 md:flex-none ${
+                        selectedType === type.value
+                          ? "bg-green-600 hover:bg-green-700"
+                          : ""
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 mr-2" />
+                      {type.label}
+                    </Button>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Activity List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Activity Logs</CardTitle>
-          <CardDescription>
-            Showing {filteredActivities.length} of {mockActivities.length}{" "}
-            activities
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredActivities.length === 0 ? (
-              <div className="text-center py-8">
-                <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  No activities found
-                </h3>
-                <p className="text-gray-500">
-                  Try adjusting your filters or search terms.
-                </p>
-              </div>
-            ) : (
-              filteredActivities.map((activity) => {
-                const Icon = getActivityIcon(activity.type);
-                return (
-                  <div
-                    key={activity.id}
-                    className="flex items-start space-x-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Activity Logs</CardTitle>
+            <CardDescription>
+              Showing {filteredActivities.length} of {mockActivities.length}{" "}
+              activities
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AnimatePresence mode="wait">
+              {filteredActivities.length === 0 ? (
+                <motion.div
+                  key="no-activities"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="text-center py-8"
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 200 }}
                   >
-                    <div
-                      className={`p-2 rounded-full ${getActivityColor(
-                        activity.type
-                      )}`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-900">
-                          {activity.action}
-                        </p>
-                        <div className="flex items-center space-x-2">
-                          <Badge
-                            variant="outline"
-                            className={getActivityColor(activity.type)}
+                    <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  </motion.div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No activities found
+                  </h3>
+                  <p className="text-gray-500">
+                    Try adjusting your filters or search terms.
+                  </p>
+                </motion.div>
+              ) : (
+                <motion.div className="space-y-4" variants={containerVariants}>
+                  {filteredActivities.map((activity, index) => {
+                    const Icon = getActivityIcon(activity.type);
+                    return (
+                      <motion.div
+                        key={activity.id}
+                        variants={itemVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ delay: index * 0.05 }}
+                        whileHover={cardHoverVariants.hover}
+                        className="flex items-start space-x-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <motion.div
+                          className={`p-2 rounded-full ${getActivityColor(
+                            activity.type
+                          )}`}
+                          whileHover={{ scale: 1.1 }}
+                        >
+                          <Icon className="w-4 h-4" />
+                        </motion.div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-gray-900">
+                              {activity.action}
+                            </p>
+                            <div className="flex items-center space-x-2">
+                              <motion.div whileHover={{ scale: 1.1 }}>
+                                <Badge
+                                  variant="outline"
+                                  className={getActivityColor(activity.type)}
+                                >
+                                  {activity.type.charAt(0).toUpperCase() +
+                                    activity.type.slice(1)}
+                                </Badge>
+                              </motion.div>
+                              <span className="text-xs text-gray-500">
+                                {formatTimeAgo(activity.timestamp)}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {activity.description}
+                          </p>
+                          <motion.div
+                            className="flex items-center mt-2"
+                            whileHover={{ scale: 1.02 }}
                           >
-                            {activity.type.charAt(0).toUpperCase() +
-                              activity.type.slice(1)}
-                          </Badge>
-                          <span className="text-xs text-gray-500">
-                            {formatTimeAgo(activity.timestamp)}
-                          </span>
+                            <Avatar className="w-6 h-6">
+                              <AvatarImage
+                                src={activity.user.avatar || "/placeholder.svg"}
+                                alt={activity.user.name}
+                              />
+                              <AvatarFallback className="text-xs">
+                                {activity.user.name
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-xs text-gray-500 ml-2">
+                              {activity.user.name} • {activity.user.role}
+                            </span>
+                          </motion.div>
                         </div>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {activity.description}
-                      </p>
-                      <div className="flex items-center mt-2">
-                        <Avatar className="w-6 h-6">
-                          <AvatarImage
-                            src={activity.user.avatar || "/placeholder.svg"}
-                            alt={activity.user.name}
-                          />
-                          <AvatarFallback className="text-xs">
-                            {activity.user.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-xs text-gray-500 ml-2">
-                          {activity.user.name} • {activity.user.role}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+                      </motion.div>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </motion.div>
   );
 }
