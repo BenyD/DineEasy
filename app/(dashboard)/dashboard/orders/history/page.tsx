@@ -777,7 +777,7 @@ export default function OrderHistoryPage() {
                 <Button
                   variant="outline"
                   onClick={resetFilters}
-                  className="shrink-0"
+                  className="shrink-0 hover:bg-green-50 hover:text-green-600 hover:border-green-600"
                 >
                   <X className="h-4 w-4 mr-2" />
                   Reset
@@ -796,7 +796,9 @@ export default function OrderHistoryPage() {
                 variant={statusFilter === "all" ? "default" : "outline"}
                 onClick={() => setStatusFilter("all")}
                 className={
-                  statusFilter === "all" ? "bg-gray-600 hover:bg-gray-700" : ""
+                  statusFilter === "all"
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
                 }
               >
                 All Status
@@ -806,8 +808,8 @@ export default function OrderHistoryPage() {
                 onClick={() => setStatusFilter("completed")}
                 className={
                   statusFilter === "completed"
-                    ? "bg-green-600 hover:bg-green-700"
-                    : ""
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
                 }
               >
                 Completed
@@ -817,8 +819,8 @@ export default function OrderHistoryPage() {
                 onClick={() => setStatusFilter("refunded")}
                 className={
                   statusFilter === "refunded"
-                    ? "bg-amber-600 hover:bg-amber-700"
-                    : ""
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
                 }
               >
                 Refunded
@@ -828,8 +830,8 @@ export default function OrderHistoryPage() {
                 onClick={() => setStatusFilter("cancelled")}
                 className={
                   statusFilter === "cancelled"
-                    ? "bg-red-600 hover:bg-red-700"
-                    : ""
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
                 }
               >
                 Cancelled

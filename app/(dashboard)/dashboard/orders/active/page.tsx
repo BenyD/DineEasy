@@ -404,7 +404,7 @@ export default function ActiveOrdersPage() {
           <Button
             variant="outline"
             size="sm"
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 hover:bg-green-50 hover:text-green-600 hover:border-green-600"
             onClick={() => router.push("/dashboard/kitchen")}
           >
             Kitchen View
@@ -546,7 +546,7 @@ export default function ActiveOrdersPage() {
                 <Button
                   variant="outline"
                   onClick={resetFilters}
-                  className="shrink-0"
+                  className="shrink-0 hover:bg-green-50 hover:text-green-600 hover:border-green-600"
                 >
                   <RefreshCcw className="h-4 w-4 mr-2" />
                   Reset
@@ -565,7 +565,9 @@ export default function ActiveOrdersPage() {
                 variant={statusFilter === null ? "default" : "outline"}
                 onClick={() => setStatusFilter(null)}
                 className={
-                  statusFilter === null ? "bg-green-600 hover:bg-green-700" : ""
+                  statusFilter === null
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
                 }
               >
                 All Status
@@ -576,7 +578,9 @@ export default function ActiveOrdersPage() {
                   setStatusFilter(statusFilter === "new" ? null : "new")
                 }
                 className={
-                  statusFilter === "new" ? "bg-red-600 hover:bg-red-700" : ""
+                  statusFilter === "new"
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
                 }
               >
                 New Orders
@@ -590,8 +594,8 @@ export default function ActiveOrdersPage() {
                 }
                 className={
                   statusFilter === "preparing"
-                    ? "bg-amber-600 hover:bg-amber-700"
-                    : ""
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
                 }
               >
                 Preparing
@@ -603,8 +607,8 @@ export default function ActiveOrdersPage() {
                 }
                 className={
                   statusFilter === "ready"
-                    ? "bg-green-600 hover:bg-green-700"
-                    : ""
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
                 }
               >
                 Ready

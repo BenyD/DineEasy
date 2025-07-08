@@ -63,8 +63,8 @@ export function CommandMenu() {
     <>
       <Button
         variant="outline"
-        className="relative h-9 w-full justify-start text-sm text-muted-foreground sm:pr-12 md:w-40 lg:w-64"
         onClick={() => setOpen(true)}
+        className="relative h-9 w-full justify-start text-sm text-muted-foreground sm:pr-12 md:w-40 lg:w-64"
       >
         <span className="hidden lg:inline-flex">Search commands...</span>
         <span className="inline-flex lg:hidden">Search...</span>

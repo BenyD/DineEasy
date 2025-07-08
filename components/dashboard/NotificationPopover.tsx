@@ -129,7 +129,7 @@ export function NotificationPopover() {
   // Render a consistent initial state
   if (!mounted) {
     return (
-      <Button variant="ghost" size="icon" className="relative">
+      <Button variant="ghost" size="icon">
         <Bell className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
         <span className="sr-only">Notifications</span>
       </Button>
@@ -142,13 +142,13 @@ export function NotificationPopover() {
         <Button
           variant="ghost"
           size="icon"
-          className={cn("relative", isOpen && "bg-muted")}
+          className={cn("relative", { "bg-muted": isOpen })}
         >
           <Bell
-            className={cn(
-              "h-5 w-5 transition-colors",
-              isOpen ? "text-foreground" : "text-muted-foreground"
-            )}
+            className={cn("h-5 w-5 transition-colors", {
+              "text-foreground": isOpen,
+              "text-muted-foreground": !isOpen,
+            })}
             aria-hidden="true"
           />
           {unreadCount > 0 && (
