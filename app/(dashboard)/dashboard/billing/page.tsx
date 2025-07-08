@@ -14,7 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
-import { DashboardAlert } from "@/components/dashboard/DashboardAlert";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { PLANS } from "@/lib/constants";
 
 // Mock data - replace with real data fetching
@@ -46,6 +46,24 @@ function formatDate(date: Date) {
   }).format(date);
 }
 
+// Add these animation variants at the top level
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.2,
+    },
+  },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 },
+  hover: { y: -5, transition: { duration: 0.2 } },
+};
+
 export default function BillingPage() {
   const daysLeft = calculateDaysLeft(billingData.trialEndsAt);
   const isTrialActive = daysLeft > 0;
@@ -53,19 +71,26 @@ export default function BillingPage() {
   if (!billingData.stripeConnected) {
     return (
       <div className="p-6 space-y-8 max-w-3xl mx-auto">
-        <div className="space-y-1">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-1"
+        >
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">
             Set Up Billing
           </h1>
           <p className="text-lg text-gray-500">
             Add a payment method to start your DineEasy subscription
           </p>
-        </div>
+        </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          variants={cardVariants}
+          initial="hidden"
+          animate="show"
+          whileHover="hover"
+          className="transform transition-all duration-200"
         >
           <Card>
             <CardHeader>
@@ -122,15 +147,18 @@ export default function BillingPage() {
 
         {isTrialActive && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
+            variants={cardVariants}
+            initial="hidden"
+            animate="show"
+            className="transform transition-all duration-200"
           >
-            <DashboardAlert
-              variant="info"
-              title={`Trial Status: ${daysLeft} days remaining`}
-              description="Set up your payment method before your trial ends to continue using DineEasy without interruption."
-            />
+            <Alert>
+              <AlertTitle>{`Trial Status: ${daysLeft} days remaining`}</AlertTitle>
+              <AlertDescription>
+                Set up your payment method before your trial ends to continue
+                using DineEasy without interruption.
+              </AlertDescription>
+            </Alert>
           </motion.div>
         )}
       </div>
@@ -139,47 +167,54 @@ export default function BillingPage() {
 
   return (
     <div className="p-6 space-y-8 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="space-y-1">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="space-y-1"
+      >
         <h1 className="text-3xl font-bold tracking-tight text-gray-900">
           Billing & Subscription
         </h1>
         <p className="text-lg text-gray-500">
           Manage your subscription plan and billing details
         </p>
-      </div>
+      </motion.div>
 
-      {/* Trial Status Alert */}
       {isTrialActive && (
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          variants={cardVariants}
+          initial="hidden"
+          animate="show"
+          className="transform transition-all duration-200"
         >
-          <DashboardAlert
-            variant="success"
-            title={`🎉 You're on your 14-day free trial — ${daysLeft} days remaining!`}
-            description={`You're currently on the ${
-              billingData.plan
-            } plan. Your card will be charged CHF ${
-              billingData.price
-            } on ${formatDate(billingData.nextBillingDate)} unless you cancel.`}
-          >
-            <div className="mt-3">
-              <Button className="bg-green-600 hover:bg-green-700 text-white">
-                Upgrade Now
-              </Button>
-            </div>
-          </DashboardAlert>
+          <Alert variant="default" className="bg-green-50 border-green-200">
+            <AlertTitle>{`🎉 You're on your 14-day free trial — ${daysLeft} days remaining!`}</AlertTitle>
+            <AlertDescription>
+              You're currently on the {billingData.plan} plan. Your card will be
+              charged CHF {billingData.price} on{" "}
+              {formatDate(billingData.nextBillingDate)} unless you cancel.
+              <div className="mt-3">
+                <Button className="bg-green-600 hover:bg-green-700 text-white">
+                  Upgrade Now
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
         </motion.div>
       )}
 
-      <div className="grid gap-8 md:grid-cols-2">
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid gap-8 md:grid-cols-2"
+      >
         {/* Current Plan Card */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
+          variants={cardVariants}
+          whileHover="hover"
+          className="transform transition-all duration-200"
         >
           <Card>
             <CardHeader className="pb-4">
@@ -239,16 +274,25 @@ export default function BillingPage() {
 
               <div className="space-y-4">
                 <h4 className="font-medium">Plan Features</h4>
-                <ul className="space-y-2.5">
+                <motion.ul
+                  variants={containerVariants}
+                  initial="hidden"
+                  animate="show"
+                  className="space-y-2.5"
+                >
                   {PLANS[
                     billingData.plan.toLowerCase() as keyof typeof PLANS
                   ].features.map((feature: string, index: number) => (
-                    <li key={index} className="flex items-center gap-2 text-sm">
+                    <motion.li
+                      key={index}
+                      variants={cardVariants}
+                      className="flex items-center gap-2 text-sm"
+                    >
                       <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
                       <span>{feature}</span>
-                    </li>
+                    </motion.li>
                   ))}
-                </ul>
+                </motion.ul>
               </div>
 
               <div className="flex gap-3 pt-4">
@@ -276,9 +320,9 @@ export default function BillingPage() {
 
         {/* Usage Stats Card */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
+          variants={cardVariants}
+          whileHover="hover"
+          className="transform transition-all duration-200"
         >
           <Card>
             <CardHeader>
@@ -288,62 +332,69 @@ export default function BillingPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Menu Items Usage */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">Menu Items</span>
-                  <span className="text-gray-500">
-                    {billingData.usage.menuItems.used} of{" "}
-                    {billingData.usage.menuItems.limit} used
-                  </span>
-                </div>
-                <Progress
-                  value={
-                    (billingData.usage.menuItems.used /
-                      billingData.usage.menuItems.limit) *
-                    100
-                  }
-                  className="h-2 bg-gray-100 [&>div]:bg-green-600"
-                />
-              </div>
+              <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="show"
+                className="space-y-6"
+              >
+                {/* Menu Items Usage */}
+                <motion.div variants={cardVariants} className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium">Menu Items</span>
+                    <span className="text-gray-500">
+                      {billingData.usage.menuItems.used} of{" "}
+                      {billingData.usage.menuItems.limit} used
+                    </span>
+                  </div>
+                  <Progress
+                    value={
+                      (billingData.usage.menuItems.used /
+                        billingData.usage.menuItems.limit) *
+                      100
+                    }
+                    className="h-2 bg-gray-100 [&>div]:bg-green-600"
+                  />
+                </motion.div>
 
-              {/* Tables Usage */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">Tables with QR Codes</span>
-                  <span className="text-gray-500">
-                    {billingData.usage.tables.used} of{" "}
-                    {billingData.usage.tables.limit} used
-                  </span>
-                </div>
-                <Progress
-                  value={
-                    (billingData.usage.tables.used /
-                      billingData.usage.tables.limit) *
-                    100
-                  }
-                  className="h-2 bg-gray-100 [&>div]:bg-green-600"
-                />
-              </div>
+                {/* Tables Usage */}
+                <motion.div variants={cardVariants} className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium">Tables with QR Codes</span>
+                    <span className="text-gray-500">
+                      {billingData.usage.tables.used} of{" "}
+                      {billingData.usage.tables.limit} used
+                    </span>
+                  </div>
+                  <Progress
+                    value={
+                      (billingData.usage.tables.used /
+                        billingData.usage.tables.limit) *
+                      100
+                    }
+                    className="h-2 bg-gray-100 [&>div]:bg-green-600"
+                  />
+                </motion.div>
 
-              {/* Staff Usage */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">Staff Accounts</span>
-                  <span className="text-gray-500">
-                    {billingData.usage.staff.used} of{" "}
-                    {billingData.usage.staff.limit} used
-                  </span>
-                </div>
-                <Progress
-                  value={
-                    (billingData.usage.staff.used /
-                      billingData.usage.staff.limit) *
-                    100
-                  }
-                  className="h-2 bg-gray-100 [&>div]:bg-green-600"
-                />
-              </div>
+                {/* Staff Usage */}
+                <motion.div variants={cardVariants} className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium">Staff Accounts</span>
+                    <span className="text-gray-500">
+                      {billingData.usage.staff.used} of{" "}
+                      {billingData.usage.staff.limit} used
+                    </span>
+                  </div>
+                  <Progress
+                    value={
+                      (billingData.usage.staff.used /
+                        billingData.usage.staff.limit) *
+                      100
+                    }
+                    className="h-2 bg-gray-100 [&>div]:bg-green-600"
+                  />
+                </motion.div>
+              </motion.div>
 
               <Separator />
 
@@ -415,7 +466,7 @@ export default function BillingPage() {
             </CardContent>
           </Card>
         </motion.div>
-      </div>
+      </motion.div>
     </div>
   );
 }

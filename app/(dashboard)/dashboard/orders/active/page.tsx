@@ -169,12 +169,12 @@ const orderStatuses = [
 type OrderStatus = "new" | "preparing" | "ready" | "refunded";
 
 const formatTime = (date: Date) => {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    hourCycle: "h12",
-  }).format(date);
+  let hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  return `${hours}:${minutes} ${ampm}`;
 };
 
 export default function ActiveOrdersPage() {

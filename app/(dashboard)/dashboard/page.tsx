@@ -27,9 +27,39 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+
+// Add this function at the top level
+const formatTime = (date: Date) => {
+  let hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  return `${hours}:${minutes} ${ampm}`;
+};
+
+// Add these animation variants at the top level
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.2,
+    },
+  },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 },
+  hover: { y: -5, transition: { duration: 0.2 } },
+};
 
 export default function DashboardPage() {
   const [currentTime] = useState(new Date());
+  const router = useRouter();
 
   // Mock data - in a real app, this would come from the backend
   const stats = [
@@ -132,9 +162,14 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="flex items-center justify-between"
+      >
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-500">
@@ -145,23 +180,25 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <Bell className="h-5 w-5 text-gray-400" />
             <span className="text-sm text-gray-500">
-              {currentTime.toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {formatTime(currentTime)}
             </span>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+      >
         {stats.map((stat, index) => (
           <motion.div
             key={index}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
+            variants={cardVariants}
+            whileHover="hover"
+            className="transform transition-all duration-200"
           >
             <Card
               className={cn(
@@ -228,14 +265,16 @@ export default function DashboardPage() {
             </Card>
           </motion.div>
         ))}
-      </div>
+      </motion.div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent Orders */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.4 }}
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+          whileHover={{ scale: 1.01 }}
+          className="transform transition-all duration-200"
         >
           <Card>
             <CardHeader>
@@ -249,19 +288,27 @@ export default function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-green-600 border-green-200 hover:bg-green-50"
+                  className="gap-2"
+                  onClick={() => router.push("/dashboard/orders")}
                 >
-                  View all
-                  <ChevronRight className="ml-1 w-4 h-4" />
+                  View All
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {recentOrders.map((order) => (
-                  <div
+              <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="show"
+                className="space-y-4"
+              >
+                {recentOrders.map((order, index) => (
+                  <motion.div
                     key={order.id}
-                    className="flex items-center justify-between py-4 border-b last:border-0"
+                    variants={cardVariants}
+                    whileHover={{ x: 5 }}
+                    className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -297,18 +344,20 @@ export default function DashboardPage() {
                         {order.items} items
                       </p>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
             </CardContent>
           </Card>
         </motion.div>
 
         {/* Recent Payments */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.5 }}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+          whileHover={{ scale: 1.01 }}
+          className="transform transition-all duration-200"
         >
           <Card>
             <CardHeader>
@@ -322,19 +371,27 @@ export default function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-green-600 border-green-200 hover:bg-green-50"
+                  className="gap-2"
+                  onClick={() => router.push("/dashboard/payments")}
                 >
-                  View all
-                  <ChevronRight className="ml-1 w-4 h-4" />
+                  View All
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {recentPayments.map((payment) => (
-                  <div
+              <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="show"
+                className="space-y-4"
+              >
+                {recentPayments.map((payment, index) => (
+                  <motion.div
                     key={payment.id}
-                    className="flex items-center justify-between py-4 border-b last:border-0"
+                    variants={cardVariants}
+                    whileHover={{ x: 5 }}
+                    className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -368,9 +425,9 @@ export default function DashboardPage() {
                         {payment.status}
                       </Badge>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
             </CardContent>
           </Card>
         </motion.div>
