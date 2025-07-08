@@ -2,13 +2,7 @@
 
 import { use, useState } from "react";
 import { motion } from "framer-motion";
-import {
-  ArrowLeft,
-  CreditCard,
-  Smartphone,
-  Banknote,
-  Check,
-} from "lucide-react";
+import { ArrowLeft, CreditCard, Banknote, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { TipSelector } from "@/components/qr/TipSelector";
 import { useCart } from "@/hooks/useCart";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const paymentMethods = [
   {
@@ -23,13 +18,6 @@ const paymentMethods = [
     name: "Credit Card",
     description: "Pay with Visa, Mastercard, or American Express",
     icon: CreditCard,
-    color: "blue",
-  },
-  {
-    id: "twint",
-    name: "TWINT",
-    description: "Swiss mobile payment app",
-    icon: Smartphone,
     color: "blue",
   },
   {
@@ -47,11 +35,13 @@ export default function CheckoutPage({
   params: Promise<{ tableId: string }>;
 }) {
   const resolvedParams = use(params);
+  const router = useRouter();
   const { cart, getTotalPrice, clearCart } = useCart();
   const [selectedPayment, setSelectedPayment] = useState("");
   const [email, setEmail] = useState("");
   const [tip, setTip] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const subtotal = getTotalPrice();
   const tax = subtotal * 0.077;
@@ -61,20 +51,30 @@ export default function CheckoutPage({
     if (!selectedPayment) return;
 
     setIsProcessing(true);
+    setIsRedirecting(true);
 
     // Simulate payment processing
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
+    // Store cart items in memory before clearing
+    const paymentMethod = selectedPayment;
+    const totalAmount = total;
+    const tipAmount = tip;
+
     // Clear cart and redirect to confirmation
     clearCart();
-    window.location.href = `/qr/${
-      resolvedParams.tableId
-    }/confirmation?payment=${selectedPayment}&total=${total.toFixed(
-      2
-    )}&tip=${tip.toFixed(2)}`;
+
+    router.push(
+      `/qr/${
+        resolvedParams.tableId
+      }/confirmation?payment=${paymentMethod}&total=${totalAmount.toFixed(
+        2
+      )}&tip=${tipAmount.toFixed(2)}`
+    );
   };
 
-  if (cart.length === 0) {
+  // Show empty cart state only if cart is empty and we're not in the process of redirecting
+  if (cart.length === 0 && !isRedirecting) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center px-4">
         <motion.div
@@ -179,16 +179,10 @@ export default function CheckoutPage({
           </div>
         </motion.div>
 
-        {/* Tip Selection */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-        >
-          <TipSelector subtotal={subtotal} onTipChange={setTip} />
-        </motion.div>
+        {/* Tip Selector */}
+        <TipSelector subtotal={subtotal} onTipChange={setTip} />
 
-        {/* Enhanced Payment Methods */}
+        {/* Payment Methods */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -254,50 +248,55 @@ export default function CheckoutPage({
           </div>
         </motion.div>
 
-        {/* Email Input for Digital Receipt */}
-        {(selectedPayment === "stripe" || selectedPayment === "twint") && (
+        {/* Email Input */}
+        {selectedPayment === "stripe" && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            transition={{ duration: 0.3 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
             className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
           >
-            <Label
-              htmlFor="email"
-              className="text-base font-semibold text-gray-900 mb-3 block"
-            >
-              Email Address
+            <Label htmlFor="email" className="text-gray-700 font-medium mb-2">
+              Email for Receipt
             </Label>
-            <p className="text-sm text-gray-500 mb-4">
-              We'll send your receipt and order updates here
-            </p>
             <Input
               id="email"
               type="email"
-              placeholder="your.email@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-12 border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-xl text-base"
+              placeholder="your@email.com"
+              className="h-12 text-lg border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-xl"
             />
           </motion.div>
         )}
       </div>
 
-      {/* Enhanced Confirm Button */}
+      {/* Enhanced Proceed Button */}
       <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-gradient-to-t from-white via-white/95 to-transparent">
         <Button
-          onClick={handleConfirmOrder}
           disabled={!selectedPayment || isProcessing}
+          onClick={handleConfirmOrder}
           size="lg"
-          className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-xl hover:shadow-2xl transition-all duration-200 h-16 disabled:opacity-50 rounded-2xl text-lg font-semibold"
+          className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-xl hover:shadow-2xl transition-all duration-200 h-16 rounded-2xl text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
         >
           {isProcessing ? (
-            <div className="flex items-center gap-3">
-              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Processing Payment...
+            <div className="flex items-center justify-center gap-3">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{
+                  duration: 1,
+                  repeat: Number.POSITIVE_INFINITY,
+                  ease: "linear",
+                }}
+                className="w-6 h-6 border-3 border-white border-t-transparent rounded-full"
+              />
+              <span>Processing...</span>
             </div>
           ) : (
-            <span>Confirm Order • CHF {total.toFixed(2)}</span>
+            <>
+              Confirm Order • CHF {total.toFixed(2)}
+              <motion.div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+            </>
           )}
         </Button>
       </div>

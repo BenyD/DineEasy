@@ -9,6 +9,7 @@ import { CartButton } from "@/components/qr/CartButton";
 import { useCart } from "@/hooks/useCart";
 import { MenuItem } from "@/types";
 import { MapPin, Clock, Star, Info } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Mock data - in real app this would come from API
 const mockRestaurant = {
@@ -142,38 +143,49 @@ export default function MenuPage({
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white pb-32">
       {/* Enhanced Restaurant Header */}
-      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-lg border-b border-gray-100">
-        <div className="px-4 py-4">
+      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-lg border-b border-gray-100 shadow-sm">
+        <div className="px-4 py-6">
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-start gap-4"
+            className="flex items-start gap-5"
           >
             {/* Restaurant Logo */}
             <div className="relative flex-shrink-0">
-              <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg">
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg ring-1 ring-black/5"
+              >
                 <img
                   src={mockRestaurant.logo || "/placeholder.svg"}
                   alt={mockRestaurant.name}
                   className="w-full h-full object-cover"
                   loading="eager"
                 />
-              </div>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center shadow-md">
+              </motion.div>
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="absolute -bottom-1 -right-1 w-7 h-7 bg-green-500 rounded-full border-2 border-white flex items-center justify-center shadow-md"
+              >
                 <span className="text-white text-xs">✓</span>
-              </div>
+              </motion.div>
             </div>
 
             {/* Restaurant Info */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-1">
-                <h1 className="text-xl font-bold text-gray-900 truncate">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <motion.h1
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-2xl font-bold text-gray-900 leading-tight"
+                >
                   {mockRestaurant.name}
-                </h1>
+                </motion.h1>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`p-1.5 hover:bg-gray-100 rounded-full transition-colors ${
+                  className={`p-2 hover:bg-gray-100 rounded-full transition-colors ${
                     showInfo ? "bg-gray-100" : ""
                   }`}
                   onClick={() => setShowInfo(!showInfo)}
@@ -186,8 +198,8 @@ export default function MenuPage({
                 </Button>
               </div>
 
-              <div className="flex items-center gap-3 text-sm text-gray-600">
-                <div className="flex items-center gap-1">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 mb-2">
+                <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-full">
                   <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
                   <span className="font-medium">{mockRestaurant.rating}</span>
                   <span className="text-gray-400">
@@ -195,7 +207,9 @@ export default function MenuPage({
                   </span>
                 </div>
                 <span className="text-gray-300">•</span>
-                <span>{mockRestaurant.cuisine}</span>
+                <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
+                  {mockRestaurant.cuisine}
+                </span>
               </div>
 
               <AnimatePresence>
@@ -205,24 +219,26 @@ export default function MenuPage({
                     animate={{ opacity: 1, height: "auto", marginTop: 12 }}
                     exit={{ opacity: 0, height: 0, marginTop: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="overflow-hidden bg-gray-50 rounded-xl border border-gray-200"
+                    className="overflow-hidden"
                   >
-                    <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <div className="bg-white p-1.5 rounded-lg">
-                          <MapPin className="w-4 h-4 text-green-600" />
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-sm">
+                      <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-white/80 p-2 rounded-xl shadow-sm">
+                            <MapPin className="w-5 h-5 text-green-600" />
+                          </div>
+                          <span className="text-sm text-gray-700 font-medium">
+                            {mockRestaurant.address}
+                          </span>
                         </div>
-                        <span className="text-sm truncate">
-                          {mockRestaurant.address}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <div className="bg-white p-1.5 rounded-lg">
-                          <Clock className="w-4 h-4 text-green-600" />
+                        <div className="flex items-center gap-3">
+                          <div className="bg-white/80 p-2 rounded-xl shadow-sm">
+                            <Clock className="w-5 h-5 text-green-600" />
+                          </div>
+                          <span className="text-sm text-gray-700 font-medium">
+                            {mockRestaurant.openingHours}
+                          </span>
                         </div>
-                        <span className="text-sm">
-                          {mockRestaurant.openingHours}
-                        </span>
                       </div>
                     </div>
                   </motion.div>
@@ -232,13 +248,13 @@ export default function MenuPage({
               <div className="flex items-center gap-2 mt-3">
                 <Badge
                   variant="outline"
-                  className="text-sm border-green-200 text-green-700 bg-green-50"
+                  className="text-sm border-green-200 text-green-700 bg-green-50 px-3 py-1 rounded-full font-medium"
                 >
                   Table {resolvedParams.tableId}
                 </Badge>
                 <Badge
                   variant="outline"
-                  className="text-sm border-blue-200 text-blue-700 bg-blue-50"
+                  className="text-sm border-blue-200 text-blue-700 bg-blue-50 px-3 py-1 rounded-full font-medium"
                 >
                   Order in Progress
                 </Badge>
@@ -247,12 +263,13 @@ export default function MenuPage({
           </motion.div>
 
           {/* Enhanced Category Tabs */}
-          <div className="mt-6 flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
+          <div className="mt-8 -mb-2 flex gap-3 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4">
             {categories.map((category, index) => {
               const availableItems = category.items.filter(
                 (item) => item.available
               ).length;
               const totalItems = category.items.length;
+              const isActive = activeCategory === category.id;
 
               return (
                 <motion.div
@@ -262,35 +279,22 @@ export default function MenuPage({
                   transition={{ delay: index * 0.1 }}
                 >
                   <Button
-                    variant={
-                      activeCategory === category.id ? "default" : "outline"
-                    }
+                    variant="outline"
                     size="lg"
                     onClick={() => setActiveCategory(category.id)}
-                    className={`relative group transition-all duration-200 ${
-                      activeCategory === category.id
-                        ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-md"
-                        : "hover:bg-green-50 hover:border-green-200 hover:shadow-sm"
-                    }`}
-                  >
-                    <span className="relative z-10">{category.name}</span>
-                    {activeCategory === category.id && (
-                      <motion.div
-                        layoutId="activeTab"
-                        className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-600 rounded-md"
-                        initial={false}
-                        transition={{
-                          type: "spring",
-                          bounce: 0.2,
-                          duration: 0.6,
-                        }}
-                      />
+                    className={cn(
+                      "relative group h-14 px-6 transition-all duration-300",
+                      isActive
+                        ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 border-transparent text-white shadow-md hover:shadow-lg"
+                        : "hover:bg-green-50 hover:border-green-200 hover:shadow-sm border-2 text-gray-700 hover:text-gray-900"
                     )}
-                    <div className="relative z-10 ml-2 flex gap-1 items-center">
+                  >
+                    <div className="flex flex-col items-center relative z-10">
+                      <span className="font-medium">{category.name}</span>
                       <Badge
                         variant="secondary"
-                        className={`${
-                          activeCategory === category.id
+                        className={`mt-1 ${
+                          isActive
                             ? "bg-white/20 text-white"
                             : "bg-gray-100 text-gray-600"
                         }`}
@@ -315,7 +319,7 @@ export default function MenuPage({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
-            className="space-y-4"
+            className="space-y-6"
           >
             {categories
               .find((cat) => cat.id === activeCategory)
