@@ -1,28 +1,44 @@
 "use client";
 
 import { useEffect } from "react";
-import type { ReactNode } from "react";
-import { AnimatePresence } from "framer-motion";
-import { initializeCookies } from "@/lib/cookies";
-import { CookieConsent } from "@/components/elements/CookieConsent";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
-interface RootLayoutClientProps {
-  children: ReactNode;
-  className: string;
-}
+export default function RootLayoutClient() {
+  const router = useRouter();
+  const supabase = createClient();
 
-export function RootLayoutClient({
-  children,
-  className,
-}: RootLayoutClientProps) {
   useEffect(() => {
-    initializeCookies();
-  }, []);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (event: AuthChangeEvent, session: Session | null) => {
+        if (event === "SIGNED_IN") {
+          router.refresh();
+          toast.success("Signed in successfully");
+        }
+        if (event === "SIGNED_OUT") {
+          router.refresh();
+          router.push("/login");
+          toast.success("Signed out successfully");
+        }
+        if (event === "USER_UPDATED") {
+          router.refresh();
+          toast.success("Profile updated");
+        }
+        if (event === "PASSWORD_RECOVERY") {
+          router.push("/reset-password");
+          toast.info("Please reset your password");
+        }
+      }
+    );
 
-  return (
-    <div className={className}>
-      <AnimatePresence mode="wait">{children}</AnimatePresence>
-      <CookieConsent />
-    </div>
-  );
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router, supabase]);
+
+  return null;
 }

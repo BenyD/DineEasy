@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "@/lib/actions/auth";
 import {
   BarChart3,
   ChefHat,
@@ -619,7 +620,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   Help & Support
                 </Link>
                 <button
-                  onClick={() => console.log("Sign out")}
+                  onClick={() => signOut()}
                   className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
                 >
                   <LogOut className="h-4 w-4" />

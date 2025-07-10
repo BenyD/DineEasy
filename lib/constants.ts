@@ -3,6 +3,10 @@ export const PLANS = {
     name: "Starter",
     price: { monthly: 15, yearly: 144 },
     currency: "CHF",
+    stripe_price_id: {
+      monthly: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID!,
+      yearly: process.env.STRIPE_STARTER_YEARLY_PRICE_ID!,
+    },
     features: [
       "Manual Digital Menu",
       "Up to 25 menu items",
@@ -30,6 +34,10 @@ export const PLANS = {
     name: "Pro",
     price: { monthly: 39, yearly: 374 },
     currency: "CHF",
+    stripe_price_id: {
+      monthly: process.env.STRIPE_PRO_MONTHLY_PRICE_ID!,
+      yearly: process.env.STRIPE_PRO_YEARLY_PRICE_ID!,
+    },
     features: [
       "Everything in Starter",
       "Up to 100 menu items",
@@ -54,6 +62,10 @@ export const PLANS = {
     name: "Elite",
     price: { monthly: 79, yearly: 758 },
     currency: "CHF",
+    stripe_price_id: {
+      monthly: process.env.STRIPE_ELITE_MONTHLY_PRICE_ID!,
+      yearly: process.env.STRIPE_ELITE_YEARLY_PRICE_ID!,
+    },
     features: [
       "Everything in Pro",
       "Unlimited Tables & QR Codes",
