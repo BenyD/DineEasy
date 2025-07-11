@@ -1,35 +1,38 @@
 import Stripe from "stripe";
+import { SUBSCRIPTION, PLANS } from "./constants";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY is not set in environment variables");
-}
+// Validate required environment variables
+const requiredEnvVars = [
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "STRIPE_STARTER_MONTHLY_PRICE_ID",
+  "STRIPE_STARTER_YEARLY_PRICE_ID",
+  "STRIPE_PRO_MONTHLY_PRICE_ID",
+  "STRIPE_PRO_YEARLY_PRICE_ID",
+  "STRIPE_ELITE_MONTHLY_PRICE_ID",
+  "STRIPE_ELITE_YEARLY_PRICE_ID",
+] as const;
 
-if (!process.env.STRIPE_WEBHOOK_SECRET) {
-  throw new Error("STRIPE_WEBHOOK_SECRET is not set in environment variables");
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    throw new Error(`${envVar} is not set in environment variables`);
+  }
 }
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-06-30.basil",
+  apiVersion: "2025-06-30.basil", // Keep the future version as it seems to be required by the types
   typescript: true,
 });
 
-export const STRIPE_PLANS = {
-  starter: {
-    monthly: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID,
-    yearly: process.env.STRIPE_STARTER_YEARLY_PRICE_ID,
-  },
-  pro: {
-    monthly: process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
-    yearly: process.env.STRIPE_PRO_YEARLY_PRICE_ID,
-  },
-  elite: {
-    monthly: process.env.STRIPE_ELITE_MONTHLY_PRICE_ID,
-    yearly: process.env.STRIPE_ELITE_YEARLY_PRICE_ID,
-  },
-} as const;
+export type StripePlan = keyof typeof PLANS;
+export type StripeInterval = keyof typeof SUBSCRIPTION.BILLING_PERIODS;
 
-export type StripePlan = keyof typeof STRIPE_PLANS;
-export type StripeInterval = keyof typeof STRIPE_PLANS.starter;
+export type SubscriptionMetadata = {
+  restaurantId: string;
+  plan: StripePlan;
+  interval: StripeInterval;
+  [key: string]: string; // Add index signature for Stripe metadata compatibility
+};
 
 export async function createStripeCustomer(email: string, name?: string) {
   const customer = await stripe.customers.create({
@@ -42,7 +45,8 @@ export async function createStripeCustomer(email: string, name?: string) {
 export async function createStripeSubscription(
   customerId: string,
   priceId: string,
-  trialDays?: number
+  metadata: SubscriptionMetadata,
+  trialDays: number = SUBSCRIPTION.TRIAL_DAYS
 ) {
   const subscription = await stripe.subscriptions.create({
     customer: customerId,
@@ -51,13 +55,19 @@ export async function createStripeSubscription(
     payment_behavior: "default_incomplete",
     payment_settings: { save_default_payment_method: "on_subscription" },
     expand: ["latest_invoice.payment_intent"],
+    metadata: {
+      restaurantId: metadata.restaurantId,
+      plan: metadata.plan,
+      interval: metadata.interval,
+    },
   });
   return subscription;
 }
 
 export async function updateStripeSubscription(
   subscriptionId: string,
-  priceId: string
+  priceId: string,
+  metadata?: Partial<SubscriptionMetadata>
 ) {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   const updatedSubscription = await stripe.subscriptions.update(
@@ -69,6 +79,14 @@ export async function updateStripeSubscription(
           price: priceId,
         },
       ],
+      ...(metadata && {
+        metadata: {
+          ...subscription.metadata,
+          ...(metadata.restaurantId && { restaurantId: metadata.restaurantId }),
+          ...(metadata.plan && { plan: metadata.plan }),
+          ...(metadata.interval && { interval: metadata.interval }),
+        },
+      }),
     }
   );
   return updatedSubscription;
@@ -82,9 +100,10 @@ export async function cancelStripeSubscription(subscriptionId: string) {
 export async function createStripeCheckoutSession(
   customerId: string,
   priceId: string,
+  metadata: SubscriptionMetadata,
   successUrl: string,
   cancelUrl: string,
-  trialDays?: number
+  trialDays: number = SUBSCRIPTION.TRIAL_DAYS
 ) {
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
@@ -92,7 +111,14 @@ export async function createStripeCheckoutSession(
     mode: "subscription",
     success_url: successUrl,
     cancel_url: cancelUrl,
-    subscription_data: trialDays ? { trial_period_days: trialDays } : undefined,
+    subscription_data: {
+      trial_period_days: trialDays,
+      metadata: {
+        restaurantId: metadata.restaurantId,
+        plan: metadata.plan,
+        interval: metadata.interval,
+      },
+    },
   });
   return session;
 }

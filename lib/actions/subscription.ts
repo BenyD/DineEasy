@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Database } from "@/types/supabase";
 import { stripe } from "@/lib/stripe";
-import { PLANS, TRIAL_DAYS } from "@/lib/constants";
+import { PLANS, SUBSCRIPTION } from "@/lib/constants";
 
 type Subscription = Database["public"]["Tables"]["subscriptions"]["Insert"];
 
@@ -21,6 +21,11 @@ export async function createSubscription(formData: FormData) {
   const restaurantId = formData.get("restaurant_id") as string;
   const plan = formData.get("plan") as Subscription["plan"];
   const interval = formData.get("interval") as Subscription["interval"];
+
+  // Validate interval
+  if (!Object.values(SUBSCRIPTION.BILLING_PERIODS).includes(interval)) {
+    return { error: "Invalid billing interval" };
+  }
 
   // Get restaurant details
   const { data: restaurant, error: restaurantError } = await supabase
@@ -70,9 +75,11 @@ export async function createSubscription(formData: FormData) {
       ],
       mode: "subscription",
       subscription_data: {
-        trial_period_days: TRIAL_DAYS,
+        trial_period_days: SUBSCRIPTION.TRIAL_DAYS,
         metadata: {
           restaurantId,
+          plan,
+          interval,
         },
       },
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
