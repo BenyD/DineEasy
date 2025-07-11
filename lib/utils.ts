@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { randomBytes } from "crypto";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -53,4 +54,9 @@ export function bytesToSize(bytes: number): string {
   if (bytes === 0) return "0 Byte";
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${Math.round(bytes / Math.pow(1024, i))} ${sizes[i]}`;
+}
+
+export function generateEmailVerificationToken(): string {
+  // Generate a random 32-byte token and convert it to a hex string
+  return randomBytes(32).toString("hex");
 }

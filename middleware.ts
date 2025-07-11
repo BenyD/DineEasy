@@ -14,7 +14,13 @@ const publicRoutes = [
 ];
 
 // Define auth routes that should redirect to dashboard if authenticated
-const authRoutes = ["/login", "/signup", "/forgot-password", "/reset-password"];
+const authRoutes = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/verify-email",
+];
 
 // Define onboarding routes that require authentication but not a complete profile
 const onboardingRoutes = ["/setup", "/select-plan"];
@@ -125,4 +131,3 @@ export const config = {
     "/((?!_next/static|_next/image|favicon.ico|images).*)",
   ],
 };
- 

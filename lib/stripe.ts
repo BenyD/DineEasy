@@ -166,12 +166,13 @@ export async function refundPayment(
 
 export async function constructWebhookEvent(
   payload: string | Buffer,
-  signature: string
+  signature: string,
+  webhookSecret: string
 ) {
   const event = stripe.webhooks.constructEvent(
     payload,
     signature,
-    process.env.STRIPE_WEBHOOK_SECRET!
+    webhookSecret
   );
   return event;
 }

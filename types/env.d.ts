@@ -20,5 +20,8 @@ declare namespace NodeJS {
 
     // App
     NEXT_PUBLIC_APP_URL: string;
+
+    // Email
+    RESEND_API_KEY: string;
   }
 }

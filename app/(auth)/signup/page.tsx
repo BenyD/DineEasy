@@ -14,13 +14,22 @@ import {
   User,
   ArrowRight,
   Check,
+  Store,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { PLATFORM_COMMISSION, SUBSCRIPTION } from "@/lib/constants";
+import { signUp } from "@/lib/actions/auth";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -29,6 +38,7 @@ export default function SignUpPage() {
     email: "",
     password: "",
     confirmPassword: "",
+    type: "restaurant" as const, // Add default type
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -52,71 +62,72 @@ export default function SignUpPage() {
       setPasswordError("Passwords do not match");
       return false;
     }
+
+    // Check password length
     if (formData.password.length < 8) {
       setPasswordError("Password must be at least 8 characters");
       return false;
     }
+
+    // Check for lowercase letters
+    if (!/[a-z]/.test(formData.password)) {
+      setPasswordError("Password must contain at least one lowercase letter");
+      return false;
+    }
+
+    // Check for uppercase letters
+    if (!/[A-Z]/.test(formData.password)) {
+      setPasswordError("Password must contain at least one uppercase letter");
+      return false;
+    }
+
+    // Check for numbers
+    if (!/\d/.test(formData.password)) {
+      setPasswordError("Password must contain at least one number");
+      return false;
+    }
+
+    // Check for special characters
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(formData.password)) {
+      setPasswordError("Password must contain at least one special character");
+      return false;
+    }
+
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
+      const formElement = e.currentTarget;
+      const formData = new FormData(formElement);
 
-      // Sign up the user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.restaurantName, // Store restaurant name temporarily in user metadata
-          },
-        },
+      // Get the restaurant name and set it as full_name
+      const restaurantName = formData.get("restaurantName");
+      formData.set("full_name", restaurantName as string);
+
+      console.log("Submitting signup form with data:", {
+        email: formData.get("email"),
+        restaurantName: formData.get("restaurantName"),
+        full_name: formData.get("full_name"),
       });
 
-      if (authError) {
-        throw authError;
+      const result = await signUp(formData);
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
       }
 
-      if (!authData.user) {
-        throw new Error("Failed to create account");
-      }
-
-      // Create restaurant record
-      const { error: restaurantError } = await supabase
-        .from("restaurants")
-        .insert({
-          owner_id: authData.user.id,
-          name: formData.restaurantName,
-          email: formData.email,
-          slug: formData.restaurantName
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-"),
-          subscription_status: "trialing",
-          trial_end: new Date(
-            Date.now() + SUBSCRIPTION.TRIAL_DAYS * 24 * 60 * 60 * 1000
-          ).toISOString(),
-        });
-
-      if (restaurantError) {
-        throw restaurantError;
-      }
-
-      // Redirect to plan selection
-      router.push("/select-plan");
-      router.refresh();
-
-      toast.success("Account created successfully!");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to create account");
+      toast.success(
+        result.message || "Check your email to verify your account"
+      );
+      router.push("/verify-email");
+    } catch (error) {
+      console.error("Signup error:", error);
+      toast.error("An unexpected error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -166,6 +177,31 @@ export default function SignUpPage() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="type" className="text-sm font-medium">
+                Business Type
+              </Label>
+              <div className="relative">
+                <Store className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+                <Select
+                  value={formData.type}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, type: value as any }))
+                  }
+                >
+                  <SelectTrigger className="h-12 pl-10 border-gray-200 focus-visible:ring-green-500">
+                    <SelectValue placeholder="Select your business type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="restaurant">Restaurant</SelectItem>
+                    <SelectItem value="cafe">Café</SelectItem>
+                    <SelectItem value="bar">Bar</SelectItem>
+                    <SelectItem value="food-truck">Food Truck</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium">
                 Email Address
               </Label>
@@ -211,6 +247,61 @@ export default function SignUpPage() {
                     <Eye className="h-5 w-5" />
                   )}
                 </button>
+              </div>
+              <div className="text-sm space-y-2 mt-2">
+                <p className="text-gray-500">Password must contain:</p>
+                <ul className="space-y-1 text-sm">
+                  <li
+                    className={`flex items-center gap-2 ${
+                      formData.password.length >= 8
+                        ? "text-green-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    <Check className="h-4 w-4" />
+                    At least 8 characters
+                  </li>
+                  <li
+                    className={`flex items-center gap-2 ${
+                      /[a-z]/.test(formData.password)
+                        ? "text-green-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    <Check className="h-4 w-4" />
+                    One lowercase letter
+                  </li>
+                  <li
+                    className={`flex items-center gap-2 ${
+                      /[A-Z]/.test(formData.password)
+                        ? "text-green-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    <Check className="h-4 w-4" />
+                    One uppercase letter
+                  </li>
+                  <li
+                    className={`flex items-center gap-2 ${
+                      /\d/.test(formData.password)
+                        ? "text-green-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    <Check className="h-4 w-4" />
+                    One number
+                  </li>
+                  <li
+                    className={`flex items-center gap-2 ${
+                      /[!@#$%^&*(),.?":{}|<>]/.test(formData.password)
+                        ? "text-green-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    <Check className="h-4 w-4" />
+                    One special character (!@#$%^&*(),.?":{}|&lt;&gt;)
+                  </li>
+                </ul>
               </div>
             </div>
 
