@@ -62,6 +62,18 @@ export async function signUp(formData: FormData) {
     // Generate verification token
     const verificationToken = generateEmailVerificationToken();
 
+    // Sign in the user to get a fresh session
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+    if (signInError) {
+      console.error("Error signing in after signup:", signInError);
+      return { error: "Error creating session" };
+    }
+
     // Store the verification token in the user's metadata
     const { error: updateError } = await supabase.auth.updateUser({
       data: {
@@ -90,12 +102,13 @@ export async function signUp(formData: FormData) {
       id: signUpData.user.id,
       email: signUpData.user.email,
       verificationSent: true,
+      sessionExists: !!signInData.session,
     });
 
     return {
       success: true,
       message: "Check your email to verify your account",
-      session: signUpData.session,
+      session: signInData.session,
       user: signUpData.user,
     };
   } catch (error) {

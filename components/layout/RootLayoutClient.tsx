@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 export default function RootLayoutClient() {
   const router = useRouter();
+  const pathname = usePathname();
   const supabase = createClient();
 
   useEffect(() => {
@@ -17,7 +18,13 @@ export default function RootLayoutClient() {
       (event: AuthChangeEvent, session: Session | null) => {
         if (event === "SIGNED_IN") {
           router.refresh();
-          toast.success("Signed in successfully");
+          // Only show the toast if not on signup or verify-email pages
+          if (
+            !pathname?.includes("/signup") &&
+            !pathname?.includes("/verify-email")
+          ) {
+            toast.success("Signed in successfully");
+          }
         }
         if (event === "SIGNED_OUT") {
           router.refresh();
@@ -26,7 +33,10 @@ export default function RootLayoutClient() {
         }
         if (event === "USER_UPDATED") {
           router.refresh();
-          toast.success("Profile updated");
+          // Only show the toast if not on verify-email page
+          if (!pathname?.includes("/verify-email")) {
+            toast.success("Profile updated");
+          }
         }
         if (event === "PASSWORD_RECOVERY") {
           router.push("/reset-password");
@@ -38,7 +48,7 @@ export default function RootLayoutClient() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [router, supabase]);
+  }, [router, pathname, supabase]);
 
   return null;
 }

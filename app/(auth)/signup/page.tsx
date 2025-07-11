@@ -14,18 +14,10 @@ import {
   User,
   ArrowRight,
   Check,
-  Store,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { PLATFORM_COMMISSION, SUBSCRIPTION } from "@/lib/constants";
@@ -34,11 +26,10 @@ import { signUp } from "@/lib/actions/auth";
 export default function SignUpPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
-    restaurantName: "",
+    fullName: "",
     email: "",
     password: "",
     confirmPassword: "",
-    type: "restaurant" as const, // Add default type
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -114,13 +105,13 @@ export default function SignUpPage() {
         const formElement = e.currentTarget;
         const formData = new FormData(formElement);
 
-        // Get the restaurant name and set it as full_name
-        const restaurantName = formData.get("restaurantName");
-        formData.set("full_name", restaurantName as string);
+        // Set the full name
+        const fullName = formData.get("fullName");
+        formData.set("full_name", fullName as string);
 
         console.log("Submitting signup form with data:", {
           email: formData.get("email"),
-          restaurantName: formData.get("restaurantName"),
+          fullName: formData.get("fullName"),
           full_name: formData.get("full_name"),
         });
 
@@ -135,6 +126,13 @@ export default function SignUpPage() {
         if (result.session) {
           const supabase = createClient();
           await supabase.auth.setSession(result.session);
+
+          // Store tokens in localStorage for verification page
+          localStorage.setItem("sb-access-token", result.session.access_token);
+          localStorage.setItem(
+            "sb-refresh-token",
+            result.session.refresh_token
+          );
         }
 
         resolve(result);
@@ -185,46 +183,21 @@ export default function SignUpPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="restaurantName" className="text-sm font-medium">
-                Restaurant Name
+              <Label htmlFor="fullName" className="text-sm font-medium">
+                Full Name
               </Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <Input
-                  id="restaurantName"
-                  name="restaurantName"
+                  id="fullName"
+                  name="fullName"
                   type="text"
-                  placeholder="Enter your restaurant name"
-                  value={formData.restaurantName}
+                  placeholder="Enter your full name"
+                  value={formData.fullName}
                   onChange={handleChange}
                   required
                   className="h-12 pl-10 border-gray-200 focus-visible:ring-green-500"
                 />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="type" className="text-sm font-medium">
-                Business Type
-              </Label>
-              <div className="relative">
-                <Store className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-                <Select
-                  value={formData.type}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, type: value as any }))
-                  }
-                >
-                  <SelectTrigger className="h-12 pl-10 border-gray-200 focus-visible:ring-green-500">
-                    <SelectValue placeholder="Select your business type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="restaurant">Restaurant</SelectItem>
-                    <SelectItem value="cafe">Café</SelectItem>
-                    <SelectItem value="bar">Bar</SelectItem>
-                    <SelectItem value="food-truck">Food Truck</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
 

@@ -26,32 +26,24 @@ export default function VerifyEmailPage() {
       try {
         const supabase = createClient();
 
-        // First try to get the session
+        // First check if we have a session
         const {
           data: { session },
         } = await supabase.auth.getSession();
 
         if (!session) {
-          console.log("No session found, attempting to recover from URL");
-          // If no session, check if we have a hash in the URL (Supabase adds this on redirects)
-          const hashParams = new URLSearchParams(
-            window.location.hash.substring(1)
-          );
-          const access_token = hashParams.get("access_token");
-          const refresh_token = hashParams.get("refresh_token");
+          // If no session, try to get it from local storage
+          const accessToken = localStorage.getItem("sb-access-token");
+          const refreshToken = localStorage.getItem("sb-refresh-token");
 
-          if (access_token && refresh_token) {
-            // Try to set the session from the URL parameters
+          if (accessToken && refreshToken) {
             const { error: sessionError } = await supabase.auth.setSession({
-              access_token,
-              refresh_token,
+              access_token: accessToken,
+              refresh_token: refreshToken,
             });
 
             if (sessionError) {
-              console.error("Error setting session:", sessionError);
-              setVerificationStatus("error");
-              setError("Session expired. Please try signing up again.");
-              return;
+              throw new Error("Failed to restore session");
             }
           }
         }
@@ -68,8 +60,6 @@ export default function VerifyEmailPage() {
           setError("Session expired. Please try signing up again.");
           return;
         }
-
-        console.log("User metadata:", user.user_metadata);
 
         // Verify the token matches and hasn't expired
         const storedToken = user.user_metadata?.verification_token;
@@ -181,9 +171,18 @@ export default function VerifyEmailPage() {
               Verification failed
             </h1>
             <p className="text-gray-500">{error}</p>
-            <Button onClick={() => router.push("/signup")} className="mt-4">
-              Back to Sign Up
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button onClick={() => window.location.reload()} className="mt-4">
+                Try Again
+              </Button>
+              <Button
+                onClick={() => router.push("/signup")}
+                variant="outline"
+                className="mt-2"
+              >
+                Back to Sign Up
+              </Button>
+            </div>
           </>
         )}
       </motion.div>
