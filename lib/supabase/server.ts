@@ -34,3 +34,30 @@ export const createClient = () => {
     }
   );
 };
+
+// Admin client with service role privileges for operations that need elevated permissions
+export const createAdminClient = () => {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY environment variable is not set"
+    );
+  }
+
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      cookies: {
+        async get(name: string) {
+          return undefined; // Admin client doesn't need cookies
+        },
+        async set(name: string, value: string, options: any) {
+          // No-op for admin client
+        },
+        async remove(name: string, options: any) {
+          // No-op for admin client
+        },
+      },
+    }
+  );
+};

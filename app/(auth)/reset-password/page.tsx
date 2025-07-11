@@ -5,12 +5,13 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Lock, ArrowLeft, Shield } from "lucide-react";
+import { Eye, EyeOff, Lock, ArrowLeft, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
+import { resetPassword } from "@/lib/actions/auth";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/layout/Logo";
 
@@ -28,68 +29,139 @@ export default function ResetPasswordPage() {
   const [isTokenValid, setIsTokenValid] = useState(false);
 
   useEffect(() => {
-    // Check if we have the necessary parameters from the reset link
-    const hasParams = searchParams.has("code") && searchParams.has("type");
-    setIsTokenValid(hasParams);
+    const verifyResetToken = async () => {
+      // Check if we have the necessary parameters from the reset link
+      const token = searchParams.get("token");
+      const email = searchParams.get("email");
 
-    if (!hasParams) {
-      toast.error("Invalid or expired reset link");
-    }
+      console.log("Reset password URL params:", { token, email });
+
+      if (!token || !email) {
+        console.log("Invalid URL parameters for password reset");
+        setIsTokenValid(false);
+        toast.error("Invalid or expired reset link");
+        return;
+      }
+
+      try {
+        // For custom tokens, we just need to validate the token format
+        // The actual verification will be done in the server action
+        if (!token || token.length < 10) {
+          console.error("Invalid token format");
+          setIsTokenValid(false);
+          toast.error("Invalid reset token format");
+          return;
+        }
+
+        console.log("Custom reset token format validated successfully");
+        setIsTokenValid(true);
+      } catch (error) {
+        console.error("Error validating reset token:", error);
+        setIsTokenValid(false);
+        toast.error("Failed to validate reset link");
+      }
+    };
+
+    verifyResetToken();
   }, [searchParams]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+  const validatePassword = (password: string): string | null => {
+    if (password.length < 8) {
+      return "Password must be at least 8 characters";
+    }
+    if (!/[A-Z]/.test(password)) {
+      return "Password must contain at least one uppercase letter";
+    }
+    if (!/[a-z]/.test(password)) {
+      return "Password must contain at least one lowercase letter";
+    }
+    if (!/[0-9]/.test(password)) {
+      return "Password must contain at least one number";
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      return "Password must contain at least one special character";
+    }
+    return null;
+  };
 
-    // Clear password error when user types
-    if (e.target.name === "password" || e.target.name === "confirmPassword") {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Validate password as user types
+    if (name === "password") {
+      const error = validatePassword(value);
+      setPasswordError(error || "");
+    }
+
+    // Check if passwords match when typing confirm password
+    if (name === "confirmPassword" && value !== formData.password) {
+      setPasswordError("Passwords do not match");
+    } else if (name === "confirmPassword" && value === formData.password) {
       setPasswordError("");
     }
   };
 
-  const validateForm = () => {
-    if (formData.password !== formData.confirmPassword) {
-      setPasswordError("Passwords do not match");
-      return false;
-    }
-    if (formData.password.length < 8) {
-      setPasswordError("Password must be at least 8 characters");
-      return false;
-    }
-    return true;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.updateUser({
-        password: formData.password,
-      });
-
-      if (error) {
-        throw error;
+      // Final password validation
+      const passwordValidationError = validatePassword(formData.password);
+      if (passwordValidationError) {
+        setPasswordError(passwordValidationError);
+        return;
       }
 
-      toast.success("Password updated successfully!");
-      router.push("/login");
-      router.refresh();
+      if (formData.password !== formData.confirmPassword) {
+        setPasswordError("Passwords do not match");
+        return;
+      }
+
+      // Get the token and email from URL params
+      const token = searchParams.get("token");
+      const email = searchParams.get("email");
+      if (!token || !email) {
+        toast.error("Invalid reset token");
+        return;
+      }
+
+      // Create form data for server action
+      const formDataToSend = new FormData();
+      formDataToSend.append("password", formData.password);
+      formDataToSend.append("confirmPassword", formData.confirmPassword);
+      formDataToSend.append("token", token);
+      formDataToSend.append("email", email);
+
+      const result = await resetPassword(formDataToSend);
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      toast.success(
+        "Password updated successfully! Please sign in with your new password."
+      );
+
+      // Clear any existing sessions
+      const supabase = createClient();
+      await supabase.auth.signOut();
+
+      // Redirect to login after a short delay
+      setTimeout(() => {
+        router.push("/login");
+        router.refresh();
+      }, 2000);
     } catch (error: any) {
+      console.error("Password reset error:", error);
       toast.error(error.message || "Failed to update password");
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Rest of the component remains the same...
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row">
       {/* Left side - Form */}
@@ -164,6 +236,61 @@ export default function ResetPasswordPage() {
                     )}
                   </button>
                 </div>
+                <div className="text-sm space-y-2 mt-2">
+                  <p className="text-gray-500">Password must contain:</p>
+                  <ul className="space-y-1 text-sm">
+                    <li
+                      className={`flex items-center gap-2 ${
+                        formData.password.length >= 8
+                          ? "text-green-600"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      <Check className="h-4 w-4" />
+                      At least 8 characters
+                    </li>
+                    <li
+                      className={`flex items-center gap-2 ${
+                        /[a-z]/.test(formData.password)
+                          ? "text-green-600"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      <Check className="h-4 w-4" />
+                      One lowercase letter
+                    </li>
+                    <li
+                      className={`flex items-center gap-2 ${
+                        /[A-Z]/.test(formData.password)
+                          ? "text-green-600"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      <Check className="h-4 w-4" />
+                      One uppercase letter
+                    </li>
+                    <li
+                      className={`flex items-center gap-2 ${
+                        /\d/.test(formData.password)
+                          ? "text-green-600"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      <Check className="h-4 w-4" />
+                      One number
+                    </li>
+                    <li
+                      className={`flex items-center gap-2 ${
+                        /[!@#$%^&*(),.?":{}|<>]/.test(formData.password)
+                          ? "text-green-600"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      <Check className="h-4 w-4" />
+                      One special character (!@#$%^&*(),.?":{}|&lt;&gt;)
+                    </li>
+                  </ul>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -204,7 +331,7 @@ export default function ResetPasswordPage() {
 
               <Button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || !!passwordError}
                 className="w-full h-12 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium transition-all duration-200"
               >
                 {isLoading ? (
@@ -264,40 +391,19 @@ export default function ResetPasswordPage() {
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 mb-8">
               <img
                 src="/placeholder.svg?height=300&width=400"
-                alt="Password Security"
+                alt="Password Reset"
                 className="w-full h-auto rounded-lg"
               />
             </div>
 
             <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              Strong Password, Strong Security
+              Create a Strong Password
             </h2>
             <p className="text-gray-600 mb-6">
-              Choose a strong password that you haven't used before. A
-              combination of letters, numbers, and symbols makes your account
-              more secure.
+              Choose a strong, unique password that you haven't used elsewhere.
+              This helps keep your account secure and protects your restaurant's
+              data.
             </p>
-
-            <div className="flex flex-wrap gap-4">
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center">
-                  <Shield className="h-4 w-4 text-green-600" />
-                </div>
-                <span className="text-sm">Minimum 8 characters</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center">
-                  <Shield className="h-4 w-4 text-green-600" />
-                </div>
-                <span className="text-sm">Mix of characters</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center">
-                  <Shield className="h-4 w-4 text-green-600" />
-                </div>
-                <span className="text-sm">Unique password</span>
-              </div>
-            </div>
           </motion.div>
         </div>
       </div>

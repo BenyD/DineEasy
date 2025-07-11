@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { requestPasswordReset } from "@/lib/actions/auth";
 import { Logo } from "@/components/layout/Logo";
 
 export default function ForgotPasswordPage() {
@@ -27,18 +27,23 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-
-      if (error) {
-        throw error;
+      // Validate email
+      if (!email || !email.includes("@")) {
+        toast.error("Please enter a valid email address");
+        return;
       }
 
+      const result = await requestPasswordReset(email);
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // Always show success message even if email doesn't exist (security best practice)
       setIsSubmitted(true);
     } catch (error: any) {
-      toast.error(error.message || "Failed to send reset link");
+      console.error("Password reset error:", error);
+      toast.error("Failed to send reset link. Please try again later.");
       setIsSubmitted(false);
     } finally {
       setIsLoading(false);
@@ -76,13 +81,15 @@ export default function ForgotPasswordPage() {
               <Alert className="bg-green-50 border-green-200 mb-6">
                 <AlertDescription className="text-green-800">
                   If an account exists with {email}, we've sent a password reset
-                  link to this email address.
+                  link to this email address. Please check your inbox and spam
+                  folder.
                 </AlertDescription>
               </Alert>
 
               <div className="text-center">
                 <p className="text-sm text-gray-500 mb-6">
-                  Didn't receive an email? Check your spam folder or try again.
+                  The reset link will expire in 1 hour. If you don't receive an
+                  email, check your spam folder or try again.
                 </p>
 
                 <Button

@@ -114,35 +114,7 @@ export default function SignUpPage() {
           return;
         }
 
-        // Store the session data
-        if (result.session) {
-          const supabase = createClient();
-
-          // Set the session in Supabase
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: result.session.access_token,
-            refresh_token: result.session.refresh_token,
-          });
-
-          if (sessionError) {
-            console.error("Error setting client session:", sessionError);
-            reject(new Error("Error establishing session"));
-            return;
-          }
-
-          // Store tokens in localStorage for verification page
-          localStorage.setItem(
-            `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL}-auth-token`,
-            JSON.stringify({
-              access_token: result.session.access_token,
-              refresh_token: result.session.refresh_token,
-            })
-          );
-        } else {
-          reject(new Error("No session returned from signup"));
-          return;
-        }
-
+        // No need to store session anymore
         resolve(result);
       } catch (error) {
         console.error("Signup error:", error);

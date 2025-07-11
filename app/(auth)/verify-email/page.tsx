@@ -7,15 +7,36 @@ import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/layout/Logo";
+import {
+  resendVerificationEmail,
+  debugEmailVerification,
+} from "@/lib/actions/auth";
+import { toast } from "sonner";
+
+interface VerificationResponse {
+  success: boolean;
+  error?: string;
+  debug?: {
+    token_provided: string;
+    token_found: boolean;
+    token_count: number;
+    expired_count: number;
+    verified_count: number;
+  };
+  user_id?: string;
+}
 
 export default function VerifyEmailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  const email = searchParams.get("email");
   const [verificationStatus, setVerificationStatus] = useState<
     "pending" | "success" | "error"
   >("pending");
   const [error, setError] = useState<string>("");
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [isResending, setIsResending] = useState(false);
 
   useEffect(() => {
     const verifyEmail = async () => {
@@ -27,90 +48,58 @@ export default function VerifyEmailPage() {
       try {
         const supabase = createClient();
 
-        // Try to get the session from localStorage
-        const storedSession = localStorage.getItem(
-          `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL}-auth-token`
-        );
+        console.log("Attempting to verify token:", token);
 
-        if (!storedSession) {
-          throw new Error("No session found");
-        }
+        // Call the verify_email function
+        const { data, error: verifyError } = await supabase
+          .rpc("verify_email", { p_token: token })
+          .single();
 
-        const { access_token, refresh_token } = JSON.parse(storedSession);
+        console.log("Verification response:", { data, error: verifyError });
 
-        if (!access_token || !refresh_token) {
-          throw new Error("Invalid session format");
-        }
-
-        // Set the session
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token,
-          refresh_token,
-        });
-
-        if (sessionError) {
-          throw new Error("Failed to restore session");
-        }
-
-        // Now that we have a session, get the user
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError || !user) {
-          console.error("User error:", userError);
+        if (verifyError) {
+          console.error("Verification error:", verifyError);
           setVerificationStatus("error");
-          setError("Session expired. Please try signing up again.");
+          setError(`Verification failed: ${verifyError.message}`);
           return;
         }
 
-        // Verify the token matches and hasn't expired
-        const storedToken = user.user_metadata?.verification_token;
-        const expiresAt = user.user_metadata?.verification_token_expires_at;
+        const response = data as VerificationResponse;
 
-        if (!storedToken || !expiresAt) {
-          console.error("No verification token found in metadata");
-          setVerificationStatus("error");
-          setError("Invalid verification link. Please try signing up again.");
-          return;
-        }
-
-        if (storedToken !== token) {
-          console.error("Token mismatch");
-          setVerificationStatus("error");
-          setError("Invalid verification token. Please try signing up again.");
-          return;
-        }
-
-        if (new Date(expiresAt) < new Date()) {
-          console.error("Token expired");
+        if (!response?.success) {
+          console.error("Verification failed:", response);
           setVerificationStatus("error");
           setError(
-            "Verification link has expired. Please try signing up again."
+            response?.error || "Failed to verify email. Please try again."
           );
+          setDebugInfo(response?.debug);
           return;
         }
 
-        // Update user metadata to mark as verified
-        const { error: updateError } = await supabase.auth.updateUser({
-          data: {
-            email_verified: true,
-            verification_token: null,
-            verification_token_expires_at: null,
-          },
-        });
+        // Get the user session
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-        if (updateError) {
-          console.error("Update error:", updateError);
+        if (sessionError) {
+          console.error("Session error:", sessionError);
           setVerificationStatus("error");
-          setError("Error verifying email. Please try again.");
+          setError("Session error. Please try signing in again.");
           return;
         }
 
-        setVerificationStatus("success");
+        if (!session) {
+          // If no session, redirect to login
+          setVerificationStatus("success");
+          setTimeout(() => {
+            router.push("/login");
+          }, 2000);
+          return;
+        }
 
-        // Redirect to dashboard after 2 seconds
+        // If we have a session, redirect to dashboard
+        setVerificationStatus("success");
         setTimeout(() => {
           router.push("/dashboard");
         }, 2000);
@@ -123,6 +112,51 @@ export default function VerifyEmailPage() {
 
     verifyEmail();
   }, [token, router]);
+
+  const handleResendEmail = async () => {
+    if (!email) {
+      toast.error("No email address found");
+      return;
+    }
+
+    setIsResending(true);
+    try {
+      const result = await resendVerificationEmail(email);
+
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success(
+          result.message || "Verification email resent successfully"
+        );
+      }
+    } catch (error) {
+      toast.error("Failed to resend verification email");
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  const handleDebug = async () => {
+    if (!email) {
+      toast.error("No email address found");
+      return;
+    }
+
+    try {
+      const result = await debugEmailVerification(email);
+      console.log("Debug result:", result);
+
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Debug info logged to console");
+        console.log("Debug information:", result);
+      }
+    } catch (error) {
+      toast.error("Debug failed");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
@@ -146,6 +180,27 @@ export default function VerifyEmailPage() {
               We sent you a verification link. Please check your email and click
               the link to verify your account.
             </p>
+            <div className="flex flex-col items-center gap-4 mt-6">
+              <p className="text-sm text-gray-500">
+                Didn't receive the email? Check your spam folder or click below
+                to resend.
+              </p>
+              <Button
+                onClick={handleResendEmail}
+                variant="outline"
+                disabled={isResending}
+                className="w-full max-w-xs"
+              >
+                {isResending ? (
+                  <>
+                    <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                    Resending...
+                  </>
+                ) : (
+                  "Resend Verification Email"
+                )}
+              </Button>
+            </div>
           </>
         )}
 
@@ -164,8 +219,7 @@ export default function VerifyEmailPage() {
               Email verified!
             </h1>
             <p className="text-gray-500">
-              Your email has been verified successfully. Redirecting you to the
-              dashboard...
+              Your email has been verified successfully. Redirecting you...
             </p>
           </>
         )}
@@ -176,7 +230,18 @@ export default function VerifyEmailPage() {
               Verification failed
             </h1>
             <p className="text-gray-500">{error}</p>
-            <div className="flex justify-center mt-4">
+
+            {/* Debug information */}
+            {debugInfo && (
+              <div className="bg-gray-100 p-4 rounded-lg text-left text-sm">
+                <h3 className="font-semibold mb-2">Debug Information:</h3>
+                <pre className="text-xs overflow-auto">
+                  {JSON.stringify(debugInfo, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            <div className="flex flex-col items-center gap-4 mt-6">
               <Button
                 onClick={() => window.location.reload()}
                 variant="ghost"
@@ -186,6 +251,33 @@ export default function VerifyEmailPage() {
                 <RotateCw className="h-4 w-4 mr-2" />
                 Try Again
               </Button>
+              {email && (
+                <>
+                  <Button
+                    onClick={handleResendEmail}
+                    variant="outline"
+                    disabled={isResending}
+                    className="w-full max-w-xs"
+                  >
+                    {isResending ? (
+                      <>
+                        <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                        Resending...
+                      </>
+                    ) : (
+                      "Resend Verification Email"
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleDebug}
+                    variant="ghost"
+                    size="sm"
+                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                  >
+                    Debug Info
+                  </Button>
+                </>
+              )}
             </div>
           </>
         )}

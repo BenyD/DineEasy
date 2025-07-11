@@ -1,9 +1,104 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { sendVerificationEmail } from "@/lib/email";
+import { sendVerificationEmail, sendPasswordResetEmail } from "@/lib/email";
 import { generateEmailVerificationToken } from "@/lib/utils";
+
+// Add rate limit check function
+async function checkRateLimit(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<boolean> {
+  const timeWindow = 5 * 60; // 5 minutes in seconds
+  const maxAttempts = 3; // Max 3 attempts per 5 minutes
+
+  const { data: attempts, error } = await supabase
+    .from("email_verifications")
+    .select("created_at")
+    .eq("user_id", userId)
+    .gte("created_at", new Date(Date.now() - timeWindow * 1000).toISOString())
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error checking rate limit:", error);
+    return false;
+  }
+
+  return (attempts?.length || 0) < maxAttempts;
+}
+
+export async function resendVerificationEmail(email: string) {
+  const supabase = createClient();
+  const adminSupabase = createAdminClient();
+
+  try {
+    // Get user by email from auth.users table using admin client
+    const {
+      data: { users },
+      error: userError,
+    } = await adminSupabase.auth.admin.listUsers();
+
+    if (userError) {
+      console.error("Error listing users:", userError);
+      return { error: "Failed to process request" };
+    }
+
+    const user = users?.find((u) => u.email === email);
+
+    if (!user) {
+      console.error("User not found with email:", email);
+      return { error: "User not found" };
+    }
+
+    // Check if email is already verified
+    if (user.email_confirmed_at) {
+      return { error: "Email is already verified" };
+    }
+
+    // Ensure profile record exists
+    await ensureProfileExists(
+      adminSupabase,
+      user.id,
+      user.user_metadata?.full_name || "New User"
+    );
+
+    // Check rate limit
+    const canResend = await checkRateLimit(supabase, user.id);
+    if (!canResend) {
+      return {
+        error: "Too many attempts. Please wait 5 minutes before trying again.",
+      };
+    }
+
+    // Generate new verification token
+    const verificationToken = generateEmailVerificationToken();
+
+    // Store new verification record using admin client
+    const { error: verificationError } = await adminSupabase
+      .from("email_verifications")
+      .insert({
+        user_id: user.id,
+        email: email,
+        token: verificationToken,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+        created_at: new Date().toISOString(),
+      });
+
+    if (verificationError) {
+      console.error("Error creating verification record:", verificationError);
+      return { error: "Error creating verification token" };
+    }
+
+    // Send new verification email
+    await sendVerificationEmail(email, verificationToken);
+
+    return { success: true, message: "Verification email sent" };
+  } catch (error) {
+    console.error("Error in resendVerificationEmail:", error);
+    return { error: "Failed to resend verification email" };
+  }
+}
 
 export async function signIn(formData: FormData) {
   const supabase = createClient();
@@ -22,6 +117,7 @@ export async function signIn(formData: FormData) {
 
 export async function signUp(formData: FormData) {
   const supabase = createClient();
+  const adminSupabase = createAdminClient();
 
   try {
     console.log("Starting signup process...");
@@ -62,89 +158,28 @@ export async function signUp(formData: FormData) {
     // Generate verification token
     const verificationToken = generateEmailVerificationToken();
 
-    // Sign in the user to get a fresh session
-    const { data: signInData, error: signInError } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password,
+    // Store verification data in database using admin client with service role privileges
+    const { error: verificationError } = await adminSupabase
+      .from("email_verifications")
+      .insert({
+        user_id: signUpData.user.id,
+        email: email,
+        token: verificationToken,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+        created_at: new Date().toISOString(),
       });
 
-    if (signInError) {
-      console.error("Error signing in after signup:", signInError);
-      return { error: "Error creating session" };
-    }
-
-    if (!signInData.session) {
-      console.error("No session returned after signin");
-      return { error: "No session created" };
-    }
-
-    // Set the session immediately after sign in
-    const { error: setSessionError } = await supabase.auth.setSession(
-      signInData.session
-    );
-
-    if (setSessionError) {
-      console.error("Error setting session:", setSessionError);
-      return { error: "Error establishing session" };
-    }
-
-    // Verify the session was set by getting the user
-    const {
-      data: { user },
-      error: getUserError,
-    } = await supabase.auth.getUser();
-
-    if (getUserError || !user) {
-      console.error("Error verifying session:", getUserError);
-      return { error: "Error verifying session" };
-    }
-
-    // Verify profile was created
-    console.log("Verifying profile creation for user:", user.id);
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile) {
-      console.error("Error or missing profile:", { profileError, profile });
-      console.log("Attempting manual profile creation...");
-      // Try to create profile manually if it doesn't exist
-      const { error: createProfileError } = await supabase
-        .from("profiles")
-        .insert([
-          {
-            id: user.id,
-            full_name: fullName,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ])
-        .single();
-
-      if (createProfileError) {
-        console.error("Manual profile creation failed:", createProfileError);
-        return { error: "Error creating user profile" };
+    if (verificationError) {
+      console.error("Error storing verification data:", verificationError);
+      // Clean up the created user if verification record creation fails
+      try {
+        await adminSupabase.auth.admin.deleteUser(signUpData.user.id);
+      } catch (cleanupError) {
+        console.error(
+          "Error cleaning up user after verification failure:",
+          cleanupError
+        );
       }
-      console.log("Manual profile creation successful");
-    } else {
-      console.log("Profile verification successful:", profile);
-    }
-
-    // Store the verification token in the user's metadata
-    const { error: updateError } = await supabase.auth.updateUser({
-      data: {
-        verification_token: verificationToken,
-        verification_token_expires_at: new Date(
-          Date.now() + 24 * 60 * 60 * 1000
-        ).toISOString(), // 24 hours
-      },
-    });
-
-    if (updateError) {
-      console.error("Error storing verification token:", updateError);
       return { error: "Error creating verification token" };
     }
 
@@ -153,7 +188,8 @@ export async function signUp(formData: FormData) {
       await sendVerificationEmail(email, verificationToken);
     } catch (emailError) {
       console.error("Error sending verification email:", emailError);
-      return { error: "Error sending verification email" };
+      // Don't return error here as the user was created successfully
+      // They can request a new verification email later
     }
 
     // Log successful signup
@@ -161,13 +197,11 @@ export async function signUp(formData: FormData) {
       id: signUpData.user.id,
       email: signUpData.user.email,
       verificationSent: true,
-      sessionExists: true,
     });
 
     return {
       success: true,
       message: "Check your email to verify your account",
-      session: signInData.session,
       user: signUpData.user,
     };
   } catch (error) {
@@ -185,21 +219,208 @@ export async function signOut() {
   redirect("/login");
 }
 
+export async function requestPasswordReset(email: string) {
+  const supabase = createClient();
+  const adminSupabase = createAdminClient();
+
+  try {
+    // Check if user exists by email
+    const {
+      data: { users },
+      error: userError,
+    } = await adminSupabase.auth.admin.listUsers();
+
+    if (userError) {
+      console.error("Error listing users:", userError);
+      // Don't expose whether the user exists or not for security
+      return { success: true };
+    }
+
+    // Find user by email (case-insensitive)
+    const user = users?.find(
+      (u) => u.email && u.email.toLowerCase() === email.toLowerCase()
+    );
+
+    console.log("Password reset request:", {
+      email,
+      userFound: !!user,
+      userEmail: user?.email,
+    });
+
+    // Always return success even if email doesn't exist (security best practice)
+    if (!user) {
+      console.log("No user found with email:", email);
+      return { success: true };
+    }
+
+    // Ensure profile record exists
+    await ensureProfileExists(
+      adminSupabase,
+      user.id,
+      user.user_metadata?.full_name || "New User"
+    );
+
+    // Generate a custom password reset token
+    const resetToken = generateEmailVerificationToken(); // Reuse the same token generator
+
+    // Store reset token in database using admin client
+    const { error: tokenError } = await adminSupabase
+      .from("password_reset_tokens")
+      .insert({
+        user_id: user.id,
+        email: email,
+        token: resetToken,
+        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour
+        created_at: new Date().toISOString(),
+      });
+
+    if (tokenError) {
+      console.error("Error creating reset token:", tokenError);
+      // Don't expose whether the user exists or not for security
+      return { success: true };
+    }
+
+    // Create reset link
+    const resetLink = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+
+    console.log("Generated custom reset link:", resetLink);
+
+    // Send password reset email using Resend
+    try {
+      await sendPasswordResetEmail(email, resetLink);
+      console.log("Password reset email sent successfully for:", email);
+    } catch (emailError) {
+      console.error("Error sending password reset email:", emailError);
+      // Don't expose whether the user exists or not for security
+      return { success: true };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error in requestPasswordReset:", error);
+    // Always return success for security (don't reveal if user exists)
+    return { success: true };
+  }
+}
+
+// Helper function to ensure profile record exists
+async function ensureProfileExists(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  userId: string,
+  fullName: string
+) {
+  try {
+    // Check if profile exists
+    const { data: existingProfile, error: checkError } = await adminSupabase
+      .from("profiles")
+      .select("id")
+      .eq("id", userId)
+      .single();
+
+    if (checkError && checkError.code !== "PGRST116") {
+      // PGRST116 = not found
+      console.error("Error checking profile:", checkError);
+      return;
+    }
+
+    // If profile doesn't exist, create it
+    if (!existingProfile) {
+      const { error: insertError } = await adminSupabase
+        .from("profiles")
+        .insert({
+          id: userId,
+          full_name: fullName,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (insertError) {
+        console.error("Error creating profile:", insertError);
+      } else {
+        console.log("Created missing profile for user:", userId);
+      }
+    }
+  } catch (error) {
+    console.error("Error ensuring profile exists:", error);
+  }
+}
+
 export async function resetPassword(formData: FormData) {
   const supabase = createClient();
+  const adminSupabase = createAdminClient();
 
-  const { error } = await supabase.auth.resetPasswordForEmail(
-    formData.get("email") as string,
-    {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`,
+  try {
+    const password = formData.get("password") as string;
+    const confirmPassword = formData.get("confirmPassword") as string;
+    const token = formData.get("token") as string;
+    const email = formData.get("email") as string;
+
+    console.log("Reset password attempt:", {
+      hasPassword: !!password,
+      hasConfirmPassword: !!confirmPassword,
+      hasToken: !!token,
+      hasEmail: !!email,
+      tokenLength: token?.length,
+    });
+
+    // Validate passwords
+    if (!password || !confirmPassword) {
+      return { error: "Both password fields are required" };
     }
-  );
 
-  if (error) {
-    return { error: error.message };
+    if (password !== confirmPassword) {
+      return { error: "Passwords do not match" };
+    }
+
+    if (password.length < 8) {
+      return { error: "Password must be at least 8 characters" };
+    }
+
+    if (!token) {
+      return { error: "Invalid reset token" };
+    }
+
+    console.log("Verifying password reset token...");
+
+    // Verify the password reset token using our custom function
+    const { data: verificationData, error: verificationError } = await supabase
+      .rpc("verify_password_reset_token", { p_token: token })
+      .single();
+
+    if (verificationError) {
+      console.error("Token verification error:", verificationError);
+      return { error: "Invalid or expired reset token" };
+    }
+
+    const verification = verificationData as any;
+
+    if (!verification?.success) {
+      console.error("Token verification failed:", verification);
+      return {
+        error: verification?.error || "Invalid or expired reset token",
+        debug: verification?.debug,
+      };
+    }
+
+    console.log("Token verified successfully, updating password...");
+
+    // Use admin client to update the user's password
+    const { error: updateError } =
+      await adminSupabase.auth.admin.updateUserById(verification.user_id, {
+        password: password,
+      });
+
+    if (updateError) {
+      console.error("Error updating password:", updateError);
+      return { error: updateError.message };
+    }
+
+    console.log("Password updated successfully");
+    return { success: true };
+  } catch (error) {
+    console.error("Error in resetPassword:", error);
+    return { error: "Failed to reset password" };
   }
-
-  return { success: true };
 }
 
 export async function updatePassword(formData: FormData) {
@@ -214,4 +435,67 @@ export async function updatePassword(formData: FormData) {
   }
 
   redirect("/dashboard");
+}
+
+export async function debugEmailVerification(email: string) {
+  const supabase = createClient();
+  const adminSupabase = createAdminClient();
+
+  try {
+    // Check if email_verifications table exists and has data
+    const { data: verifications, error: verificationsError } =
+      await adminSupabase
+        .from("email_verifications")
+        .select("*")
+        .eq("email", email)
+        .order("created_at", { ascending: false });
+
+    if (verificationsError) {
+      console.error("Error checking verifications:", verificationsError);
+      return { error: "Database error" };
+    }
+
+    // Check if user exists in auth.users table
+    const {
+      data: { users },
+      error: userError,
+    } = await adminSupabase.auth.admin.listUsers();
+
+    if (userError) {
+      console.error("Error listing users:", userError);
+      return { error: "Failed to check users" };
+    }
+
+    const user = users?.find((u) => u.email === email);
+
+    if (!user) {
+      console.error("User not found with email:", email);
+      return { error: "User not found" };
+    }
+
+    // Check if profile exists
+    const { data: profile, error: profileError } = await adminSupabase
+      .from("profiles")
+      .select("id, full_name")
+      .eq("id", user.id)
+      .single();
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        email_confirmed_at: user.email_confirmed_at,
+        created_at: user.created_at,
+        user_metadata: user.user_metadata,
+      },
+      profile: profile || null,
+      profileExists: !!profile,
+      verifications: verifications || [],
+      tableExists: true,
+    };
+  } catch (error) {
+    console.error("Debug error:", error);
+    return { error: "Debug failed" };
+  }
 }

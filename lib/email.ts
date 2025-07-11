@@ -6,7 +6,7 @@ import { getBaseUrl } from "./env";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const sendVerificationEmail = async (email: string, token: string) => {
-  const verificationLink = `${process.env.NEXT_PUBLIC_APP_URL}/verify-email?token=${token}`;
+  const verificationLink = `${process.env.NEXT_PUBLIC_APP_URL}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
 
   try {
     console.log("Attempting to send verification email to:", email);
@@ -56,9 +56,10 @@ export const sendVerificationEmail = async (email: string, token: string) => {
   }
 };
 
-export const sendPasswordResetEmail = async (email: string, token: string) => {
-  const resetLink = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`;
-
+export const sendPasswordResetEmail = async (
+  email: string,
+  resetLink: string
+) => {
   try {
     const { data, error } = await resend.emails.send({
       from: "DineEasy <noreply@dineeasy.ch>",
