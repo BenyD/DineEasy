@@ -14,11 +14,8 @@ interface Restaurant {
   stripe_customer_id: string | null;
 }
 
-// Get the appropriate webhook secret based on environment
-const webhookSecret =
-  process.env.NODE_ENV === "production"
-    ? process.env.STRIPE_WEBHOOK_SECRET_PROD
-    : process.env.STRIPE_WEBHOOK_SECRET;
+// Get the webhook secret
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 if (!webhookSecret) {
   throw new Error("Stripe webhook secret is not set");
@@ -131,7 +128,8 @@ export async function POST(req: Request) {
           status: subscription.status,
         });
 
-        const { restaurantId, plan, interval } = subscription.metadata;
+        const { restaurantId, plan, interval, currency } =
+          subscription.metadata;
 
         // More detailed validation
         if (!restaurantId) {
@@ -220,6 +218,7 @@ export async function POST(req: Request) {
           stripe_subscription_id: subscription.id,
           plan,
           interval,
+          currency: currency || "USD", // Default to USD if not provided
           status: subscription.status,
           current_period_start: toISOString(subscription.current_period_start),
           current_period_end: toISOString(subscription.current_period_end),

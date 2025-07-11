@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Database } from "@/types/supabase";
 import { stripe } from "@/lib/stripe";
-import { PLANS, SUBSCRIPTION } from "@/lib/constants";
+import { PRICING, SUBSCRIPTION, getStripePriceId } from "@/lib/constants";
 
 type Subscription = Database["public"]["Tables"]["subscriptions"]["Insert"];
 
@@ -21,6 +21,7 @@ export async function createSubscription(formData: FormData) {
   const restaurantId = formData.get("restaurant_id") as string;
   const plan = formData.get("plan") as Subscription["plan"];
   const interval = formData.get("interval") as Subscription["interval"];
+  const currency = formData.get("currency") as string || "USD";
 
   // Validate interval
   if (!Object.values(SUBSCRIPTION.BILLING_PERIODS).includes(interval)) {
@@ -64,12 +65,15 @@ export async function createSubscription(formData: FormData) {
         .eq("id", restaurantId);
     }
 
+    // Get the correct Stripe price ID for the plan, currency, and interval
+    const priceId = getStripePriceId(plan, currency as keyof typeof PRICING, interval);
+
     // Create Stripe Checkout session
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       line_items: [
         {
-          price: PLANS[plan].stripe_price_id[interval],
+          price: priceId,
           quantity: 1,
         },
       ],
@@ -80,6 +84,7 @@ export async function createSubscription(formData: FormData) {
           restaurantId,
           plan,
           interval,
+          currency,
         },
       },
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,

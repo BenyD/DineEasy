@@ -12,9 +12,17 @@ import {
   Store,
   ChefHat,
   Building2,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { HeaderSection } from "@/components/elements/HeaderSection";
 import { CTASection } from "@/components/elements/CTASection";
@@ -26,7 +34,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { PLANS } from "@/lib/constants";
+import {
+  PRICING,
+  CURRENCIES,
+  CURRENCY_SYMBOLS,
+  CURRENCY_NAMES,
+  getPrice,
+  formatPrice,
+} from "@/lib/constants";
 import Link from "next/link";
 
 interface PlanFeature {
@@ -129,10 +144,13 @@ const FEATURE_COMPARISON = [
 
 export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] =
+    useState<keyof typeof CURRENCIES>("USD");
 
   const plans = [
     {
-      ...PLANS.starter,
+      id: "starter",
+      ...PRICING.starter,
       highlighted: false,
       icon: Store,
       emoji: "🥗",
@@ -141,16 +159,14 @@ export default function PricingPage() {
         "For independent owners, food stalls & cafés with no staff complexity",
       bestFor: "Independent owners",
       features: [
-        ...PLANS.starter.features.map(
-          (text) => ({ text, included: true } as PlanFeature)
-        ),
-        ...(PLANS.starter.negativeFeatures || []).map(
-          (text) => ({ text, included: false } as PlanFeature)
+        ...PRICING.starter.features.map(
+          (text) => ({ text, included: true }) as PlanFeature
         ),
       ],
     },
     {
-      ...PLANS.pro,
+      id: "pro",
+      ...PRICING.pro,
       highlighted: true,
       icon: ChefHat,
       emoji: "🍽️",
@@ -159,13 +175,14 @@ export default function PricingPage() {
         "Designed for busy cafés, bars, and small restaurants with a few staff",
       bestFor: "Growing restaurants",
       features: [
-        ...PLANS.pro.features.map(
-          (text) => ({ text, included: true } as PlanFeature)
+        ...PRICING.pro.features.map(
+          (text) => ({ text, included: true }) as PlanFeature
         ),
       ],
     },
     {
-      ...PLANS.elite,
+      id: "elite",
+      ...PRICING.elite,
       highlighted: false,
       icon: Building2,
       emoji: "🏢",
@@ -173,8 +190,8 @@ export default function PricingPage() {
       description: "For high-volume kitchens and restaurants with larger staff",
       bestFor: "High-volume restaurants",
       features: [
-        ...PLANS.elite.features.map(
-          (text) => ({ text, included: true } as PlanFeature)
+        ...PRICING.elite.features.map(
+          (text) => ({ text, included: true }) as PlanFeature
         ),
       ],
     },
@@ -255,11 +272,46 @@ export default function PricingPage() {
           className="absolute right-0 bottom-0 -z-10 opacity-30"
         />
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          {/* Currency Selector */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
+            className="mx-auto mb-8 flex max-w-[400px] items-center justify-center gap-4 rounded-full border bg-white/80 p-3 shadow-sm backdrop-blur-sm"
+          >
+            <Globe className="h-4 w-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Currency:</span>
+            <Select
+              value={selectedCurrency}
+              onValueChange={(value) =>
+                setSelectedCurrency(value as keyof typeof CURRENCIES)
+              }
+            >
+              <SelectTrigger className="w-32 border-0 bg-transparent shadow-none focus:ring-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(CURRENCIES).map(([code, symbol]) => (
+                  <SelectItem key={code} value={code}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{symbol}</span>
+                      <span className="text-gray-500">
+                        ({CURRENCY_NAMES[code as keyof typeof CURRENCIES]})
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </motion.div>
+
+          {/* Billing Toggle */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
             className="mx-auto flex max-w-[300px] items-center justify-center gap-4 rounded-full border bg-white/80 p-2 shadow-sm backdrop-blur-sm"
           >
             <span
@@ -333,8 +385,14 @@ export default function PricingPage() {
                     <div className="mb-6">
                       <div className="flex items-baseline gap-1">
                         <span className="text-3xl font-bold text-gray-900 sm:text-4xl">
-                          {plan.currency}{" "}
-                          {annual ? plan.price.yearly : plan.price.monthly}
+                          {formatPrice(
+                            getPrice(
+                              plan.id as keyof typeof PRICING,
+                              selectedCurrency,
+                              annual ? "yearly" : "monthly"
+                            ),
+                            selectedCurrency
+                          )}
                         </span>
                         <span className="text-gray-500">
                           /{annual ? "year" : "month"}
@@ -412,15 +470,36 @@ export default function PricingPage() {
                     </th>
                     <th className="p-4 text-sm font-medium text-gray-500">
                       Starter
-                      <span className="ml-1 text-gray-400">(CHF 15)</span>
+                      <span className="ml-1 text-gray-400">
+                        (
+                        {formatPrice(
+                          getPrice("starter", selectedCurrency, "monthly"),
+                          selectedCurrency
+                        )}
+                        )
+                      </span>
                     </th>
                     <th className="p-4 text-sm font-medium text-gray-500">
                       Pro
-                      <span className="ml-1 text-gray-400">(CHF 39)</span>
+                      <span className="ml-1 text-gray-400">
+                        (
+                        {formatPrice(
+                          getPrice("pro", selectedCurrency, "monthly"),
+                          selectedCurrency
+                        )}
+                        )
+                      </span>
                     </th>
                     <th className="p-4 text-sm font-medium text-gray-500">
                       Elite
-                      <span className="ml-1 text-gray-400">(CHF 79)</span>
+                      <span className="ml-1 text-gray-400">
+                        (
+                        {formatPrice(
+                          getPrice("elite", selectedCurrency, "monthly"),
+                          selectedCurrency
+                        )}
+                        )
+                      </span>
                     </th>
                   </tr>
                 </thead>

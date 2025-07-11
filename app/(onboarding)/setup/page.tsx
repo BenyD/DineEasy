@@ -32,6 +32,12 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Logo } from "@/components/layout/Logo";
+import {
+  CURRENCIES,
+  CURRENCY_NAMES,
+  CURRENCY_SYMBOLS,
+  type Currency,
+} from "@/lib/constants";
 
 const RESTAURANT_TYPES = [
   { value: "restaurant", label: "Restaurant" },
@@ -40,10 +46,14 @@ const RESTAURANT_TYPES = [
   { value: "food-truck", label: "Food Truck" },
 ] as const;
 
-const CURRENCIES = [
-  { value: "CHF", label: "CHF" },
-  { value: "EUR", label: "EUR" },
-  { value: "USD", label: "USD" },
+// Currency options for the setup form
+const CURRENCY_OPTIONS = [
+  { value: "USD", label: "US Dollar ($)" },
+  { value: "CHF", label: "Swiss Franc (CHF)" },
+  { value: "EUR", label: "Euro (€)" },
+  { value: "GBP", label: "British Pound (£)" },
+  { value: "INR", label: "Indian Rupee (₹)" },
+  { value: "AUD", label: "Australian Dollar (A$)" },
 ] as const;
 
 const PRICE_RANGES = [
@@ -88,7 +98,7 @@ export default function SetupPage() {
     email: "",
     phone: "",
     website: "",
-    currency: "CHF",
+    currency: "USD",
     tax_rate: "7.7",
     vat_number: "",
     price_range: "",
@@ -379,7 +389,7 @@ export default function SetupPage() {
                             <SelectValue placeholder="Select currency" />
                           </SelectTrigger>
                           <SelectContent>
-                            {CURRENCIES.map((currency) => (
+                            {CURRENCY_OPTIONS.map((currency) => (
                               <SelectItem
                                 key={currency.value}
                                 value={currency.value}

@@ -2,16 +2,7 @@ import Stripe from "stripe";
 import { SUBSCRIPTION, PLANS } from "./constants";
 
 // Validate required environment variables
-const requiredEnvVars = [
-  "STRIPE_SECRET_KEY",
-  "STRIPE_WEBHOOK_SECRET",
-  "STRIPE_STARTER_MONTHLY_PRICE_ID",
-  "STRIPE_STARTER_YEARLY_PRICE_ID",
-  "STRIPE_PRO_MONTHLY_PRICE_ID",
-  "STRIPE_PRO_YEARLY_PRICE_ID",
-  "STRIPE_ELITE_MONTHLY_PRICE_ID",
-  "STRIPE_ELITE_YEARLY_PRICE_ID",
-] as const;
+const requiredEnvVars = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] as const;
 
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
@@ -24,13 +15,15 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   typescript: true,
 });
 
-export type StripePlan = keyof typeof PLANS;
-export type StripeInterval = keyof typeof SUBSCRIPTION.BILLING_PERIODS;
+export type StripePlan = "starter" | "pro" | "elite";
+export type StripeInterval = "monthly" | "yearly";
+export type StripeCurrency = "USD" | "CHF" | "EUR" | "GBP" | "INR" | "AUD";
 
 export type SubscriptionMetadata = {
   restaurantId: string;
   plan: StripePlan;
   interval: StripeInterval;
+  currency: StripeCurrency;
   [key: string]: string; // Add index signature for Stripe metadata compatibility
 };
 
@@ -59,6 +52,7 @@ export async function createStripeSubscription(
       restaurantId: metadata.restaurantId,
       plan: metadata.plan,
       interval: metadata.interval,
+      currency: metadata.currency,
     },
   });
   return subscription;
@@ -117,6 +111,7 @@ export async function createStripeCheckoutSession(
         restaurantId: metadata.restaurantId,
         plan: metadata.plan,
         interval: metadata.interval,
+        currency: metadata.currency,
       },
     },
   });

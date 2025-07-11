@@ -2,9 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check, ChefHat } from "lucide-react";
+import { ArrowRight, Check, ChefHat, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Card,
   CardContent,
@@ -12,7 +19,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { PLANS, SUBSCRIPTION, PLATFORM_COMMISSION } from "@/lib/constants";
+import {
+  PRICING,
+  CURRENCIES,
+  CURRENCY_NAMES,
+  getPrice,
+  formatPrice,
+  SUBSCRIPTION,
+  PLATFORM_COMMISSION,
+} from "@/lib/constants";
 import { createSubscription } from "@/lib/actions/subscription";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -23,6 +38,8 @@ export default function SelectPlanPage() {
   const router = useRouter();
   const [annual, setAnnual] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("pro");
+  const [selectedCurrency, setSelectedCurrency] =
+    useState<keyof typeof CURRENCIES>("USD");
   const [isLoading, setIsLoading] = useState(false);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
 
@@ -43,7 +60,7 @@ export default function SelectPlanPage() {
       // Get user's restaurant
       const { data: restaurant, error } = await supabase
         .from("restaurants")
-        .select("id, subscription_status")
+        .select("id, subscription_status, currency")
         .eq("owner_id", user.id)
         .single();
 
@@ -60,6 +77,10 @@ export default function SelectPlanPage() {
       }
 
       setRestaurantId(restaurant.id);
+      // Set the currency based on restaurant's currency
+      if (restaurant.currency && restaurant.currency in CURRENCIES) {
+        setSelectedCurrency(restaurant.currency as keyof typeof CURRENCIES);
+      }
     };
 
     fetchRestaurant();
@@ -68,17 +89,17 @@ export default function SelectPlanPage() {
   const plans = [
     {
       id: "starter",
-      ...PLANS.starter,
+      ...PRICING.starter,
       highlighted: false,
     },
     {
       id: "pro",
-      ...PLANS.pro,
+      ...PRICING.pro,
       highlighted: true,
     },
     {
       id: "elite",
-      ...PLANS.elite,
+      ...PRICING.elite,
       highlighted: false,
     },
   ];
@@ -105,6 +126,7 @@ export default function SelectPlanPage() {
           ? SUBSCRIPTION.BILLING_PERIODS.yearly
           : SUBSCRIPTION.BILLING_PERIODS.monthly
       );
+      formData.append("currency", selectedCurrency);
 
       const { error, checkoutUrl } = await createSubscription(formData);
 
@@ -217,7 +239,12 @@ export default function SelectPlanPage() {
                   <div className="mt-4">
                     <div className="flex items-end justify-center">
                       <span className="text-3xl font-bold">
-                        ${annual ? plan.price.yearly : plan.price.monthly}
+                        {formatPrice(
+                          annual
+                            ? plan.price[selectedCurrency].yearly
+                            : plan.price[selectedCurrency].monthly,
+                          selectedCurrency
+                        )}
                       </span>
                       <span className="text-gray-500">
                         /{annual ? "year" : "month"}
@@ -226,9 +253,10 @@ export default function SelectPlanPage() {
                     {annual && (
                       <p className="text-sm text-green-600 mt-1">
                         Save $
-                        {(plan.price.monthly * 12 - plan.price.yearly).toFixed(
-                          2
-                        )}{" "}
+                        {(
+                          plan.price[selectedCurrency].monthly * 12 -
+                          plan.price[selectedCurrency].yearly
+                        ).toFixed(2)}{" "}
                         per year
                       </p>
                     )}
