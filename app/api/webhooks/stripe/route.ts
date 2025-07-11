@@ -32,15 +32,71 @@ export async function POST(req: Request) {
     const supabase = createClient();
 
     switch (event.type) {
+      case "customer.updated": {
+        const customer = event.data.object as Stripe.Customer;
+
+        // Update restaurant with new customer details if needed
+        const { data: restaurant, error: fetchError } = await supabase
+          .from("restaurants")
+          .select(
+            `
+            id,
+            email,
+            stripe_customer_id
+          `
+          )
+          .eq("stripe_customer_id", customer.id)
+          .single();
+
+        if (fetchError || !restaurant) {
+          console.error("Error fetching restaurant:", fetchError);
+          return new NextResponse("Error fetching restaurant", { status: 500 });
+        }
+
+        // Update if email or name changed
+        if (customer.email !== restaurant.email) {
+          const { error: updateError } = await supabase
+            .from("restaurants")
+            .update({
+              email: customer.email,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", restaurant.id);
+
+          if (updateError) {
+            console.error("Error updating restaurant:", updateError);
+            return new NextResponse("Error updating restaurant", {
+              status: 500,
+            });
+          }
+        }
+
+        break;
+      }
+
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as Stripe.Subscription & {
+          current_period_start: number;
+          current_period_end: number;
+        };
         const { restaurantId, plan, interval } = subscription.metadata;
 
         if (!restaurantId || !plan || !interval) {
           console.error("Missing metadata in subscription:", subscription.id);
           return new NextResponse("Missing metadata", { status: 400 });
         }
+
+        // Helper function to safely convert Unix timestamp to ISO string
+        const toISOString = (timestamp: number | null): string | null => {
+          if (!timestamp) return null;
+          try {
+            return new Date(timestamp * 1000).toISOString();
+          } catch (error) {
+            console.error("Invalid timestamp:", timestamp);
+            return null;
+          }
+        };
 
         // Update restaurant subscription status
         const { error: updateError } = await supabase
@@ -67,24 +123,14 @@ export async function POST(req: Request) {
             plan,
             interval,
             status: subscription.status,
-            current_period_start: new Date(
-              (subscription as any).current_period_start * 1000
-            ).toISOString(),
-            current_period_end: new Date(
-              (subscription as any).current_period_end * 1000
-            ).toISOString(),
-            trial_start: subscription.trial_start
-              ? new Date(subscription.trial_start * 1000).toISOString()
-              : null,
-            trial_end: subscription.trial_end
-              ? new Date(subscription.trial_end * 1000).toISOString()
-              : null,
-            cancel_at: subscription.cancel_at
-              ? new Date(subscription.cancel_at * 1000).toISOString()
-              : null,
-            canceled_at: subscription.canceled_at
-              ? new Date(subscription.canceled_at * 1000).toISOString()
-              : null,
+            current_period_start: toISOString(
+              subscription.current_period_start
+            ),
+            current_period_end: toISOString(subscription.current_period_end),
+            trial_start: toISOString(subscription.trial_start),
+            trial_end: toISOString(subscription.trial_end),
+            cancel_at: toISOString(subscription.cancel_at),
+            canceled_at: toISOString(subscription.canceled_at),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
@@ -145,42 +191,6 @@ export async function POST(req: Request) {
           return new NextResponse("Error updating subscription", {
             status: 500,
           });
-        }
-
-        break;
-      }
-
-      case "customer.updated": {
-        const customer = event.data.object as Stripe.Customer;
-
-        // Update restaurant with new customer details if needed
-        const { data: restaurants, error: fetchError } = await supabase
-          .from("restaurants")
-          .select()
-          .eq("stripe_customer_id", customer.id)
-          .single();
-
-        if (fetchError || !restaurants) {
-          console.error("Error fetching restaurant:", fetchError);
-          return new NextResponse("Error fetching restaurant", { status: 500 });
-        }
-
-        // Update if email or name changed
-        if (customer.email !== restaurants.email) {
-          const { error: updateError } = await supabase
-            .from("restaurants")
-            .update({
-              email: customer.email,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("stripe_customer_id", customer.id);
-
-          if (updateError) {
-            console.error("Error updating restaurant:", updateError);
-            return new NextResponse("Error updating restaurant", {
-              status: 500,
-            });
-          }
         }
 
         break;

@@ -5,13 +5,14 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ChefHat, Eye, EyeOff, Lock, ArrowLeft, Shield } from "lucide-react";
+import { Eye, EyeOff, Lock, ArrowLeft, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { Logo } from "@/components/layout/Logo";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -100,8 +101,7 @@ export default function ResetPasswordPage() {
           className="max-w-md mx-auto w-full"
         >
           <div className="flex items-center gap-2 mb-8">
-            <ChefHat className="h-8 w-8 text-green-600" />
-            <span className="text-2xl font-bold">DineEasy</span>
+            <Logo />
           </div>
 
           <div className="mb-8">

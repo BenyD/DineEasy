@@ -31,6 +31,7 @@ import { createRestaurant } from "@/lib/actions/restaurant";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Logo } from "@/components/layout/Logo";
 
 const RESTAURANT_TYPES = [
   { value: "restaurant", label: "Restaurant" },
@@ -52,11 +53,34 @@ const PRICE_RANGES = [
   { value: "$$$$", label: "$$$$ - Fine dining" },
 ] as const;
 
+interface FormData {
+  name: string;
+  type: string;
+  description: string;
+  cuisine: string;
+  email: string;
+  phone: string;
+  website: string;
+  currency: string;
+  tax_rate: string;
+  vat_number: string;
+  price_range: string;
+  logo: File | null;
+  coverPhoto: File | null;
+  address: string;
+  city: string;
+  postal_code: string;
+  country: string;
+  accepts_reservations: boolean;
+  delivery_available: boolean;
+  takeout_available: boolean;
+}
+
 export default function SetupPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: "",
     type: "",
     description: "",
@@ -136,38 +160,52 @@ export default function SetupPage() {
   const handleComplete = async () => {
     setIsLoading(true);
     try {
+      // Validate required fields for the current step
+      if (
+        !formData.name ||
+        !formData.type ||
+        !formData.email ||
+        !formData.currency
+      ) {
+        toast.error("Please fill in all required fields");
+        setIsLoading(false);
+        return;
+      }
+
+      // Validate file sizes
+      if (formData.logo && formData.logo.size > 2 * 1024 * 1024) {
+        toast.error("Logo file size must be less than 2MB");
+        setIsLoading(false);
+        return;
+      }
+
+      if (formData.coverPhoto && formData.coverPhoto.size > 5 * 1024 * 1024) {
+        toast.error("Cover photo file size must be less than 5MB");
+        setIsLoading(false);
+        return;
+      }
+
       // Create FormData object with all the collected information
       const submitData = new FormData();
-      submitData.append("name", formData.name);
-      submitData.append("type", formData.type);
-      submitData.append("description", formData.description);
-      submitData.append("cuisine", formData.cuisine);
-      submitData.append("email", formData.email);
-      submitData.append("phone", formData.phone);
-      submitData.append("website", formData.website);
-      submitData.append("currency", formData.currency);
-      submitData.append("tax_rate", formData.tax_rate);
-      submitData.append("vat_number", formData.vat_number);
-      submitData.append("price_range", formData.price_range);
-      if (formData.logo) submitData.append("logo", formData.logo);
-      if (formData.coverPhoto)
-        submitData.append("coverPhoto", formData.coverPhoto);
-      submitData.append("address", formData.address);
-      submitData.append("city", formData.city);
-      submitData.append("postal_code", formData.postal_code);
-      submitData.append("country", formData.country);
-      submitData.append(
-        "accepts_reservations",
-        formData.accepts_reservations.toString()
-      );
-      submitData.append(
-        "delivery_available",
-        formData.delivery_available.toString()
-      );
-      submitData.append(
-        "takeout_available",
-        formData.takeout_available.toString()
-      );
+      (
+        Object.entries(formData) as [keyof FormData, FormData[keyof FormData]][]
+      ).forEach(([key, value]) => {
+        if (value !== null && value !== "") {
+          if (
+            key === "accepts_reservations" ||
+            key === "delivery_available" ||
+            key === "takeout_available"
+          ) {
+            submitData.append(key, value.toString());
+          } else if (key === "logo" || key === "coverPhoto") {
+            if (value instanceof File) {
+              submitData.append(key, value);
+            }
+          } else {
+            submitData.append(key, value.toString());
+          }
+        }
+      });
 
       const result = await createRestaurant(submitData);
 
@@ -176,8 +214,10 @@ export default function SetupPage() {
         return;
       }
 
+      toast.success("Restaurant profile created successfully!");
       router.push("/select-plan");
     } catch (error) {
+      console.error("Error submitting form:", error);
       toast.error("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
@@ -185,37 +225,35 @@ export default function SetupPage() {
   };
 
   const handleSkip = () => {
+    // Only skip non-required fields
+    if (
+      step === 1 &&
+      (!formData.name || !formData.type || !formData.currency)
+    ) {
+      toast.error("Please fill in all required fields before continuing");
+      return;
+    }
+    if (step === 2 && !formData.email) {
+      toast.error("Business email is required");
+      return;
+    }
     handleNext();
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       {/* Background Pattern */}
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(#e0f2e9_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
 
-      <header className="bg-white border-b">
-        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <ChefHat className="h-8 w-8 text-green-600" />
-                <span className="text-2xl font-bold">DineEasy</span>
-              </div>
-              <div className="hidden sm:block h-6 w-px bg-gray-300" />
-              <div className="hidden sm:block">
-                <h1 className="text-lg font-semibold">Restaurant Setup</h1>
-                <p className="text-sm text-gray-500">
-                  Complete your profile to get started
-                </p>
-              </div>
-            </div>
-            <div className="text-sm text-gray-500">
-              Step {step} of {totalSteps}
-            </div>
+      {/* Header */}
+      <div className="border-b bg-white/80 backdrop-blur-sm">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
+          <Logo />
+          <div className="text-sm text-gray-500">
+            Step {step} of {totalSteps}
           </div>
-          <Progress value={progress} className="h-1 mt-4" />
         </div>
-      </header>
+      </div>
 
       <main className="container max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <motion.div
@@ -239,7 +277,9 @@ export default function SetupPage() {
                 <CardContent className="p-6">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Restaurant Name</Label>
+                      <Label htmlFor="name">
+                        Restaurant Name <span className="text-red-500">*</span>
+                      </Label>
                       <Input
                         id="name"
                         name="name"
@@ -252,7 +292,9 @@ export default function SetupPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="type">Restaurant Type</Label>
+                      <Label htmlFor="type">
+                        Restaurant Type <span className="text-red-500">*</span>
+                      </Label>
                       <Select
                         name="type"
                         value={formData.type}
@@ -322,7 +364,9 @@ export default function SetupPage() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="currency">Currency</Label>
+                        <Label htmlFor="currency">
+                          Currency <span className="text-red-500">*</span>
+                        </Label>
                         <Select
                           name="currency"
                           value={formData.currency}
@@ -347,7 +391,9 @@ export default function SetupPage() {
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="tax_rate">Tax Rate (%)</Label>
+                        <Label htmlFor="tax_rate">
+                          Tax Rate (%) <span className="text-red-500">*</span>
+                        </Label>
                         <Input
                           id="tax_rate"
                           name="tax_rate"
@@ -362,7 +408,7 @@ export default function SetupPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="vat_number">VAT Number (Optional)</Label>
+                      <Label htmlFor="vat_number">VAT Number</Label>
                       <Input
                         id="vat_number"
                         name="vat_number"
@@ -391,7 +437,9 @@ export default function SetupPage() {
                 <CardContent className="p-6">
                   <div className="space-y-6">
                     <div className="space-y-2">
-                      <Label htmlFor="email">Business Email</Label>
+                      <Label htmlFor="email">
+                        Business Email <span className="text-red-500">*</span>
+                      </Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                         <Input

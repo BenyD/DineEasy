@@ -5,16 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  ChefHat,
-  Eye,
-  EyeOff,
-  Mail,
-  Lock,
-  User,
-  ArrowRight,
-  Check,
-} from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +13,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { PLATFORM_COMMISSION, SUBSCRIPTION } from "@/lib/constants";
 import { signUp } from "@/lib/actions/auth";
+import { Logo } from "@/components/layout/Logo";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -125,14 +117,30 @@ export default function SignUpPage() {
         // Store the session data
         if (result.session) {
           const supabase = createClient();
-          await supabase.auth.setSession(result.session);
+
+          // Set the session in Supabase
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: result.session.access_token,
+            refresh_token: result.session.refresh_token,
+          });
+
+          if (sessionError) {
+            console.error("Error setting client session:", sessionError);
+            reject(new Error("Error establishing session"));
+            return;
+          }
 
           // Store tokens in localStorage for verification page
-          localStorage.setItem("sb-access-token", result.session.access_token);
           localStorage.setItem(
-            "sb-refresh-token",
-            result.session.refresh_token
+            `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL}-auth-token`,
+            JSON.stringify({
+              access_token: result.session.access_token,
+              refresh_token: result.session.refresh_token,
+            })
           );
+        } else {
+          reject(new Error("No session returned from signup"));
+          return;
         }
 
         resolve(result);
@@ -169,8 +177,7 @@ export default function SignUpPage() {
           className="max-w-md mx-auto w-full"
         >
           <div className="flex items-center gap-2 mb-8">
-            <ChefHat className="h-8 w-8 text-green-600" />
-            <span className="text-2xl font-bold">DineEasy</span>
+            <Logo />
           </div>
 
           <div className="mb-8">

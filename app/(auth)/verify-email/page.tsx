@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Mail } from "lucide-react";
+import { Mail, RotateCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/layout/Logo";
 
 export default function VerifyEmailPage() {
   const router = useRouter();
@@ -26,29 +27,32 @@ export default function VerifyEmailPage() {
       try {
         const supabase = createClient();
 
-        // First check if we have a session
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        // Try to get the session from localStorage
+        const storedSession = localStorage.getItem(
+          `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL}-auth-token`
+        );
 
-        if (!session) {
-          // If no session, try to get it from local storage
-          const accessToken = localStorage.getItem("sb-access-token");
-          const refreshToken = localStorage.getItem("sb-refresh-token");
-
-          if (accessToken && refreshToken) {
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-
-            if (sessionError) {
-              throw new Error("Failed to restore session");
-            }
-          }
+        if (!storedSession) {
+          throw new Error("No session found");
         }
 
-        // Get the current user
+        const { access_token, refresh_token } = JSON.parse(storedSession);
+
+        if (!access_token || !refresh_token) {
+          throw new Error("Invalid session format");
+        }
+
+        // Set the session
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
+
+        if (sessionError) {
+          throw new Error("Failed to restore session");
+        }
+
+        // Now that we have a session, get the user
         const {
           data: { user },
           error: userError,
@@ -128,7 +132,8 @@ export default function VerifyEmailPage() {
         transition={{ duration: 0.6 }}
         className="max-w-md w-full text-center space-y-6"
       >
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-6">
+          <Logo />
           <div className="rounded-full bg-green-100 p-3">
             <Mail className="h-6 w-6 text-green-600" />
           </div>
@@ -171,16 +176,15 @@ export default function VerifyEmailPage() {
               Verification failed
             </h1>
             <p className="text-gray-500">{error}</p>
-            <div className="flex flex-col gap-2">
-              <Button onClick={() => window.location.reload()} className="mt-4">
-                Try Again
-              </Button>
+            <div className="flex justify-center mt-4">
               <Button
-                onClick={() => router.push("/signup")}
-                variant="outline"
-                className="mt-2"
+                onClick={() => window.location.reload()}
+                variant="ghost"
+                size="sm"
+                className="text-green-600 hover:text-green-700 hover:bg-green-50"
               >
-                Back to Sign Up
+                <RotateCw className="h-4 w-4 mr-2" />
+                Try Again
               </Button>
             </div>
           </>

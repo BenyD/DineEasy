@@ -74,6 +74,65 @@ export async function signUp(formData: FormData) {
       return { error: "Error creating session" };
     }
 
+    if (!signInData.session) {
+      console.error("No session returned after signin");
+      return { error: "No session created" };
+    }
+
+    // Set the session immediately after sign in
+    const { error: setSessionError } = await supabase.auth.setSession(
+      signInData.session
+    );
+
+    if (setSessionError) {
+      console.error("Error setting session:", setSessionError);
+      return { error: "Error establishing session" };
+    }
+
+    // Verify the session was set by getting the user
+    const {
+      data: { user },
+      error: getUserError,
+    } = await supabase.auth.getUser();
+
+    if (getUserError || !user) {
+      console.error("Error verifying session:", getUserError);
+      return { error: "Error verifying session" };
+    }
+
+    // Verify profile was created
+    console.log("Verifying profile creation for user:", user.id);
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      console.error("Error or missing profile:", { profileError, profile });
+      console.log("Attempting manual profile creation...");
+      // Try to create profile manually if it doesn't exist
+      const { error: createProfileError } = await supabase
+        .from("profiles")
+        .insert([
+          {
+            id: user.id,
+            full_name: fullName,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ])
+        .single();
+
+      if (createProfileError) {
+        console.error("Manual profile creation failed:", createProfileError);
+        return { error: "Error creating user profile" };
+      }
+      console.log("Manual profile creation successful");
+    } else {
+      console.log("Profile verification successful:", profile);
+    }
+
     // Store the verification token in the user's metadata
     const { error: updateError } = await supabase.auth.updateUser({
       data: {
@@ -102,7 +161,7 @@ export async function signUp(formData: FormData) {
       id: signUpData.user.id,
       email: signUpData.user.email,
       verificationSent: true,
-      sessionExists: !!signInData.session,
+      sessionExists: true,
     });
 
     return {

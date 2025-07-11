@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, ChefHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,14 +14,56 @@ import {
 } from "@/components/ui/card";
 import { PLANS, SUBSCRIPTION, PLATFORM_COMMISSION } from "@/lib/constants";
 import { createSubscription } from "@/lib/actions/subscription";
+import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { Logo } from "@/components/layout/Logo";
 
 export default function SelectPlanPage() {
   const router = useRouter();
   const [annual, setAnnual] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("pro");
   const [isLoading, setIsLoading] = useState(false);
+  const [restaurantId, setRestaurantId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchRestaurant = async () => {
+      const supabase = createClient();
+
+      // Get current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Please sign in to continue");
+        router.push("/login");
+        return;
+      }
+
+      // Get user's restaurant
+      const { data: restaurant, error } = await supabase
+        .from("restaurants")
+        .select("id, subscription_status")
+        .eq("owner_id", user.id)
+        .single();
+
+      if (error || !restaurant) {
+        toast.error("Restaurant not found");
+        router.push("/setup");
+        return;
+      }
+
+      // If subscription is already active, redirect to dashboard
+      if (restaurant.subscription_status === "active") {
+        router.push("/dashboard");
+        return;
+      }
+
+      setRestaurantId(restaurant.id);
+    };
+
+    fetchRestaurant();
+  }, [router]);
 
   const plans = [
     {
@@ -46,10 +88,16 @@ export default function SelectPlanPage() {
   };
 
   const handleContinue = async () => {
+    if (!restaurantId) {
+      toast.error("Restaurant not found");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       const formData = new FormData();
+      formData.append("restaurant_id", restaurantId);
       formData.append("plan", selectedPlan);
       formData.append(
         "interval",
@@ -73,6 +121,14 @@ export default function SelectPlanPage() {
     }
   };
 
+  if (!restaurantId) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-green-500 border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white">
       {/* Background Pattern */}
@@ -81,11 +137,8 @@ export default function SelectPlanPage() {
       {/* Header */}
       <div className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ChefHat className="h-8 w-8 text-green-600" />
-            <span className="text-2xl font-bold">DineEasy</span>
-          </div>
-          <div className="text-sm text-gray-500">Step 1 of 4</div>
+          <Logo />
+          <div className="text-sm text-gray-500">Final Step</div>
         </div>
       </div>
 
@@ -143,8 +196,8 @@ export default function SelectPlanPage() {
                   selectedPlan === plan.id
                     ? "ring-2 ring-green-500 shadow-lg"
                     : plan.highlighted
-                    ? "border-green-200 shadow-md"
-                    : ""
+                      ? "border-green-200 shadow-md"
+                      : ""
                 }`}
                 onClick={() => handlePlanSelect(plan.id)}
               >
@@ -214,7 +267,7 @@ export default function SelectPlanPage() {
         >
           <Button
             onClick={handleContinue}
-            disabled={isLoading}
+            disabled={isLoading || !restaurantId}
             size="lg"
             className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8"
           >

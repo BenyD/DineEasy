@@ -4,13 +4,14 @@ import type React from "react";
 import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ChefHat, Mail, ArrowLeft } from "lucide-react";
+import { Mail, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { Logo } from "@/components/layout/Logo";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -55,8 +56,7 @@ export default function ForgotPasswordPage() {
           className="max-w-md mx-auto w-full"
         >
           <div className="flex items-center gap-2 mb-8">
-            <ChefHat className="h-8 w-8 text-green-600" />
-            <span className="text-2xl font-bold">DineEasy</span>
+            <Logo />
           </div>
 
           <div className="mb-8">

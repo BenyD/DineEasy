@@ -5,12 +5,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ChefHat, Eye, EyeOff, Mail, Lock, Check } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { Logo } from "@/components/layout/Logo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       });
@@ -43,8 +44,31 @@ export default function LoginPage() {
         throw error;
       }
 
-      // Redirect to dashboard on success
-      router.push("/dashboard");
+      // Check if user needs to complete onboarding
+      const { data: restaurant } = await supabase
+        .from("restaurants")
+        .select("id, subscription_status")
+        .eq("owner_id", data.user.id)
+        .single();
+
+      // Show success message
+      toast.success("Signed in successfully");
+
+      // Wait a moment for session to be established
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Redirect based on onboarding status
+      if (!restaurant) {
+        router.push("/setup");
+      } else if (
+        !restaurant.subscription_status ||
+        restaurant.subscription_status === "inactive"
+      ) {
+        router.push("/select-plan");
+      } else {
+        router.push("/dashboard");
+      }
+
       router.refresh();
     } catch (error: any) {
       toast.error(error.message || "Failed to sign in");
@@ -64,8 +88,7 @@ export default function LoginPage() {
           className="max-w-md mx-auto w-full"
         >
           <div className="flex items-center gap-2 mb-8">
-            <ChefHat className="h-8 w-8 text-green-600" />
-            <span className="text-2xl font-bold">DineEasy</span>
+            <Logo />
           </div>
 
           <div className="mb-8">

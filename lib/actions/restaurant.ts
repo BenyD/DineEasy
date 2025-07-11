@@ -19,19 +19,68 @@ export async function createRestaurant(formData: FormData) {
   }
 
   try {
+    // Validate required fields
+    const name = formData.get("name") as string;
+    const type = formData.get("type") as Restaurant["type"];
+    const email = formData.get("email") as string;
+    const currency = (formData.get("currency") as Currency) || "CHF";
+
+    if (!name || !type || !email) {
+      return { error: "Missing required fields" };
+    }
+
     // Create Stripe customer first
     const customer = await stripe.customers.create({
       email: user.email,
-      name: formData.get("name") as string,
+      name: name,
     });
+
+    // Handle file uploads if present
+    let logo_url = null;
+    let cover_url = null;
+
+    const logo = formData.get("logo") as File;
+    const coverPhoto = formData.get("coverPhoto") as File;
+
+    if (logo?.size) {
+      const logoPath = `restaurants/${user.id}/logo-${Date.now()}`;
+      const { data: logoData, error: logoError } = await supabase.storage
+        .from("restaurant-images")
+        .upload(logoPath, logo);
+
+      if (logoError) {
+        console.error("Error uploading logo:", logoError);
+      } else {
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("restaurant-images").getPublicUrl(logoPath);
+        logo_url = publicUrl;
+      }
+    }
+
+    if (coverPhoto?.size) {
+      const coverPath = `restaurants/${user.id}/cover-${Date.now()}`;
+      const { data: coverData, error: coverError } = await supabase.storage
+        .from("restaurant-images")
+        .upload(coverPath, coverPhoto);
+
+      if (coverError) {
+        console.error("Error uploading cover photo:", coverError);
+      } else {
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("restaurant-images").getPublicUrl(coverPath);
+        cover_url = publicUrl;
+      }
+    }
 
     const restaurant: Restaurant = {
       owner_id: user.id,
-      name: formData.get("name") as string,
-      slug: (formData.get("name") as string).toLowerCase().replace(/\s+/g, "-"),
-      type: formData.get("type") as Restaurant["type"],
-      email: formData.get("email") as string,
-      currency: (formData.get("currency") as Currency) || "CHF",
+      name,
+      slug: name.toLowerCase().replace(/\s+/g, "-"),
+      type,
+      email,
+      currency,
       tax_rate: parseFloat(formData.get("tax_rate") as string) || 7.7,
       description: (formData.get("description") as string) || null,
       cuisine: (formData.get("cuisine") as string) || null,
@@ -40,13 +89,16 @@ export async function createRestaurant(formData: FormData) {
       address: (formData.get("address") as string) || null,
       city: (formData.get("city") as string) || null,
       postal_code: (formData.get("postal_code") as string) || null,
+      country: (formData.get("country") as string) || null,
       seating_capacity:
         parseInt(formData.get("seating_capacity") as string) || null,
-      accepts_reservations: formData.get("accepts_reservations") === "on",
-      delivery_available: formData.get("delivery_available") === "on",
-      takeout_available: formData.get("takeout_available") === "on",
+      accepts_reservations: formData.get("accepts_reservations") === "true",
+      delivery_available: formData.get("delivery_available") === "true",
+      takeout_available: formData.get("takeout_available") === "true",
       stripe_customer_id: customer.id,
       subscription_status: "incomplete",
+      logo_url,
+      cover_url,
     };
 
     const { error } = await supabase
@@ -59,7 +111,7 @@ export async function createRestaurant(formData: FormData) {
       return { error: error.message };
     }
 
-    redirect("/select-plan");
+    return { success: true };
   } catch (error) {
     console.error("Error creating restaurant:", error);
     return { error: "Failed to create restaurant" };
