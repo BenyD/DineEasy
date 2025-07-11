@@ -95,6 +95,8 @@ export async function signUp(formData: FormData) {
     return {
       success: true,
       message: "Check your email to verify your account",
+      session: signUpData.session,
+      user: signUpData.user,
     };
   } catch (error) {
     console.error("Unexpected error during signup:", error);

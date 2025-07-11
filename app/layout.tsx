@@ -63,7 +63,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <RootLayoutClient />
         {children}
-        <Toaster />
+        <Toaster position="top-right" expand={false} richColors closeButton />
         <CookieConsent />
       </body>
     </html>

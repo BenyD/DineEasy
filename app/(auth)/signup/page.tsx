@@ -98,36 +98,63 @@ export default function SignUpPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    // Validate form before proceeding
+    if (!validateForm()) {
+      toast.error("Invalid form", {
+        description: passwordError,
+      });
+      return;
+    }
+
     setIsLoading(true);
 
-    try {
-      const formElement = e.currentTarget;
-      const formData = new FormData(formElement);
+    const promise = new Promise(async (resolve, reject) => {
+      try {
+        const formElement = e.currentTarget;
+        const formData = new FormData(formElement);
 
-      // Get the restaurant name and set it as full_name
-      const restaurantName = formData.get("restaurantName");
-      formData.set("full_name", restaurantName as string);
+        // Get the restaurant name and set it as full_name
+        const restaurantName = formData.get("restaurantName");
+        formData.set("full_name", restaurantName as string);
 
-      console.log("Submitting signup form with data:", {
-        email: formData.get("email"),
-        restaurantName: formData.get("restaurantName"),
-        full_name: formData.get("full_name"),
-      });
+        console.log("Submitting signup form with data:", {
+          email: formData.get("email"),
+          restaurantName: formData.get("restaurantName"),
+          full_name: formData.get("full_name"),
+        });
 
-      const result = await signUp(formData);
+        const result = await signUp(formData);
 
-      if (result.error) {
-        toast.error(result.error);
-        return;
+        if (result.error) {
+          reject(new Error(result.error));
+          return;
+        }
+
+        // Store the session data
+        if (result.session) {
+          const supabase = createClient();
+          await supabase.auth.setSession(result.session);
+        }
+
+        resolve(result);
+      } catch (error) {
+        console.error("Signup error:", error);
+        reject(new Error("An unexpected error occurred"));
       }
+    });
 
-      toast.success(
-        result.message || "Check your email to verify your account"
-      );
-      router.push("/verify-email");
-    } catch (error) {
-      console.error("Signup error:", error);
-      toast.error("An unexpected error occurred");
+    toast.promise(promise, {
+      loading: "Creating your account...",
+      success: () => {
+        router.push("/verify-email");
+        return "Account created successfully! Check your email to verify your account.";
+      },
+      error: (err: Error) => err.message,
+    });
+
+    try {
+      await promise;
     } finally {
       setIsLoading(false);
     }

@@ -26,6 +26,36 @@ export default function VerifyEmailPage() {
       try {
         const supabase = createClient();
 
+        // First try to get the session
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session) {
+          console.log("No session found, attempting to recover from URL");
+          // If no session, check if we have a hash in the URL (Supabase adds this on redirects)
+          const hashParams = new URLSearchParams(
+            window.location.hash.substring(1)
+          );
+          const access_token = hashParams.get("access_token");
+          const refresh_token = hashParams.get("refresh_token");
+
+          if (access_token && refresh_token) {
+            // Try to set the session from the URL parameters
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token,
+              refresh_token,
+            });
+
+            if (sessionError) {
+              console.error("Error setting session:", sessionError);
+              setVerificationStatus("error");
+              setError("Session expired. Please try signing up again.");
+              return;
+            }
+          }
+        }
+
         // Get the current user
         const {
           data: { user },
@@ -35,7 +65,7 @@ export default function VerifyEmailPage() {
         if (userError || !user) {
           console.error("User error:", userError);
           setVerificationStatus("error");
-          setError("User not found. Please try signing up again.");
+          setError("Session expired. Please try signing up again.");
           return;
         }
 
