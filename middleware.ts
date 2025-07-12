@@ -19,6 +19,9 @@ const publicRoutes = [
   "/verify-email",
 ];
 
+// Define onboarding routes that should be accessible during onboarding
+const onboardingRoutes = ["/setup", "/select-plan", "/setup/connect"];
+
 export async function middleware(request: NextRequest) {
   const res = NextResponse.next();
 
@@ -95,35 +98,80 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    // If user is authenticated but hasn't completed onboarding
-    if (user && needsOnboarding(request.nextUrl.pathname)) {
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+    // Import the utility function dynamically (since middleware runs in edge runtime)
+    const { getOnboardingStatus } = await import("./lib/utils");
 
-      if (profileError) {
-        console.error("Profile error in middleware:", profileError);
+    // Get user's current onboarding status
+    const onboardingStatus = await getOnboardingStatus(supabase);
+
+    // If user is on an onboarding route but shouldn't be there, redirect them
+    if (
+      onboardingRoutes.some((route) =>
+        request.nextUrl.pathname.startsWith(route)
+      )
+    ) {
+      const currentRoute = request.nextUrl.pathname;
+      let shouldRedirect = false;
+      let redirectTo = "";
+
+      // Check if user is on the wrong onboarding step
+      if (onboardingStatus.step === "auth") {
+        shouldRedirect = true;
+        redirectTo = "/login";
+      } else if (
+        onboardingStatus.step === "setup" &&
+        !currentRoute.startsWith("/setup")
+      ) {
+        shouldRedirect = true;
+        redirectTo = "/setup";
+      } else if (
+        onboardingStatus.step === "select-plan" &&
+        !currentRoute.startsWith("/select-plan")
+      ) {
+        shouldRedirect = true;
+        redirectTo = "/select-plan";
+      } else if (
+        onboardingStatus.step === "connect-stripe" &&
+        !currentRoute.startsWith("/setup/connect")
+      ) {
+        shouldRedirect = true;
+        redirectTo = "/setup/connect";
+      } else if (
+        onboardingStatus.step === "complete" &&
+        onboardingRoutes.some((route) => currentRoute.startsWith(route))
+      ) {
+        shouldRedirect = true;
+        redirectTo = "/dashboard";
       }
 
-      if (!profile) {
-        return NextResponse.redirect(new URL("/setup", request.url));
+      if (shouldRedirect) {
+        return NextResponse.redirect(new URL(redirectTo, request.url));
       }
+    }
 
-      const { data: restaurant, error: restaurantError } = await supabase
-        .from("restaurants")
-        .select("subscription_status")
-        .eq("owner_id", user.id)
-        .single();
-
-      if (restaurantError) {
-        console.error("Restaurant error in middleware:", restaurantError);
+    // If user is trying to access dashboard but hasn't completed onboarding
+    if (
+      request.nextUrl.pathname.startsWith("/dashboard") &&
+      onboardingStatus.step !== "complete"
+    ) {
+      let redirectTo = "";
+      switch (onboardingStatus.step) {
+        case "auth":
+          redirectTo = "/login";
+          break;
+        case "setup":
+          redirectTo = "/setup";
+          break;
+        case "select-plan":
+          redirectTo = "/select-plan";
+          break;
+        case "connect-stripe":
+          redirectTo = "/setup/connect";
+          break;
+        default:
+          redirectTo = "/login";
       }
-
-      if (!restaurant || !restaurant.subscription_status) {
-        return NextResponse.redirect(new URL("/select-plan", request.url));
-      }
+      return NextResponse.redirect(new URL(redirectTo, request.url));
     }
 
     return res;
@@ -134,10 +182,6 @@ export async function middleware(request: NextRequest) {
     loginUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
-}
-
-function needsOnboarding(pathname: string): boolean {
-  return pathname.startsWith("/dashboard");
 }
 
 export const config = {

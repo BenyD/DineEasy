@@ -14,10 +14,11 @@ export default async function DashboardLayout({
 
   // Check if user is authenticated
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (error || !user) {
     redirect("/login");
   }
 
@@ -25,7 +26,7 @@ export default async function DashboardLayout({
   const { data: restaurants } = await supabase
     .from("restaurants")
     .select("id, subscription_status")
-    .eq("owner_id", session.user.id)
+    .eq("owner_id", user.id)
     .single();
 
   // If no restaurant, redirect to setup

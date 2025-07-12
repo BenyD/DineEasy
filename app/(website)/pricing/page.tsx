@@ -444,6 +444,26 @@ export default function PricingPage() {
                         </div>
                       ))}
                     </div>
+                    {/* Render negative features greyed out with X mark */}
+                    {plan.negativeFeatures && (
+                      <div className="mt-4 space-y-3">
+                        {plan.negativeFeatures.map(
+                          (feature: string, idx: number) => (
+                            <div
+                              key={idx}
+                              className="flex items-start gap-3 opacity-60"
+                            >
+                              <div className="flex-shrink-0">
+                                <X className="h-5 w-5 text-gray-400" />
+                              </div>
+                              <span className="text-sm text-gray-400 line-through">
+                                {feature}
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>

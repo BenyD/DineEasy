@@ -15,6 +15,9 @@ import {
   ChefHat,
   Building2,
   Mail,
+  CreditCard,
+  Shield,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,8 +40,10 @@ import {
   CURRENCIES,
   CURRENCY_NAMES,
   CURRENCY_SYMBOLS,
+  COUNTRY_OPTIONS,
   type Currency,
 } from "@/lib/constants";
+import { getOnboardingStatus, redirectToOnboardingStep } from "@/lib/utils";
 
 const RESTAURANT_TYPES = [
   { value: "restaurant", label: "Restaurant" },
@@ -133,6 +138,15 @@ export default function SetupPage() {
         return;
       }
 
+      // Check if user should be on this page
+      const onboardingStatus = await getOnboardingStatus(supabase);
+
+      if (onboardingStatus.step !== "setup") {
+        // User has already completed this step or needs to go to a different step
+        redirectToOnboardingStep(onboardingStatus.step, router);
+        return;
+      }
+
       setIsAuthenticated(true);
       setIsCheckingAuth(false);
     };
@@ -149,11 +163,58 @@ export default function SetupPage() {
     });
   };
 
+  // Add a helper to map currency to country
+  const getCountryByCurrency = (currency: string) => {
+    const country = COUNTRY_OPTIONS.find((c) => c.currency === currency);
+    return country ? country.value : "";
+  };
+
+  // Auto-select country when currency changes and step is 3
+  useEffect(() => {
+    if (step === 3) {
+      const countryForCurrency = getCountryByCurrency(formData.currency);
+      if (
+        (!formData.country && countryForCurrency) ||
+        (formData.country &&
+          COUNTRY_OPTIONS.find((c) => c.value === formData.country)
+            ?.currency !== formData.currency)
+      ) {
+        setFormData((prev) => ({ ...prev, country: countryForCurrency }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.currency, step]);
+
   const handleSelectChange = (name: string, value: string) => {
-    setFormData({
+    let newFormData = {
       ...formData,
       [name]: value,
-    });
+    };
+
+    // Auto-set currency based on country selection
+    if (name === "country") {
+      const selectedCountry = COUNTRY_OPTIONS.find(
+        (country) => country.value === value
+      );
+      if (selectedCountry) {
+        newFormData.currency = selectedCountry.currency;
+      }
+    }
+
+    // Auto-set country based on currency selection
+    if (name === "currency") {
+      const countryForCurrency = getCountryByCurrency(value);
+      // Only update if country is not set or doesn't match the currency
+      if (
+        !formData.country ||
+        COUNTRY_OPTIONS.find((c) => c.value === formData.country)?.currency !==
+          value
+      ) {
+        newFormData.country = countryForCurrency;
+      }
+    }
+
+    setFormData(newFormData);
   };
 
   const handleSwitchChange = (name: string, checked: boolean) => {
@@ -271,6 +332,7 @@ export default function SetupPage() {
       toast.error("Business email is required");
       return;
     }
+
     handleNext();
   };
 
@@ -708,14 +770,42 @@ export default function SetupPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="country">Country</Label>
-                      <Input
-                        id="country"
-                        name="country"
+                      <Select
                         value={formData.country}
-                        onChange={handleChange}
-                        placeholder="Country"
-                        className="h-11"
-                      />
+                        onValueChange={(value) =>
+                          handleSelectChange("country", value)
+                        }
+                      >
+                        <SelectTrigger className="h-11">
+                          <SelectValue placeholder="Select your country" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {COUNTRY_OPTIONS.map((country) => (
+                            <SelectItem
+                              key={country.value}
+                              value={country.value}
+                            >
+                              {country.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {formData.country && (
+                        <p className="text-sm text-gray-500">
+                          💡 Currency will be automatically set to{" "}
+                          {
+                            COUNTRY_OPTIONS.find(
+                              (c) => c.value === formData.country
+                            )?.currency
+                          }{" "}
+                          for{" "}
+                          {
+                            COUNTRY_OPTIONS.find(
+                              (c) => c.value === formData.country
+                            )?.label
+                          }
+                        </p>
+                      )}
                     </div>
 
                     <div className="pt-6 space-y-4">

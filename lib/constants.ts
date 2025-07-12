@@ -7,6 +7,15 @@ export {
   type Currency,
 } from "./constants/currencies";
 
+// Import countries from separate file
+export {
+  COUNTRIES,
+  COUNTRY_OPTIONS,
+  type CountryCode,
+  getCountryByCurrency,
+  getCurrencyByCountry,
+} from "./constants/countries";
+
 // Import subscription constants
 export { SUBSCRIPTION, PLATFORM_COMMISSION } from "./constants/subscription";
 

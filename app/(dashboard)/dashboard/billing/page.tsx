@@ -1,8 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle, ArrowRight, CreditCard, AlertCircle } from "lucide-react";
+import {
+  CheckCircle,
+  ArrowRight,
+  CreditCard,
+  AlertCircle,
+  Loader2,
+  Sparkles,
+  XCircle,
+  AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,26 +20,24 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { PLANS } from "@/lib/constants";
-
-// Mock data - replace with real data fetching
-const billingData = {
-  plan: "Pro",
-  price: 39,
-  billingCycle: "monthly",
-  nextBillingDate: new Date("2024-05-01"),
-  trialEndsAt: new Date("2024-04-15"),
-  stripeConnected: true,
-  usage: {
-    tables: { used: 8, limit: 12 },
-    menuItems: { used: 75, limit: 100 },
-    staff: { used: 2, limit: 3 },
-  },
-};
+import { useBillingData } from "@/hooks/useBillingData";
+import { createStripePortalSession } from "@/lib/actions/billing";
+import { toast } from "sonner";
+import { cancelSubscription } from "@/lib/actions/subscription";
+import { useSearchParams } from "next/navigation";
 
 function calculateDaysLeft(endDate: Date) {
   const now = new Date();
@@ -38,7 +45,8 @@ function calculateDaysLeft(endDate: Date) {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-function formatDate(date: Date) {
+function formatDate(date: Date | null) {
+  if (!date) return "Not available";
   return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     month: "long",
@@ -65,10 +73,110 @@ const cardVariants = {
 };
 
 export default function BillingPage() {
-  const daysLeft = calculateDaysLeft(billingData.trialEndsAt);
+  const billingData = useBillingData();
+  const searchParams = useSearchParams();
+  const [isLoadingPortal, setIsLoadingPortal] = useState(false);
+  const [isLoadingCancel, setIsLoadingCancel] = useState(false);
+  const [showUpgradeSuccess, setShowUpgradeSuccess] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+
+  const daysLeft = billingData.trialEndsAt
+    ? calculateDaysLeft(billingData.trialEndsAt)
+    : 0;
   const isTrialActive = daysLeft > 0;
 
-  if (!billingData.stripeConnected) {
+  // Check if subscription is cancelled
+  const isSubscriptionCancelled =
+    billingData.nextBillingDate &&
+    new Date(billingData.nextBillingDate) < new Date();
+
+  // Handle upgrade success message
+  useEffect(() => {
+    if (searchParams?.get("upgraded") === "true") {
+      setShowUpgradeSuccess(true);
+      toast.success(
+        "🎉 Plan upgraded successfully! Your new features are now available."
+      );
+
+      // Refresh billing data to show updated plan
+      billingData.refresh();
+
+      // Remove the URL parameter
+      const url = new URL(window.location.href);
+      url.searchParams.delete("upgraded");
+      window.history.replaceState({}, "", url.toString());
+
+      // Hide success message after 5 seconds
+      setTimeout(() => setShowUpgradeSuccess(false), 5000);
+    }
+  }, [searchParams, billingData.refresh]);
+
+  const handleStripePortal = async () => {
+    setIsLoadingPortal(true);
+    try {
+      const result = await createStripePortalSession();
+      if (result.error) {
+        toast.error(result.error);
+      } else if (result.portalUrl) {
+        window.location.href = result.portalUrl;
+      }
+    } catch (error) {
+      toast.error("Failed to open billing portal");
+    } finally {
+      setIsLoadingPortal(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    setShowCancelDialog(false);
+    setIsLoadingCancel(true);
+    try {
+      const formData = new FormData();
+      formData.append("restaurant_id", billingData.restaurantId || "");
+      const res = await cancelSubscription(formData);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(
+          "Subscription cancellation scheduled. You will retain access until the end of the billing period."
+        );
+        // Refresh billing data to show updated status
+        billingData.refresh();
+      }
+    } catch (err) {
+      toast.error("Failed to cancel subscription.");
+    } finally {
+      setIsLoadingCancel(false);
+    }
+  };
+
+  // Show loading state
+  if (billingData.isLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading billing information...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (billingData.error) {
+    return (
+      <div className="p-6">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-red-600">
+            Error Loading Billing
+          </h2>
+          <p className="text-gray-600 mt-2">{billingData.error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!billingData.hasActiveSubscription) {
     return (
       <div className="p-6 space-y-8 max-w-3xl mx-auto">
         <motion.div
@@ -181,6 +289,45 @@ export default function BillingPage() {
         </p>
       </motion.div>
 
+      {/* Upgrade Success Message */}
+      {showUpgradeSuccess && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="transform transition-all duration-200"
+        >
+          <Alert variant="default" className="bg-green-50 border-green-200">
+            <Sparkles className="h-4 w-4 text-green-600" />
+            <AlertTitle>Plan Upgraded Successfully! 🎉</AlertTitle>
+            <AlertDescription>
+              Your plan has been upgraded and your new features are now
+              available.
+              {isTrialActive && " Your trial period has been preserved."}
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
+
+      {/* Cancellation Notice */}
+      {isSubscriptionCancelled && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="transform transition-all duration-200"
+        >
+          <Alert variant="destructive" className="bg-red-50 border-red-200">
+            <XCircle className="h-4 w-4 text-red-600" />
+            <AlertTitle>Subscription Cancelled</AlertTitle>
+            <AlertDescription>
+              Your subscription has been cancelled and will end on{" "}
+              {formatDate(billingData.nextBillingDate)}. You can reactivate your
+              subscription at any time by visiting the change plan page.
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
+
       {isTrialActive && (
         <motion.div
           variants={cardVariants}
@@ -188,17 +335,24 @@ export default function BillingPage() {
           animate="show"
           className="transform transition-all duration-200"
         >
-          <Alert variant="default" className="bg-green-50 border-green-200">
+          <Alert variant="default" className="bg-blue-50 border-blue-200">
             <AlertTitle>{`🎉 You're on your 14-day free trial — ${daysLeft} days remaining!`}</AlertTitle>
             <AlertDescription>
               You're currently on the {billingData.plan} plan. Your card will be
-              charged CHF {billingData.price} on{" "}
+              charged {billingData.currency} {billingData.price} on{" "}
               {formatDate(billingData.nextBillingDate)} unless you cancel.
-              <div className="mt-3">
-                <Button className="bg-green-600 hover:bg-green-700 text-white">
-                  Upgrade Now
-                </Button>
-              </div>
+              {billingData.plan.toLowerCase() !== "elite" && (
+                <div className="mt-3">
+                  <Button
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={() =>
+                      (window.location.href = "/dashboard/billing/change-plan")
+                    }
+                  >
+                    Upgrade Now
+                  </Button>
+                </div>
+              )}
             </AlertDescription>
           </Alert>
         </motion.div>
@@ -225,12 +379,18 @@ export default function BillingPage() {
                 </div>
                 <Badge
                   className={`${
-                    isTrialActive
-                      ? "bg-blue-100 text-blue-800"
-                      : "bg-green-100 text-green-800"
+                    isSubscriptionCancelled
+                      ? "bg-red-100 text-red-800"
+                      : isTrialActive
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-green-100 text-green-800"
                   }`}
                 >
-                  {isTrialActive ? "Trial" : "Active"}
+                  {isSubscriptionCancelled
+                    ? "Cancelled"
+                    : isTrialActive
+                      ? "Trial"
+                      : "Active"}
                 </Badge>
               </div>
             </CardHeader>
@@ -240,7 +400,7 @@ export default function BillingPage() {
                   {billingData.plan} Plan
                 </h3>
                 <p className="text-sm text-gray-500">
-                  CHF {billingData.price}/
+                  {billingData.currency} {billingData.price}/
                   {billingData.billingCycle === "monthly" ? "month" : "year"}
                 </p>
               </div>
@@ -255,19 +415,21 @@ export default function BillingPage() {
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Next billing date</span>
+                  <span className="text-gray-500">
+                    {isSubscriptionCancelled
+                      ? "Access ends"
+                      : isTrialActive
+                        ? "Trial ends"
+                        : "Next billing date"}
+                  </span>
                   <span className="font-medium">
-                    {formatDate(billingData.nextBillingDate)}
+                    {formatDate(
+                      isTrialActive
+                        ? billingData.trialEndsAt
+                        : billingData.nextBillingDate
+                    )}
                   </span>
                 </div>
-                {isTrialActive && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Trial ends on</span>
-                    <span className="font-medium">
-                      {formatDate(billingData.trialEndsAt)}
-                    </span>
-                  </div>
-                )}
               </div>
 
               <Separator />
@@ -306,13 +468,23 @@ export default function BillingPage() {
                   Change Plan
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
-                  onClick={() => (window.location.href = "/api/stripe/portal")}
-                >
-                  Cancel Subscription
-                </Button>
+                {!isSubscriptionCancelled && (
+                  <Button
+                    variant="outline"
+                    className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => setShowCancelDialog(true)}
+                    disabled={isLoadingCancel}
+                  >
+                    {isLoadingCancel ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Canceling...
+                      </>
+                    ) : (
+                      "Cancel Subscription"
+                    )}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -343,18 +515,21 @@ export default function BillingPage() {
                   <div className="flex justify-between text-sm">
                     <span className="font-medium">Menu Items</span>
                     <span className="text-gray-500">
-                      {billingData.usage.menuItems.used} of{" "}
-                      {billingData.usage.menuItems.limit} used
+                      {billingData.plan.toLowerCase() === "elite"
+                        ? "Unlimited"
+                        : `${billingData.usage.menuItems.used} of ${billingData.usage.menuItems.limit} used`}
                     </span>
                   </div>
-                  <Progress
-                    value={
-                      (billingData.usage.menuItems.used /
-                        billingData.usage.menuItems.limit) *
-                      100
-                    }
-                    className="h-2 bg-gray-100 [&>div]:bg-green-600"
-                  />
+                  {billingData.plan.toLowerCase() !== "elite" && (
+                    <Progress
+                      value={
+                        (billingData.usage.menuItems.used /
+                          billingData.usage.menuItems.limit) *
+                        100
+                      }
+                      className="h-2 bg-gray-100 [&>div]:bg-green-600"
+                    />
+                  )}
                 </motion.div>
 
                 {/* Tables Usage */}
@@ -362,18 +537,21 @@ export default function BillingPage() {
                   <div className="flex justify-between text-sm">
                     <span className="font-medium">Tables with QR Codes</span>
                     <span className="text-gray-500">
-                      {billingData.usage.tables.used} of{" "}
-                      {billingData.usage.tables.limit} used
+                      {billingData.plan.toLowerCase() === "elite"
+                        ? "Unlimited"
+                        : `${billingData.usage.tables.used} of ${billingData.usage.tables.limit} used`}
                     </span>
                   </div>
-                  <Progress
-                    value={
-                      (billingData.usage.tables.used /
-                        billingData.usage.tables.limit) *
-                      100
-                    }
-                    className="h-2 bg-gray-100 [&>div]:bg-green-600"
-                  />
+                  {billingData.plan.toLowerCase() !== "elite" && (
+                    <Progress
+                      value={
+                        (billingData.usage.tables.used /
+                          billingData.usage.tables.limit) *
+                        100
+                      }
+                      className="h-2 bg-gray-100 [&>div]:bg-green-600"
+                    />
+                  )}
                 </motion.div>
 
                 {/* Staff Usage */}
@@ -381,18 +559,21 @@ export default function BillingPage() {
                   <div className="flex justify-between text-sm">
                     <span className="font-medium">Staff Accounts</span>
                     <span className="text-gray-500">
-                      {billingData.usage.staff.used} of{" "}
-                      {billingData.usage.staff.limit} used
+                      {billingData.plan.toLowerCase() === "elite"
+                        ? "Unlimited"
+                        : `${billingData.usage.staff.used} of ${billingData.usage.staff.limit} used`}
                     </span>
                   </div>
-                  <Progress
-                    value={
-                      (billingData.usage.staff.used /
-                        billingData.usage.staff.limit) *
-                      100
-                    }
-                    className="h-2 bg-gray-100 [&>div]:bg-green-600"
-                  />
+                  {billingData.plan.toLowerCase() !== "elite" && (
+                    <Progress
+                      value={
+                        (billingData.usage.staff.used /
+                          billingData.usage.staff.limit) *
+                        100
+                      }
+                      className="h-2 bg-gray-100 [&>div]:bg-green-600"
+                    />
+                  )}
                 </motion.div>
               </motion.div>
 
@@ -408,10 +589,11 @@ export default function BillingPage() {
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => (window.location.href = "/api/stripe/portal")}
+                  onClick={handleStripePortal}
+                  disabled={isLoadingPortal}
                 >
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Manage Billing in Stripe
+                  {isLoadingPortal ? "Loading..." : "Manage Billing in Stripe"}
                 </Button>
               </div>
 
@@ -467,6 +649,45 @@ export default function BillingPage() {
           </Card>
         </motion.div>
       </motion.div>
+
+      {/* Cancel Subscription Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Cancel Subscription
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel your subscription? You will retain
+              access until the end of the billing period (
+              {formatDate(billingData.nextBillingDate)}).
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowCancelDialog(false)}
+            >
+              Keep Subscription
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelSubscription}
+              disabled={isLoadingCancel}
+            >
+              {isLoadingCancel ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Canceling...
+                </>
+              ) : (
+                "Cancel Subscription"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -2,8 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Database } from "@/types/supabase";
+import type { Database } from "@/types/supabase";
 import { stripe } from "@/lib/stripe";
+import Stripe from "stripe";
 
 type Restaurant = Database["public"]["Tables"]["restaurants"]["Insert"];
 type Currency = Database["public"]["Enums"]["currency"];
@@ -332,4 +333,160 @@ export async function getRestaurantBySlug(slug: string) {
   }
 
   return { restaurant };
+}
+
+export async function completeOnboarding(restaurantId: string) {
+  const supabase = createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  try {
+    // Get the restaurant to verify ownership and current status
+    const { data: restaurant, error: restaurantError } = await supabase
+      .from("restaurants")
+      .select("*")
+      .eq("id", restaurantId)
+      .eq("owner_id", user.id)
+      .single();
+
+    if (restaurantError || !restaurant) {
+      return { error: "Restaurant not found or not authorized" };
+    }
+
+    console.log("Completing onboarding for restaurant:", {
+      restaurantId: restaurant.id,
+      restaurantName: restaurant.name,
+      stripeCustomerId: restaurant.stripe_customer_id,
+      stripeAccountId: restaurant.stripe_account_id,
+      subscriptionStatus: restaurant.subscription_status,
+    });
+
+    // Ensure Stripe customer exists and is properly linked
+    let stripeCustomerId = restaurant.stripe_customer_id;
+    if (!stripeCustomerId) {
+      console.log("Creating Stripe customer for restaurant:", restaurant.id);
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: restaurant.name,
+        metadata: {
+          restaurantId: restaurant.id,
+          restaurantName: restaurant.name,
+        },
+      });
+      stripeCustomerId = customer.id;
+
+      // Update restaurant with new Stripe customer ID
+      await supabase
+        .from("restaurants")
+        .update({
+          stripe_customer_id: stripeCustomerId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", restaurantId);
+
+      console.log("Created and linked Stripe customer:", stripeCustomerId);
+    } else {
+      // Verify the existing customer exists in Stripe
+      try {
+        const customer = (await stripe.customers.retrieve(
+          stripeCustomerId
+        )) as Stripe.Customer;
+        console.log("Verified existing Stripe customer:", customer.id);
+
+        // Update customer metadata if needed
+        if (
+          !customer.metadata.restaurantId ||
+          customer.metadata.restaurantId !== restaurantId
+        ) {
+          await stripe.customers.update(stripeCustomerId, {
+            metadata: {
+              restaurantId: restaurant.id,
+              restaurantName: restaurant.name,
+            },
+          });
+          console.log("Updated Stripe customer metadata");
+        }
+      } catch (error: any) {
+        if (error?.code === "resource_missing") {
+          // Customer doesn't exist, create a new one
+          console.log("Stripe customer not found, creating new one");
+          const customer = await stripe.customers.create({
+            email: user.email,
+            name: restaurant.name,
+            metadata: {
+              restaurantId: restaurant.id,
+              restaurantName: restaurant.name,
+            },
+          });
+          stripeCustomerId = customer.id;
+
+          await supabase
+            .from("restaurants")
+            .update({
+              stripe_customer_id: stripeCustomerId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", restaurantId);
+
+          console.log("Created new Stripe customer:", stripeCustomerId);
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    // If restaurant has Stripe Connect account, verify it's properly linked
+    if (restaurant.stripe_account_id) {
+      try {
+        const account = await stripe.accounts.retrieve(
+          restaurant.stripe_account_id
+        );
+        console.log("Verified Stripe Connect account:", account.id);
+
+        // Update restaurant with current account status
+        await supabase
+          .from("restaurants")
+          .update({
+            stripe_account_enabled: account.charges_enabled,
+            stripe_account_requirements: account.requirements,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", restaurantId);
+
+        console.log("Updated Stripe Connect account status");
+      } catch (error: any) {
+        console.error("Error verifying Stripe Connect account:", error);
+        // Don't fail onboarding if Stripe Connect verification fails
+      }
+    }
+
+    // Mark onboarding as completed
+    await supabase
+      .from("restaurants")
+      .update({
+        onboarding_completed: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", restaurantId);
+
+    console.log(
+      "Successfully completed onboarding for restaurant:",
+      restaurantId
+    );
+
+    return {
+      success: true,
+      stripeCustomerId,
+      stripeAccountId: restaurant.stripe_account_id,
+      subscriptionStatus: restaurant.subscription_status,
+    };
+  } catch (error) {
+    console.error("Error completing onboarding:", error);
+    return { error: "Failed to complete onboarding" };
+  }
 }

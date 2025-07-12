@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart3,
@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Bell,
   CreditCard,
+  X,
 } from "lucide-react";
 import {
   Card,
@@ -28,6 +29,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { getStripeAccountStatus } from "@/lib/actions/stripe-connect";
 
 // Add this function at the top level
 const formatTime = (date: Date) => {
@@ -59,7 +62,44 @@ const cardVariants = {
 
 export default function DashboardPage() {
   const [currentTime] = useState(new Date());
+  const [showStripeReminder, setShowStripeReminder] = useState(false);
+  const [stripeStatus, setStripeStatus] = useState<string | null>(null);
+  const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const router = useRouter();
+
+  // Check Stripe Connect status
+  useEffect(() => {
+    const checkStripeStatus = async () => {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) return;
+
+        const { data: restaurant } = await supabase
+          .from("restaurants")
+          .select("id")
+          .eq("owner_id", user.id)
+          .single();
+
+        if (!restaurant) return;
+
+        setRestaurantId(restaurant.id);
+        const result = await getStripeAccountStatus(restaurant.id);
+
+        if (result.status === "not_connected") {
+          setShowStripeReminder(true);
+          setStripeStatus("not_connected");
+        }
+      } catch (error) {
+        console.error("Error checking Stripe status:", error);
+      }
+    };
+
+    checkStripeStatus();
+  }, []);
 
   // Mock data - in a real app, this would come from the backend
   const stats = [
@@ -163,13 +203,60 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
+      {/* Stripe Connect Reminder Banner */}
+      {showStripeReminder && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        className="flex items-center justify-between"
+          exit={{ opacity: 0, y: -20 }}
+          className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4"
         >
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              <CreditCard className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+              <div>
+                <h3 className="font-medium text-blue-800">
+                  Set up payments to start accepting customer orders
+                </h3>
+                <p className="text-sm text-blue-700 mt-1">
+                  Connect your Stripe account to receive payments directly to
+                  your bank account. Takes just 5 minutes to set up.
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    size="sm"
+                    onClick={() => router.push("/setup/connect")}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Set Up Payments
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowStripeReminder(false)}
+                  >
+                    Remind me later
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowStripeReminder(false)}
+              className="text-blue-400 hover:text-blue-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="flex items-center justify-between"
+      >
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-500">
@@ -183,16 +270,16 @@ export default function DashboardPage() {
               {formatTime(currentTime)}
             </span>
           </div>
-            </div>
-        </motion.div>
+        </div>
+      </motion.div>
 
       {/* Stats Grid */}
-        <motion.div
+      <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="show"
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-        >
+      >
         {stats.map((stat, index) => (
           <motion.div
             key={index}
@@ -220,7 +307,7 @@ export default function DashboardPage() {
                         stat.color === "blue" && "text-blue-800",
                         stat.color === "red" && "text-red-800"
                       )}
-              >
+                    >
                       {stat.title}
                     </p>
                     <p
@@ -242,9 +329,9 @@ export default function DashboardPage() {
                       stat.color === "amber" && "text-amber-600",
                       stat.color === "blue" && "text-blue-600",
                       stat.color === "red" && "text-red-600"
-                )}
+                    )}
                   />
-            </div>
+                </div>
                 <div className="mt-2 flex items-center justify-between">
                   <p className="text-sm text-gray-500">{stat.description}</p>
                   <div
@@ -259,8 +346,8 @@ export default function DashboardPage() {
                       <ArrowDownIcon className="w-3 h-3 mr-1" />
                     )}
                     {stat.trend.value}%
-      </div>
-      </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -318,8 +405,8 @@ export default function DashboardPage() {
                             order.status === "Preparing"
                               ? "default"
                               : order.status === "Ready"
-                              ? "outline"
-                              : "secondary"
+                                ? "outline"
+                                : "secondary"
                           }
                           className={cn(
                             order.status === "Preparing" &&
@@ -336,16 +423,16 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="w-3 h-3" />
                         {order.time}
-          </div>
-        </div>
+                      </div>
+                    </div>
                     <div className="text-right">
                       <p className="font-medium">{order.total}</p>
                       <p className="text-sm text-muted-foreground">
                         {order.items} items
                       </p>
-              </div>
+                    </div>
                   </motion.div>
-            ))}
+                ))}
               </motion.div>
             </CardContent>
           </Card>
@@ -362,22 +449,22 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-            <div>
+                <div>
                   <CardTitle>Recent Payments</CardTitle>
                   <CardDescription>
                     Latest transactions from customers
                   </CardDescription>
-            </div>
-            <Button
+                </div>
+                <Button
                   variant="outline"
-              size="sm"
+                  size="sm"
                   className="gap-2"
                   onClick={() => router.push("/dashboard/payments")}
-            >
-              View All
+                >
+                  View All
                   <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <motion.div
@@ -392,7 +479,7 @@ export default function DashboardPage() {
                     variants={cardVariants}
                     whileHover={{ x: 5 }}
                     className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
-              >
+                  >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <p className="font-medium">{payment.customer}</p>
@@ -405,15 +492,15 @@ export default function DashboardPage() {
                             <span className="ml-1">•••• {payment.last4}</span>
                           )}
                         </Badge>
-                  </div>
+                      </div>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="w-3 h-3" />
                         {payment.time}
-                  </div>
-                </div>
+                      </div>
+                    </div>
                     <div className="text-right">
                       <p className="font-medium">{payment.amount}</p>
-                <Badge
+                      <Badge
                         variant="secondary"
                         className={cn(
                           "text-xs",
@@ -421,12 +508,12 @@ export default function DashboardPage() {
                             ? "bg-green-100 text-green-700"
                             : "bg-amber-100 text-amber-700"
                         )}
-                >
+                      >
                         {payment.status}
-                </Badge>
-              </div>
+                      </Badge>
+                    </div>
                   </motion.div>
-            ))}
+                ))}
               </motion.div>
             </CardContent>
           </Card>

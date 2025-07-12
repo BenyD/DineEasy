@@ -33,6 +33,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/layout/Logo";
+import { getOnboardingStatus, redirectToOnboardingStep } from "@/lib/utils";
 
 export default function SelectPlanPage() {
   const router = useRouter();
@@ -57,22 +58,25 @@ export default function SelectPlanPage() {
         return;
       }
 
-      // Get user's restaurant
+      // Check if user should be on this page
+      const onboardingStatus = await getOnboardingStatus(supabase);
+
+      if (onboardingStatus.step !== "select-plan") {
+        // User has already completed this step or needs to go to a different step
+        redirectToOnboardingStep(onboardingStatus.step, router);
+        return;
+      }
+
+      // Get user's restaurant for currency setting
       const { data: restaurant, error } = await supabase
         .from("restaurants")
-        .select("id, subscription_status, currency")
+        .select("id, currency")
         .eq("owner_id", user.id)
         .single();
 
       if (error || !restaurant) {
         toast.error("Restaurant not found");
         router.push("/setup");
-        return;
-      }
-
-      // If subscription is already active, redirect to dashboard
-      if (restaurant.subscription_status === "active") {
-        router.push("/dashboard");
         return;
       }
 

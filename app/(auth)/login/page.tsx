@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/layout/Logo";
+import { getOnboardingStatus, redirectToOnboardingStep } from "@/lib/utils";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,30 +45,15 @@ export default function LoginPage() {
         throw error;
       }
 
-      // Check if user needs to complete onboarding
-      const { data: restaurant } = await supabase
-        .from("restaurants")
-        .select("id, subscription_status")
-        .eq("owner_id", data.user.id)
-        .single();
-
       // Show success message
       toast.success("Signed in successfully");
 
       // Wait a moment for session to be established
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Redirect based on onboarding status
-      if (!restaurant) {
-        router.push("/setup");
-      } else if (
-        !restaurant.subscription_status ||
-        restaurant.subscription_status === "inactive"
-      ) {
-        router.push("/select-plan");
-      } else {
-        router.push("/dashboard");
-      }
+      // Get user's current onboarding status and redirect accordingly
+      const onboardingStatus = await getOnboardingStatus(supabase);
+      redirectToOnboardingStep(onboardingStatus.step, router);
 
       router.refresh();
     } catch (error: any) {

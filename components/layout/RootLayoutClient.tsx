@@ -18,10 +18,26 @@ export default function RootLayoutClient() {
       (event: AuthChangeEvent, session: Session | null) => {
         if (event === "SIGNED_IN") {
           router.refresh();
-          // Only show the toast if not on signup or verify-email pages
+          // Only show the toast if not on public pages, signup, or verify-email pages
+          const isPublicPage =
+            pathname === "/" ||
+            pathname?.startsWith("/about") ||
+            pathname?.startsWith("/contact") ||
+            pathname?.startsWith("/features") ||
+            pathname?.startsWith("/pricing") ||
+            pathname?.startsWith("/privacy") ||
+            pathname?.startsWith("/security") ||
+            pathname?.startsWith("/terms") ||
+            pathname?.startsWith("/setup-guide") ||
+            pathname?.startsWith("/solutions");
+
           if (
+            !isPublicPage &&
             !pathname?.includes("/signup") &&
-            !pathname?.includes("/verify-email")
+            !pathname?.includes("/verify-email") &&
+            !pathname?.includes("/login") &&
+            !pathname?.includes("/forgot-password") &&
+            !pathname?.includes("/reset-password")
           ) {
             toast.success("Signed in successfully");
           }

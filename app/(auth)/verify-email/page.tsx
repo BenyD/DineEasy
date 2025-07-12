@@ -11,6 +11,7 @@ import {
   resendVerificationEmail,
   debugEmailVerification,
 } from "@/lib/actions/auth";
+import { getOnboardingStatus, redirectToOnboardingStep } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface VerificationResponse {
@@ -98,10 +99,11 @@ export default function VerifyEmailPage() {
           return;
         }
 
-        // If we have a session, redirect to dashboard
+        // Get onboarding status and redirect accordingly
+        const onboardingStatus = await getOnboardingStatus(supabase);
         setVerificationStatus("success");
         setTimeout(() => {
-          router.push("/dashboard");
+          redirectToOnboardingStep(onboardingStatus.step, router);
         }, 2000);
       } catch (error) {
         console.error("Error during email verification:", error);

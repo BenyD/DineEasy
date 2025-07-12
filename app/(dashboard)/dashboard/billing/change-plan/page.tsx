@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Check, X, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,26 +12,20 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { PLANS } from "@/lib/constants";
+import { PRICING, formatPrice } from "@/lib/constants/pricing";
+import { SUBSCRIPTION } from "@/lib/constants/subscription";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { createPlanChangeSession } from "@/lib/actions/billing";
+import { toast } from "sonner";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface Plan {
   id: string;
   name: string;
-  price: {
-    readonly monthly: number;
-    readonly yearly: number;
-  };
-  currency: string;
+  price: Record<string, { monthly: number; yearly: number }>;
   features: readonly string[];
-  negativeFeatures?: readonly string[];
   highlighted?: boolean;
-  limits: {
-    readonly staff: number | "unlimited";
-    readonly analytics: false | "basic" | "advanced";
-    readonly roles: boolean;
-    readonly tables: number | "unlimited";
-  };
 }
 
 type BillingCycle = "monthly" | "yearly";
@@ -42,12 +36,7 @@ interface CurrentPlan {
   billingCycle: BillingCycle;
 }
 
-// Mock data - replace with real data fetching
-const currentPlan: CurrentPlan = {
-  id: "pro",
-  name: "Pro",
-  billingCycle: "monthly",
-};
+// Current plan will be fetched from the database
 
 // Add animation variants at the top level
 const containerVariants = {
@@ -68,14 +57,93 @@ const cardVariants = {
 };
 
 export default function ChangePlanPage() {
-  const [annual, setAnnual] = useState<boolean>(
-    currentPlan.billingCycle === "yearly"
-  );
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [currentPlan, setCurrentPlan] = useState<CurrentPlan | null>(null);
+  const [isLoadingPlan, setIsLoadingPlan] = useState(true);
+  const [annual, setAnnual] = useState<boolean>(false);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [restaurantCurrency, setRestaurantCurrency] = useState<string>("CHF");
   const [isLoading, setIsLoading] = useState(false);
 
+  // Fetch current plan data
+  useEffect(() => {
+    async function fetchCurrentPlan() {
+      try {
+        const supabase = createClient();
+
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError || !user) {
+          throw new Error("Not authenticated");
+        }
+
+        const { data: restaurant, error: restaurantError } = await supabase
+          .from("restaurants")
+          .select(
+            `
+            currency,
+            subscriptions (
+              plan,
+              interval
+            )
+          `
+          )
+          .eq("owner_id", user.id)
+          .single();
+
+        if (restaurantError) {
+          throw restaurantError;
+        }
+
+        // Set the currency based on restaurant's currency
+        if (restaurant.currency) {
+          setRestaurantCurrency(restaurant.currency);
+        }
+
+        const subscription = restaurant.subscriptions?.[0];
+        if (subscription) {
+          setCurrentPlan({
+            id: subscription.plan,
+            name:
+              subscription.plan.charAt(0).toUpperCase() +
+              subscription.plan.slice(1),
+            billingCycle: subscription.interval as "monthly" | "yearly",
+          });
+          setAnnual(subscription.interval === "yearly");
+        } else {
+          setCurrentPlan({
+            id: "starter",
+            name: "Starter",
+            billingCycle: "monthly",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching current plan:", error);
+        toast.error("Failed to load current plan");
+      } finally {
+        setIsLoadingPlan(false);
+      }
+    }
+
+    fetchCurrentPlan();
+  }, []);
+
+  useEffect(() => {
+    // Show success toast if planChanged=1 is in the URL
+    if (searchParams?.get("planChanged") === "1") {
+      toast.success("Your plan was changed successfully!");
+      setTimeout(() => {
+        router.push("/dashboard/billing");
+      }, 2000);
+    }
+  }, [searchParams, router]);
+
   const handlePlanSelect = (planId: string) => {
-    if (planId.toLowerCase() === currentPlan.name.toLowerCase()) return;
+    if (!currentPlan || planId.toLowerCase() === currentPlan.name.toLowerCase())
+      return;
     setSelectedPlan(planId);
   };
 
@@ -83,31 +151,102 @@ export default function ChangePlanPage() {
     if (!selectedPlan) return;
     setIsLoading(true);
 
-    // Here you would typically:
-    // 1. Call your API to create a Stripe checkout session
-    // 2. Redirect to Stripe checkout
-    window.location.href = `/api/stripe/create-checkout-session?plan=${selectedPlan}&cycle=${
-      annual ? "yearly" : "monthly"
-    }&isUpgrade=true`;
+    try {
+      const result = await createPlanChangeSession(
+        selectedPlan,
+        annual ? "yearly" : "monthly",
+        restaurantCurrency
+      );
+
+      if (result.error) {
+        toast.error(result.error);
+      } else if (result.checkoutUrl) {
+        // Check if this is a direct upgrade (not a checkout URL)
+        if (
+          result.checkoutUrl.includes(
+            "dashboard/billing?success=true&upgraded=true"
+          )
+        ) {
+          // Direct upgrade - redirect to billing page with success message
+          window.location.href = result.checkoutUrl;
+        } else {
+          // New subscription or checkout required
+          window.location.href = result.checkoutUrl;
+        }
+      }
+    } catch (error) {
+      toast.error("Failed to create checkout session");
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  // Get current subscription status
+  const getCurrentSubscriptionStatus = () => {
+    if (!currentPlan) return null;
+
+    // This would need to be fetched from the billing data hook
+    // For now, we'll assume trial status based on the plan
+    return {
+      isInTrial:
+        currentPlan.id === "starter" && currentPlan.billingCycle === "monthly",
+      daysLeft: 14, // This should come from billing data
+    };
+  };
+
+  const subscriptionStatus = getCurrentSubscriptionStatus();
+  const isInTrial = subscriptionStatus?.isInTrial;
 
   const plans: Plan[] = [
     {
       id: "starter",
-      ...PLANS.starter,
+      name: PRICING.starter.name,
+      price: PRICING.starter.price,
+      features: PRICING.starter.features,
       highlighted: false,
     },
     {
       id: "pro",
-      ...PLANS.pro,
+      name: PRICING.pro.name,
+      price: PRICING.pro.price,
+      features: PRICING.pro.features,
       highlighted: true,
     },
     {
       id: "elite",
-      ...PLANS.elite,
+      name: PRICING.elite.name,
+      price: PRICING.elite.price,
+      features: PRICING.elite.features,
       highlighted: false,
     },
   ];
+
+  // Show loading state while fetching current plan
+  if (isLoadingPlan) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading plan information...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentPlan) {
+    return (
+      <div className="p-6">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-red-600">
+            Error Loading Plan
+          </h2>
+          <p className="text-gray-600 mt-2">
+            Failed to load your current plan information.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto">
@@ -131,6 +270,56 @@ export default function ChangePlanPage() {
           Select a new plan that better fits your needs
         </p>
       </motion.div>
+
+      {/* Current Plan Info */}
+      {currentPlan && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="flex justify-center"
+        >
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 max-w-2xl w-full text-center shadow-sm">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+              <h3 className="text-lg font-semibold text-blue-900">
+                Current Plan
+              </h3>
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-2xl font-bold text-blue-900">
+                {currentPlan.name} Plan
+              </p>
+              <p className="text-blue-700 font-medium">
+                {currentPlan.billingCycle === "yearly" ? "Annual" : "Monthly"}{" "}
+                Billing
+              </p>
+              <p className="text-lg font-semibold text-blue-800">
+                {formatPrice(
+                  annual
+                    ? PRICING[currentPlan.id as keyof typeof PRICING].price[
+                        restaurantCurrency as keyof typeof PRICING.starter.price
+                      ]?.yearly || 0
+                    : PRICING[currentPlan.id as keyof typeof PRICING].price[
+                        restaurantCurrency as keyof typeof PRICING.starter.price
+                      ]?.monthly || 0,
+                  restaurantCurrency as any
+                )}{" "}
+                / {annual ? "year" : "month"}
+              </p>
+              {isInTrial && (
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    🎉 <strong>Trial Period Active</strong> - Upgrades preserve
+                    your trial period!
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Billing Toggle */}
       <div className="flex justify-center">
@@ -159,7 +348,7 @@ export default function ChangePlanPage() {
           >
             Yearly{" "}
             <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-              Save 20%
+              Save {SUBSCRIPTION.YEARLY_DISCOUNT_PERCENTAGE}%
             </span>
           </span>
         </motion.div>
@@ -184,14 +373,14 @@ export default function ChangePlanPage() {
               className="transform transition-all duration-200"
             >
               <Card
-                className={`relative cursor-pointer transition-all hover:shadow-lg ${
+                className={`relative transition-all hover:shadow-lg ${
                   isSelected
-                    ? "border-green-200 ring-1 ring-green-500"
+                    ? "border-green-200 ring-1 ring-green-500 cursor-pointer"
                     : isCurrentPlan
-                    ? "border-blue-200 bg-blue-50/50"
-                    : "hover:border-green-200"
+                      ? "border-blue-300 bg-gradient-to-br from-blue-50 to-indigo-50 ring-1 ring-blue-200 cursor-default"
+                      : "hover:border-green-200 cursor-pointer"
                 }`}
-                onClick={() => handlePlanSelect(plan.id)}
+                onClick={() => !isCurrentPlan && handlePlanSelect(plan.id)}
               >
                 {plan.highlighted && !isCurrentPlan && (
                   <motion.div
@@ -214,7 +403,12 @@ export default function ChangePlanPage() {
                   <div className="mt-4">
                     <div className="flex items-baseline">
                       <span className="text-3xl font-bold">
-                        CHF {annual ? plan.price.yearly : plan.price.monthly}
+                        {formatPrice(
+                          annual
+                            ? plan.price[restaurantCurrency]?.yearly || 0
+                            : plan.price[restaurantCurrency]?.monthly || 0,
+                          restaurantCurrency as any
+                        )}
                       </span>
                       <span className="text-gray-500">
                         /{annual ? "year" : "month"}
@@ -222,9 +416,11 @@ export default function ChangePlanPage() {
                     </div>
                     {annual && (
                       <p className="text-sm text-green-600 mt-1">
-                        Save CHF{" "}
-                        {(plan.price.monthly * 12 - plan.price.yearly).toFixed(
-                          2
+                        Save{" "}
+                        {formatPrice(
+                          (plan.price[restaurantCurrency]?.monthly || 0) * 12 -
+                            (plan.price[restaurantCurrency]?.yearly || 0),
+                          restaurantCurrency as any
                         )}{" "}
                         per year
                       </p>
@@ -249,27 +445,16 @@ export default function ChangePlanPage() {
                         <span className="text-sm">{feature}</span>
                       </motion.li>
                     ))}
-                    {plan.negativeFeatures?.map((feature, i) => (
-                      <motion.li
-                        key={`neg-${i}`}
-                        variants={cardVariants}
-                        className="flex items-start gap-2"
-                      >
-                        <X className="h-4 w-4 text-gray-300 mt-0.5 shrink-0" />
-                        <span className="text-sm text-gray-500">{feature}</span>
-                      </motion.li>
-                    ))}
                   </motion.ul>
-
                   {isCurrentPlan ? (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       className="text-center"
                     >
-                      <div className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">
+                      <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm">
                         <Check className="h-4 w-4" />
-                        Current Plan
+                        Your Current Plan
                       </div>
                     </motion.div>
                   ) : isSelected ? (
@@ -291,6 +476,42 @@ export default function ChangePlanPage() {
         })}
       </motion.div>
 
+      {/* Upgrade Information */}
+      {selectedPlan && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="flex justify-center"
+        >
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-2xl">
+            <h3 className="font-medium text-green-800 mb-2">
+              What happens when you upgrade?
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4 text-sm text-green-700">
+              <div>
+                <h4 className="font-medium mb-1">During Trial Period:</h4>
+                <ul className="space-y-1">
+                  <li>• Your trial period is preserved</li>
+                  <li>• Plan changes immediately</li>
+                  <li>• No additional charges until trial ends</li>
+                  <li>• New features available right away</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-medium mb-1">After Trial Period:</h4>
+                <ul className="space-y-1">
+                  <li>• Plan changes immediately</li>
+                  <li>• Prorated charges may apply</li>
+                  <li>• New features available right away</li>
+                  <li>• Next billing date remains the same</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Action Buttons */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -309,6 +530,8 @@ export default function ChangePlanPage() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Processing...
               </>
+            ) : selectedPlan && isInTrial ? (
+              "Upgrade Now (Trial Preserved)"
             ) : (
               "Continue to Checkout"
             )}

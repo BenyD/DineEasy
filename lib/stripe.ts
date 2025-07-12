@@ -133,7 +133,8 @@ export async function createPaymentIntent(
   amount: number,
   currency: string,
   customerId?: string,
-  paymentMethodId?: string
+  paymentMethodId?: string,
+  returnUrl?: string
 ) {
   const paymentIntent = await stripe.paymentIntents.create({
     amount,
@@ -142,6 +143,8 @@ export async function createPaymentIntent(
     payment_method: paymentMethodId,
     confirm: !!paymentMethodId,
     automatic_payment_methods: !paymentMethodId ? { enabled: true } : undefined,
+    return_url:
+      returnUrl || `${process.env.NEXT_PUBLIC_APP_URL}/payment/return`,
   });
   return paymentIntent;
 }

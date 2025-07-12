@@ -1,4 +1,4 @@
-import { CURRENCIES, type Currency } from "./currencies";
+import { CURRENCIES, CURRENCY_SYMBOLS, type Currency } from "./currencies";
 
 // Pricing configuration for each currency
 export const PRICING = {
@@ -39,12 +39,26 @@ export const PRICING = {
       },
     },
     features: [
-      "Up to 100 orders per month",
-      "Basic menu management",
-      "QR code table ordering",
-      "Email support",
-      "Basic analytics",
-      "1 staff account",
+      "Manual Digital Menu",
+      "Up to 25 menu items",
+      "QR-Based Table Ordering (Up to 6 Tables)",
+      "Stripe & Cash Payments",
+      "Real-Time Order Dashboard",
+      "1 User Login",
+      "ESC/POS Basic Receipt Printing",
+      "Weekly Sales Summary (via Email)",
+    ],
+    limits: {
+      staff: 1,
+      analytics: false,
+      roles: false,
+      tables: 6,
+    },
+    negativeFeatures: [
+      "No Staff Role Permissions (RBAC)",
+      "No Analytics or Feedback Dashboard",
+      "No Custom Receipts",
+      "Limited to 6 Tables/QR Codes",
     ],
   },
   pro: {
@@ -84,14 +98,29 @@ export const PRICING = {
       },
     },
     features: [
-      "Up to 500 orders per month",
-      "Advanced menu management",
-      "Custom QR code branding",
-      "Priority email & chat support",
-      "Advanced analytics & reports",
-      "5 staff accounts",
-      "Kitchen display system",
-      "Table management",
+      "Everything in Starter",
+      "Up to 100 menu items",
+      "Up to 12 Tables with QR Codes",
+      "Up to 3 Staff Accounts (Waiter, Staff, Supervisor)",
+      "Role-Based Permissions (RBAC)",
+      "PDF Receipts with Restaurant Branding",
+      "Daily Sales Reports (Email & Download)",
+      "View Customer Feedback",
+      "Basic Order Analytics",
+      "Early Access to Features",
+      "Priority Email Support",
+    ],
+    limits: {
+      staff: 3,
+      analytics: "basic",
+      roles: true,
+      tables: 12,
+    },
+    negativeFeatures: [
+      "No Staff Role Permissions (RBAC)",
+      "No Analytics or Feedback Dashboard",
+      "No Custom Receipts",
+      "Limited to 6 Tables/QR Codes",
     ],
   },
   elite: {
@@ -131,15 +160,29 @@ export const PRICING = {
       },
     },
     features: [
-      "Unlimited orders",
-      "Full menu customization",
-      "White-label QR codes",
-      "24/7 priority support",
-      "Custom analytics",
-      "Unlimited staff accounts",
-      "Advanced inventory management",
-      "API access",
-      "Custom integrations",
+      "Everything in Pro",
+      "Unlimited Tables & QR Codes",
+      "Unlimited menu items",
+      "Unlimited Staff Accounts",
+      "Full Audit Logs (Order actions, logins, changes)",
+      "Enhanced Analytics",
+      "Early Access: Experimental AI Features",
+      "Dedicated Onboarding Session",
+      "Priority Feature Requests Queue",
+      "Assisted Printer Setup & Configuration",
+      "24/7 Priority Support (Email + Phone)",
+    ],
+    limits: {
+      staff: "unlimited",
+      analytics: "advanced",
+      roles: true,
+      tables: "unlimited",
+    },
+    negativeFeatures: [
+      "No Staff Role Permissions (RBAC)",
+      "No Analytics or Feedback Dashboard",
+      "No Custom Receipts",
+      "Limited to 6 Tables/QR Codes",
     ],
   },
 } as const;
@@ -168,7 +211,7 @@ export function formatPrice(
   currency: Currency,
   showSymbol: boolean = true
 ): string {
-  const symbol = showSymbol ? CURRENCIES[currency] : "";
+  const symbol = showSymbol ? CURRENCY_SYMBOLS[currency] : "";
 
   // Special formatting for INR (no decimals)
   if (currency === "INR") {

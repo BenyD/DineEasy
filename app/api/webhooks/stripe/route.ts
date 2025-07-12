@@ -14,6 +14,15 @@ interface Restaurant {
   stripe_customer_id: string | null;
 }
 
+interface StripeAccountRestaurant {
+  id: string;
+  owner_id: string;
+  name: string;
+  email: string;
+  stripe_account_id: string;
+  stripe_account_enabled: boolean;
+}
+
 // Get the webhook secret
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -39,7 +48,148 @@ export async function POST(req: Request) {
     const supabase = createClient();
     const adminSupabase = createAdminClient();
 
+    // Helper function to check if a customer has active subscriptions
+    const hasActiveSubscriptions = async (
+      customerId: string
+    ): Promise<boolean> => {
+      try {
+        const subscriptions = await stripe.subscriptions.list({
+          customer: customerId,
+          status: "active",
+          limit: 1,
+        });
+        return subscriptions.data.length > 0;
+      } catch (error) {
+        console.error("Error checking subscriptions:", error);
+        return false;
+      }
+    };
+
     switch (event.type) {
+      case "account.updated": {
+        const account = event.data.object as Stripe.Account;
+
+        console.log("Processing account.updated event:", {
+          accountId: account.id,
+          chargesEnabled: account.charges_enabled,
+          requirements: account.requirements,
+        });
+
+        // Find restaurant by Stripe account ID using the new function
+        const { data: restaurant, error: fetchError } = await adminSupabase
+          .rpc("get_restaurant_by_stripe_account", {
+            p_stripe_account_id: account.id,
+          })
+          .single();
+
+        if (fetchError || !restaurant) {
+          console.error("No restaurant found for Stripe account:", account.id);
+
+          // Try to find restaurant by searching all restaurants with this account ID
+          // This is a fallback in case the function doesn't work
+          const { data: fallbackRestaurant, error: fallbackError } =
+            await adminSupabase
+              .from("restaurants")
+              .select(
+                "id, owner_id, name, email, stripe_account_id, stripe_account_enabled"
+              )
+              .eq("stripe_account_id", account.id)
+              .single();
+
+          if (fallbackError || !fallbackRestaurant) {
+            console.error(
+              "Fallback search also failed for Stripe account:",
+              account.id
+            );
+
+            // Log all restaurants with stripe_account_id for debugging
+            const { data: allRestaurants } = await adminSupabase
+              .from("restaurants")
+              .select("id, name, stripe_account_id")
+              .not("stripe_account_id", "is", null);
+
+            console.log(
+              "All restaurants with stripe_account_id:",
+              allRestaurants
+            );
+
+            return new NextResponse("No restaurant found for account", {
+              status: 404,
+            });
+          }
+
+          console.log(
+            "Found restaurant via fallback search:",
+            fallbackRestaurant
+          );
+          const stripeRestaurant =
+            fallbackRestaurant as StripeAccountRestaurant;
+
+          // Update restaurant with new account status using the new function
+          const { error: updateError } = await adminSupabase.rpc(
+            "update_stripe_connect_status",
+            {
+              p_restaurant_id: stripeRestaurant.id,
+              p_stripe_account_id: account.id,
+              p_charges_enabled: account.charges_enabled,
+              p_requirements: account.requirements,
+            }
+          );
+
+          if (updateError) {
+            console.error("Error updating restaurant Stripe account:", {
+              restaurantId: stripeRestaurant.id,
+              accountId: account.id,
+              error: updateError,
+            });
+            return new NextResponse("Error updating restaurant", {
+              status: 500,
+            });
+          }
+
+          console.log(
+            "Successfully updated restaurant Stripe account via fallback:",
+            {
+              restaurantId: stripeRestaurant.id,
+              accountId: account.id,
+              chargesEnabled: account.charges_enabled,
+            }
+          );
+
+          break;
+        }
+
+        const stripeRestaurant = restaurant as StripeAccountRestaurant;
+
+        // Update restaurant with new account status using the new function
+        const { error: updateError } = await adminSupabase.rpc(
+          "update_stripe_connect_status",
+          {
+            p_restaurant_id: stripeRestaurant.id,
+            p_stripe_account_id: account.id,
+            p_charges_enabled: account.charges_enabled,
+            p_requirements: account.requirements,
+          }
+        );
+
+        if (updateError) {
+          console.error("Error updating restaurant Stripe account:", {
+            restaurantId: stripeRestaurant.id,
+            accountId: account.id,
+            error: updateError,
+          });
+          return new NextResponse("Error updating restaurant", { status: 500 });
+        }
+
+        console.log("Successfully updated restaurant Stripe account:", {
+          restaurantId: stripeRestaurant.id,
+          accountId: account.id,
+          chargesEnabled: account.charges_enabled,
+        });
+
+        break;
+      }
+
       case "customer.updated": {
         const customer = event.data.object as Stripe.Customer;
 
@@ -114,10 +264,7 @@ export async function POST(req: Request) {
 
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        const subscription = event.data.object as Stripe.Subscription & {
-          current_period_start: number;
-          current_period_end: number;
-        };
+        const subscription = event.data.object as Stripe.Subscription;
 
         // Log the full subscription object for debugging
         console.log("Processing subscription event:", {
@@ -127,6 +274,12 @@ export async function POST(req: Request) {
           customer: subscription.customer,
           status: subscription.status,
         });
+
+        // Log the full event for debugging
+        console.log(
+          "Full subscription event data:",
+          JSON.stringify(event.data.object, null, 2)
+        );
 
         const { restaurantId, plan, interval, currency } =
           subscription.metadata;
@@ -210,45 +363,67 @@ export async function POST(req: Request) {
           return new NextResponse("Error updating restaurant", { status: 500 });
         }
 
-        // Update or create subscription record
-        const subscriptionData = {
-          id: subscription.id, // This is now the Stripe subscription ID
-          restaurant_id: restaurantId,
-          stripe_customer_id: subscription.customer as string,
-          stripe_subscription_id: subscription.id,
-          plan,
-          interval,
-          currency: currency || "USD", // Default to USD if not provided
-          status: subscription.status,
-          current_period_start: toISOString(subscription.current_period_start),
-          current_period_end: toISOString(subscription.current_period_end),
-          trial_start: toISOString(subscription.trial_start),
-          trial_end: toISOString(subscription.trial_end),
-          cancel_at: toISOString(subscription.cancel_at),
-          canceled_at: toISOString(subscription.canceled_at),
-          created_at: getCurrentTime(),
-          updated_at: getCurrentTime(),
-        };
-
         console.log("Upserting subscription:", {
           id: subscription.id,
           restaurantId,
           status: subscription.status,
-          current_period_start: subscription.current_period_start,
-          current_period_end: subscription.current_period_end,
-          trial_start: subscription.trial_start,
-          trial_end: subscription.trial_end,
+          current_period_start: (subscription as any).current_period_start,
+          current_period_end: (subscription as any).current_period_end,
+          trial_start: (subscription as any).trial_start,
+          trial_end: (subscription as any).trial_end,
         });
 
-        // Use upsert with on conflict to handle both insert and update
-        const { data: upsertedSub, error: upsertError } = await adminSupabase
-          .from("subscriptions")
-          .upsert([subscriptionData], {
-            onConflict: "id", // Conflict on the Stripe subscription ID
-            ignoreDuplicates: false,
-          })
-          .select()
-          .single();
+        // Log the raw subscription object to debug timestamp issues
+        console.log("Raw subscription object:", {
+          id: subscription.id,
+          current_period_start: (subscription as any).current_period_start,
+          current_period_end: (subscription as any).current_period_end,
+          trial_start: (subscription as any).trial_start,
+          trial_end: (subscription as any).trial_end,
+          cancel_at: (subscription as any).cancel_at,
+          canceled_at: (subscription as any).canceled_at,
+        });
+
+        // Convert timestamps and log the results
+        const currentPeriodStart = toISOString(
+          (subscription as any).current_period_start
+        );
+        const currentPeriodEnd = toISOString(
+          (subscription as any).current_period_end
+        );
+        const trialStart = toISOString((subscription as any).trial_start);
+        const trialEnd = toISOString((subscription as any).trial_end);
+        const cancelAt = toISOString((subscription as any).cancel_at);
+        const canceledAt = toISOString((subscription as any).canceled_at);
+
+        console.log("Converted timestamps:", {
+          current_period_start: currentPeriodStart,
+          current_period_end: currentPeriodEnd,
+          trial_start: trialStart,
+          trial_end: trialEnd,
+          cancel_at: cancelAt,
+          canceled_at: canceledAt,
+        });
+
+        // Use the new upsert function for better error handling
+        const { error: upsertError } = await adminSupabase.rpc(
+          "upsert_subscription",
+          {
+            p_stripe_subscription_id: subscription.id,
+            p_restaurant_id: restaurantId,
+            p_stripe_customer_id: subscription.customer as string,
+            p_plan: plan,
+            p_interval: interval,
+            p_currency: currency || "USD",
+            p_status: subscription.status,
+            p_current_period_start: currentPeriodStart,
+            p_current_period_end: currentPeriodEnd,
+            p_trial_start: trialStart,
+            p_trial_end: trialEnd,
+            p_cancel_at: cancelAt,
+            p_canceled_at: canceledAt,
+          }
+        );
 
         if (upsertError) {
           console.error("Error upserting subscription:", {
@@ -265,8 +440,11 @@ export async function POST(req: Request) {
 
         console.log("Successfully processed subscription:", {
           id: subscription.id,
-          status: upsertedSub.status,
-          restaurantId: upsertedSub.restaurant_id,
+          status: subscription.status,
+          restaurantId,
+          plan,
+          interval,
+          currency,
         });
 
         break;
@@ -284,18 +462,36 @@ export async function POST(req: Request) {
           return new NextResponse("Missing restaurantId", { status: 400 });
         }
 
-        // Update restaurant subscription status
-        const { error: updateError } = await adminSupabase.rpc(
-          "update_restaurant_subscription_status",
-          {
-            p_restaurant_id: restaurantId,
-            p_subscription_status: "canceled",
-          }
-        );
+        // Check if this is part of a plan upgrade (new subscription exists)
+        const { data: newSubscription } = await adminSupabase
+          .from("subscriptions")
+          .select("id, status")
+          .eq("restaurant_id", restaurantId)
+          .neq("id", subscription.id) // Different from the deleted one
+          .in("status", ["active", "trialing", "past_due"])
+          .single();
 
-        if (updateError) {
-          console.error("Error updating restaurant:", updateError);
-          return new NextResponse("Error updating restaurant", { status: 500 });
+        // Only update restaurant status to cancelled if this is not part of an upgrade
+        if (!newSubscription) {
+          // Update restaurant subscription status
+          const { error: updateError } = await adminSupabase.rpc(
+            "update_restaurant_subscription_status",
+            {
+              p_restaurant_id: restaurantId,
+              p_subscription_status: "canceled",
+            }
+          );
+
+          if (updateError) {
+            console.error("Error updating restaurant:", updateError);
+            return new NextResponse("Error updating restaurant", {
+              status: 500,
+            });
+          }
+        } else {
+          console.log(
+            "Skipping restaurant status update - this appears to be a plan upgrade"
+          );
         }
 
         // Update subscription record using the correct column
@@ -326,19 +522,62 @@ export async function POST(req: Request) {
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
-        // Create payment record
-        const { error: createError } = await adminSupabase
-          .from("payments")
-          .insert({
-            restaurant_id: paymentIntent.metadata.restaurantId,
-            order_id: paymentIntent.metadata.orderId,
-            amount: paymentIntent.amount,
-            status: "completed",
-            method: "card",
-            stripe_payment_id: paymentIntent.id,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
+        console.log("Processing payment_intent.succeeded:", {
+          id: paymentIntent.id,
+          amount: paymentIntent.amount,
+          metadata: paymentIntent.metadata,
+        });
+
+        // Try to get restaurant ID from metadata first, then from customer
+        let restaurantId = paymentIntent.metadata.restaurantId;
+
+        if (!restaurantId && paymentIntent.customer) {
+          // Try to get restaurant ID from customer
+          const { data: restaurant, error: customerError } = await adminSupabase
+            .rpc("get_restaurant_by_stripe_customer", {
+              p_stripe_customer_id: paymentIntent.customer as string,
+            })
+            .single();
+
+          if (!customerError && restaurant) {
+            restaurantId = (restaurant as Restaurant).id;
+            console.log("Found restaurant ID from customer:", restaurantId);
+          }
+        }
+
+        // For subscription payments, we don't need to create a payment record
+        // since they're handled by the subscription events
+        if (
+          paymentIntent.metadata.subscriptionId ||
+          paymentIntent.metadata.isUpgrade ||
+          paymentIntent.metadata.isNewSubscription ||
+          paymentIntent.metadata.subscription_id ||
+          // Check if the customer has active subscriptions
+          (paymentIntent.customer &&
+            (await hasActiveSubscriptions(paymentIntent.customer as string)))
+        ) {
+          console.log(
+            "Skipping payment record creation for subscription payment:",
+            paymentIntent.id,
+            "metadata:",
+            paymentIntent.metadata
+          );
+          break;
+        }
+
+        // Use the new function to create payment with fallback
+        const { error: createError } = await adminSupabase.rpc(
+          "create_payment_with_fallback",
+          [
+            restaurantId,
+            paymentIntent.metadata.orderId,
+            paymentIntent.amount / 100, // Convert from cents
+            "completed",
+            "card",
+            paymentIntent.id,
+            paymentIntent.currency.toUpperCase(),
+          ]
+        );
 
         if (createError) {
           console.error("Error creating payment:", createError);
@@ -351,23 +590,728 @@ export async function POST(req: Request) {
       case "payment_intent.payment_failed": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
-        // Create failed payment record
-        const { error: createError } = await adminSupabase
-          .from("payments")
-          .insert({
-            restaurant_id: paymentIntent.metadata.restaurantId,
-            order_id: paymentIntent.metadata.orderId,
-            amount: paymentIntent.amount,
-            status: "failed",
-            method: "card",
-            stripe_payment_id: paymentIntent.id,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
+        console.log("Processing payment_intent.payment_failed:", {
+          id: paymentIntent.id,
+          amount: paymentIntent.amount,
+          metadata: paymentIntent.metadata,
+        });
+
+        // Try to get restaurant ID from metadata first, then from customer
+        let restaurantId = paymentIntent.metadata.restaurantId;
+
+        if (!restaurantId && paymentIntent.customer) {
+          // Try to get restaurant ID from customer
+          const { data: restaurant, error: customerError } = await adminSupabase
+            .rpc("get_restaurant_by_stripe_customer", {
+              p_stripe_customer_id: paymentIntent.customer as string,
+            })
+            .single();
+
+          if (!customerError && restaurant) {
+            restaurantId = (restaurant as Restaurant).id;
+            console.log("Found restaurant ID from customer:", restaurantId);
+          }
+        }
+
+        // For subscription payments, we don't need to create a payment record
+        // since they're handled by the subscription events
+        if (
+          paymentIntent.metadata.subscriptionId ||
+          paymentIntent.metadata.isUpgrade ||
+          paymentIntent.metadata.isNewSubscription ||
+          paymentIntent.metadata.subscription_id ||
+          // Check if the customer has active subscriptions
+          (paymentIntent.customer &&
+            (await hasActiveSubscriptions(paymentIntent.customer as string)))
+        ) {
+          console.log(
+            "Skipping payment record creation for subscription payment:",
+            paymentIntent.id,
+            "metadata:",
+            paymentIntent.metadata
+          );
+          break;
+        }
+
+        // Use the new function to create payment with fallback
+        const { error: createError } = await adminSupabase.rpc(
+          "create_payment_with_fallback",
+          [
+            restaurantId,
+            paymentIntent.metadata.orderId,
+            paymentIntent.amount / 100, // Convert from cents
+            "failed",
+            "card",
+            paymentIntent.id,
+            paymentIntent.currency.toUpperCase(),
+          ]
+        );
 
         if (createError) {
           console.error("Error creating payment:", createError);
           return new NextResponse("Error creating payment", { status: 500 });
+        }
+
+        break;
+      }
+
+      case "charge.succeeded": {
+        const charge = event.data.object as Stripe.Charge;
+
+        console.log("Processing charge.succeeded:", {
+          id: charge.id,
+          amount: charge.amount,
+          metadata: charge.metadata,
+          transfer_group: charge.transfer_group,
+        });
+
+        // Only process charges that are customer payments to restaurants
+        // Skip subscription-related charges
+        if (
+          charge.metadata.subscriptionId ||
+          charge.metadata.isUpgrade ||
+          charge.metadata.isNewSubscription ||
+          charge.metadata.subscription_id ||
+          // Check if the customer has active subscriptions
+          (charge.customer &&
+            (await hasActiveSubscriptions(charge.customer as string)))
+        ) {
+          console.log(
+            "Skipping subscription charge:",
+            charge.id,
+            "metadata:",
+            charge.metadata
+          );
+          break;
+        }
+
+        // Get restaurant ID from transfer_group or metadata
+        let restaurantId =
+          charge.transfer_group || charge.metadata.restaurantId;
+
+        if (!restaurantId) {
+          console.log("No restaurant ID found for charge:", charge.id);
+          break;
+        }
+
+        // Create payment record for customer payment to restaurant
+        const { error: createError } = await adminSupabase.rpc(
+          "create_payment_with_fallback",
+          [
+            restaurantId,
+            charge.metadata.orderId,
+            charge.amount / 100, // Convert from cents
+            "completed",
+            "card",
+            charge.id,
+            charge.currency.toUpperCase(),
+          ]
+        );
+
+        if (createError) {
+          console.error("Error creating payment from charge:", createError);
+          return new NextResponse("Error creating payment", { status: 500 });
+        }
+
+        console.log("Successfully created payment from charge:", charge.id);
+        break;
+      }
+
+      case "charge.failed": {
+        const charge = event.data.object as Stripe.Charge;
+
+        console.log("Processing charge.failed:", {
+          id: charge.id,
+          amount: charge.amount,
+          metadata: charge.metadata,
+          transfer_group: charge.transfer_group,
+        });
+
+        // Only process charges that are customer payments to restaurants
+        if (
+          charge.metadata.subscriptionId ||
+          charge.metadata.isUpgrade ||
+          charge.metadata.isNewSubscription ||
+          charge.metadata.subscription_id ||
+          // Check if the customer has active subscriptions
+          (charge.customer &&
+            (await hasActiveSubscriptions(charge.customer as string)))
+        ) {
+          console.log(
+            "Skipping subscription charge:",
+            charge.id,
+            "metadata:",
+            charge.metadata
+          );
+          break;
+        }
+
+        // Get restaurant ID from transfer_group or metadata
+        let restaurantId =
+          charge.transfer_group || charge.metadata.restaurantId;
+
+        if (!restaurantId) {
+          console.log("No restaurant ID found for charge:", charge.id);
+          break;
+        }
+
+        // Create failed payment record
+        const { error: createError } = await adminSupabase.rpc(
+          "create_payment_with_fallback",
+          [
+            restaurantId,
+            charge.metadata.orderId,
+            charge.amount / 100, // Convert from cents
+            "failed",
+            "card",
+            charge.id,
+            charge.currency.toUpperCase(),
+          ]
+        );
+
+        if (createError) {
+          console.error(
+            "Error creating failed payment from charge:",
+            createError
+          );
+          return new NextResponse("Error creating payment", { status: 500 });
+        }
+
+        console.log(
+          "Successfully created failed payment from charge:",
+          charge.id
+        );
+        break;
+      }
+
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+
+        console.log("Processing charge.refunded:", {
+          id: charge.id,
+          amount: charge.amount,
+          amount_refunded: charge.amount_refunded,
+          metadata: charge.metadata,
+          transfer_group: charge.transfer_group,
+        });
+
+        // Only process charges that are customer payments to restaurants
+        if (
+          charge.metadata.subscriptionId ||
+          charge.metadata.isUpgrade ||
+          charge.metadata.isNewSubscription
+        ) {
+          console.log("Skipping subscription charge:", charge.id);
+          break;
+        }
+
+        // Get restaurant ID from transfer_group or metadata
+        let restaurantId =
+          charge.transfer_group || charge.metadata.restaurantId;
+
+        if (!restaurantId) {
+          console.log("No restaurant ID found for charge:", charge.id);
+          break;
+        }
+
+        // Update existing payment to refunded status
+        const { error: updateError } = await adminSupabase
+          .from("payments")
+          .update({
+            status: "refunded",
+            refund_id: charge.refunds?.data?.[0]?.id || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("stripe_payment_id", charge.id);
+
+        if (updateError) {
+          console.error("Error updating payment to refunded:", updateError);
+          return new NextResponse("Error updating payment", { status: 500 });
+        }
+
+        console.log("Successfully updated payment to refunded:", charge.id);
+        break;
+      }
+
+      case "charge.dispute.created": {
+        const dispute = event.data.object as Stripe.Dispute;
+
+        console.log("Processing charge.dispute.created:", {
+          id: dispute.id,
+          charge: dispute.charge,
+          amount: dispute.amount,
+        });
+
+        // Get the charge to find restaurant ID
+        const charge = await stripe.charges.retrieve(dispute.charge as string);
+
+        // Only process charges that are customer payments to restaurants
+        if (
+          charge.metadata.subscriptionId ||
+          charge.metadata.isUpgrade ||
+          charge.metadata.isNewSubscription
+        ) {
+          console.log("Skipping subscription charge:", charge.id);
+          break;
+        }
+
+        // Get restaurant ID from transfer_group or metadata
+        let restaurantId =
+          charge.transfer_group || charge.metadata.restaurantId;
+
+        if (!restaurantId) {
+          console.log("No restaurant ID found for charge:", charge.id);
+          break;
+        }
+
+        // Update existing payment to disputed status
+        const { error: updateError } = await adminSupabase
+          .from("payments")
+          .update({
+            status: "disputed",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("stripe_payment_id", charge.id);
+
+        if (updateError) {
+          console.error("Error updating payment to disputed:", updateError);
+          return new NextResponse("Error updating payment", { status: 500 });
+        }
+
+        console.log("Successfully updated payment to disputed:", charge.id);
+        break;
+      }
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+
+        console.log("Processing invoice.payment_succeeded:", {
+          id: invoice.id,
+          subscription: (invoice as any).subscription,
+          customer: invoice.customer,
+          amount_paid: invoice.amount_paid,
+          status: invoice.status,
+        });
+
+        // Only handle subscription invoices
+        if (!(invoice as any).subscription) {
+          console.log("Skipping non-subscription invoice:", invoice.id);
+          break;
+        }
+
+        // Get the subscription to check if this is a trial end payment
+        const subscription = await stripe.subscriptions.retrieve(
+          (invoice as any).subscription as string
+        );
+
+        console.log("Retrieved subscription for invoice:", {
+          subscriptionId: subscription.id,
+          status: subscription.status,
+          trial_end: (subscription as any).trial_end,
+          current_period_start: (subscription as any).current_period_start,
+          current_period_end: (subscription as any).current_period_end,
+        });
+
+        // Check if this is a trial end payment
+        const isTrialEnd =
+          (subscription as any).trial_end &&
+          (subscription as any).trial_end <= Math.floor(Date.now() / 1000);
+
+        if (isTrialEnd) {
+          console.log("Processing trial end payment:", {
+            subscriptionId: subscription.id,
+            trialEnd: new Date(
+              (subscription as any).trial_end * 1000
+            ).toISOString(),
+            amountPaid: invoice.amount_paid,
+          });
+        }
+
+        // Update subscription with new billing period if trial ended
+        if (isTrialEnd && subscription.metadata.restaurantId) {
+          // First, update the restaurant subscription status
+          const { error: restaurantUpdateError } = await adminSupabase.rpc(
+            "update_restaurant_subscription_status",
+            {
+              p_restaurant_id: subscription.metadata.restaurantId,
+              p_subscription_status: subscription.status,
+              p_stripe_customer_id: subscription.customer as string,
+            }
+          );
+
+          if (restaurantUpdateError) {
+            console.error(
+              "Error updating restaurant subscription status after trial end:",
+              restaurantUpdateError
+            );
+            return new NextResponse(
+              "Error updating restaurant subscription status",
+              {
+                status: 500,
+              }
+            );
+          }
+
+          // Then, update the subscription record
+          const { error: updateError } = await adminSupabase.rpc(
+            "upsert_subscription",
+            {
+              p_stripe_subscription_id: subscription.id,
+              p_restaurant_id: subscription.metadata.restaurantId,
+              p_stripe_customer_id: subscription.customer as string,
+              p_plan: subscription.metadata.plan,
+              p_interval: subscription.metadata.interval,
+              p_currency: subscription.metadata.currency || "USD",
+              p_status: subscription.status,
+              p_current_period_start: new Date(
+                (subscription as any).current_period_start * 1000
+              ).toISOString(),
+              p_current_period_end: new Date(
+                (subscription as any).current_period_end * 1000
+              ).toISOString(),
+              p_trial_start: (subscription as any).trial_start
+                ? new Date(
+                    (subscription as any).trial_start * 1000
+                  ).toISOString()
+                : null,
+              p_trial_end: (subscription as any).trial_end
+                ? new Date((subscription as any).trial_end * 1000).toISOString()
+                : null,
+              p_cancel_at: (subscription as any).cancel_at
+                ? new Date((subscription as any).cancel_at * 1000).toISOString()
+                : null,
+              p_canceled_at: (subscription as any).canceled_at
+                ? new Date(
+                    (subscription as any).canceled_at * 1000
+                  ).toISOString()
+                : null,
+            }
+          );
+
+          if (updateError) {
+            console.error(
+              "Error updating subscription after trial end:",
+              updateError
+            );
+            return new NextResponse("Error updating subscription", {
+              status: 500,
+            });
+          }
+
+          console.log("Successfully updated subscription after trial end:", {
+            subscriptionId: subscription.id,
+            restaurantId: subscription.metadata.restaurantId,
+            newStatus: subscription.status,
+            newBillingPeriod: {
+              start: new Date(
+                (subscription as any).current_period_start * 1000
+              ).toISOString(),
+              end: new Date(
+                (subscription as any).current_period_end * 1000
+              ).toISOString(),
+            },
+          });
+        }
+
+        break;
+      }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+
+        console.log("Processing invoice.payment_failed:", {
+          id: invoice.id,
+          subscription: (invoice as any).subscription,
+          customer: invoice.customer,
+          amount_due: invoice.amount_due,
+          status: invoice.status,
+        });
+
+        // Only handle subscription invoices
+        if (!(invoice as any).subscription) {
+          console.log("Skipping non-subscription invoice:", invoice.id);
+          break;
+        }
+
+        // Get the subscription to update its status
+        const subscription = await stripe.subscriptions.retrieve(
+          (invoice as any).subscription as string
+        );
+
+        console.log("Retrieved subscription for failed payment:", {
+          subscriptionId: subscription.id,
+          status: subscription.status,
+          trial_end: (subscription as any).trial_end,
+        });
+
+        // Update subscription status to past_due
+        if (subscription.metadata.restaurantId) {
+          // First, update the restaurant subscription status
+          const { error: restaurantUpdateError } = await adminSupabase.rpc(
+            "update_restaurant_subscription_status",
+            {
+              p_restaurant_id: subscription.metadata.restaurantId,
+              p_subscription_status: subscription.status,
+              p_stripe_customer_id: subscription.customer as string,
+            }
+          );
+
+          if (restaurantUpdateError) {
+            console.error(
+              "Error updating restaurant subscription status after failed payment:",
+              restaurantUpdateError
+            );
+            return new NextResponse(
+              "Error updating restaurant subscription status",
+              {
+                status: 500,
+              }
+            );
+          }
+
+          // Then, update the subscription record
+          const { error: updateError } = await adminSupabase.rpc(
+            "upsert_subscription",
+            {
+              p_stripe_subscription_id: subscription.id,
+              p_restaurant_id: subscription.metadata.restaurantId,
+              p_stripe_customer_id: subscription.customer as string,
+              p_plan: subscription.metadata.plan,
+              p_interval: subscription.metadata.interval,
+              p_currency: subscription.metadata.currency || "USD",
+              p_status: subscription.status,
+              p_current_period_start: new Date(
+                (subscription as any).current_period_start * 1000
+              ).toISOString(),
+              p_current_period_end: new Date(
+                (subscription as any).current_period_end * 1000
+              ).toISOString(),
+              p_trial_start: (subscription as any).trial_start
+                ? new Date(
+                    (subscription as any).trial_start * 1000
+                  ).toISOString()
+                : null,
+              p_trial_end: (subscription as any).trial_end
+                ? new Date((subscription as any).trial_end * 1000).toISOString()
+                : null,
+              p_cancel_at: (subscription as any).cancel_at
+                ? new Date((subscription as any).cancel_at * 1000).toISOString()
+                : null,
+              p_canceled_at: (subscription as any).canceled_at
+                ? new Date(
+                    (subscription as any).canceled_at * 1000
+                  ).toISOString()
+                : null,
+            }
+          );
+
+          if (updateError) {
+            console.error(
+              "Error updating subscription after failed payment:",
+              updateError
+            );
+            return new NextResponse("Error updating subscription", {
+              status: 500,
+            });
+          }
+
+          console.log(
+            "Successfully updated subscription after failed payment:",
+            {
+              subscriptionId: subscription.id,
+              restaurantId: subscription.metadata.restaurantId,
+              newStatus: subscription.status,
+            }
+          );
+        }
+
+        break;
+      }
+
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+
+        console.log("Processing checkout.session.completed:", {
+          id: session.id,
+          mode: session.mode,
+          metadata: session.metadata,
+          customer: session.customer,
+        });
+
+        // Only handle subscription checkouts
+        if (session.mode !== "subscription") {
+          console.log("Skipping non-subscription checkout:", session.id);
+          break;
+        }
+
+        // Get the subscription that was created
+        if (!session.subscription) {
+          console.error(
+            "No subscription found in checkout session:",
+            session.id
+          );
+          return new NextResponse("No subscription in session", {
+            status: 400,
+          });
+        }
+
+        const subscription = await stripe.subscriptions.retrieve(
+          session.subscription as string
+        );
+
+        console.log("Retrieved subscription from checkout:", {
+          subscriptionId: subscription.id,
+          metadata: subscription.metadata,
+          status: subscription.status,
+        });
+
+        // Handle subscription upgrade
+        if (
+          session.metadata?.isUpgrade === "true" &&
+          session.metadata?.existingSubscriptionId
+        ) {
+          console.log("Processing subscription upgrade:", {
+            newSubscriptionId: subscription.id,
+            existingSubscriptionId: session.metadata.existingSubscriptionId,
+            isTrialUpgrade: session.metadata?.isTrialUpgrade === "true",
+          });
+
+          // Get the old subscription to check if it's a trial upgrade
+          let oldSubscription;
+          try {
+            oldSubscription = await stripe.subscriptions.retrieve(
+              session.metadata.existingSubscriptionId
+            );
+          } catch (error) {
+            console.error("Error retrieving old subscription:", error);
+          }
+
+          // If this is a trial upgrade, we need to preserve the trial period
+          if (session.metadata?.isTrialUpgrade === "true" && oldSubscription) {
+            console.log("Processing trial upgrade - preserving trial period:", {
+              oldTrialEnd: oldSubscription.trial_end,
+              newSubscriptionId: subscription.id,
+            });
+
+            // Update the new subscription to preserve the trial period
+            try {
+              const updateData: any = {
+                metadata: {
+                  ...subscription.metadata,
+                  trial_preserved: "true",
+                },
+              };
+
+              if (oldSubscription.trial_end) {
+                updateData.trial_end = oldSubscription.trial_end;
+                updateData.metadata.original_trial_end =
+                  oldSubscription.trial_end.toString();
+              }
+
+              await stripe.subscriptions.update(subscription.id, updateData);
+              console.log(
+                "Updated new subscription with preserved trial period"
+              );
+            } catch (error) {
+              console.error(
+                "Error updating subscription with trial period:",
+                error
+              );
+            }
+          }
+
+          // Cancel the old subscription
+          try {
+            await stripe.subscriptions.cancel(
+              session.metadata.existingSubscriptionId
+            );
+            console.log(
+              "Canceled old subscription:",
+              session.metadata.existingSubscriptionId
+            );
+          } catch (error) {
+            console.error("Error canceling old subscription:", error);
+          }
+        }
+
+        // Update the subscription in the database
+        if (subscription.metadata.restaurantId) {
+          // Helper function to safely convert Unix timestamp to ISO string
+          const toISOString = (timestamp: number | null): string | null => {
+            if (!timestamp) return null;
+            try {
+              return new Date(timestamp * 1000).toISOString();
+            } catch (error) {
+              console.error("Invalid timestamp:", timestamp);
+              return null;
+            }
+          };
+
+          // First, update the restaurant subscription status
+          const { error: restaurantUpdateError } = await adminSupabase.rpc(
+            "update_restaurant_subscription_status",
+            {
+              p_restaurant_id: subscription.metadata.restaurantId,
+              p_subscription_status: subscription.status,
+              p_stripe_customer_id: subscription.customer as string,
+            }
+          );
+
+          if (restaurantUpdateError) {
+            console.error(
+              "Error updating restaurant subscription status:",
+              restaurantUpdateError
+            );
+            return new NextResponse(
+              "Error updating restaurant subscription status",
+              {
+                status: 500,
+              }
+            );
+          }
+
+          // Then, update the subscription record
+          const { error: updateError } = await adminSupabase.rpc(
+            "upsert_subscription",
+            {
+              p_stripe_subscription_id: subscription.id,
+              p_restaurant_id: subscription.metadata.restaurantId,
+              p_stripe_customer_id: subscription.customer as string,
+              p_plan: subscription.metadata.plan,
+              p_interval: subscription.metadata.interval,
+              p_currency: subscription.metadata.currency || "USD",
+              p_status: subscription.status,
+              p_current_period_start: toISOString(
+                (subscription as any).current_period_start
+              ),
+              p_current_period_end: toISOString(
+                (subscription as any).current_period_end
+              ),
+              p_trial_start: toISOString((subscription as any).trial_start),
+              p_trial_end: toISOString((subscription as any).trial_end),
+              p_cancel_at: toISOString((subscription as any).cancel_at),
+              p_canceled_at: toISOString((subscription as any).canceled_at),
+            }
+          );
+
+          if (updateError) {
+            console.error(
+              "Error updating subscription after checkout:",
+              updateError
+            );
+            return new NextResponse("Error updating subscription", {
+              status: 500,
+            });
+          }
+
+          console.log("Successfully updated subscription after checkout:", {
+            subscriptionId: subscription.id,
+            restaurantId: subscription.metadata.restaurantId,
+            plan: subscription.metadata.plan,
+            interval: subscription.metadata.interval,
+            status: subscription.status,
+            isUpgrade: session.metadata?.isUpgrade === "true",
+          });
         }
 
         break;

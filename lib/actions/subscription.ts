@@ -21,7 +21,7 @@ export async function createSubscription(formData: FormData) {
   const restaurantId = formData.get("restaurant_id") as string;
   const plan = formData.get("plan") as Subscription["plan"];
   const interval = formData.get("interval") as Subscription["interval"];
-  const currency = formData.get("currency") as string || "USD";
+  const currency = (formData.get("currency") as string) || "USD";
 
   // Validate interval
   if (!Object.values(SUBSCRIPTION.BILLING_PERIODS).includes(interval)) {
@@ -46,6 +46,21 @@ export async function createSubscription(formData: FormData) {
   try {
     // Create or get Stripe customer
     let stripeCustomerId = restaurant.stripe_customer_id;
+    let customerExists = false;
+    if (stripeCustomerId) {
+      try {
+        // Try to retrieve the customer from Stripe
+        await stripe.customers.retrieve(stripeCustomerId);
+        customerExists = true;
+      } catch (err: any) {
+        if (err?.code === "resource_missing") {
+          // Customer does not exist in Stripe, will create a new one
+          stripeCustomerId = undefined;
+        } else {
+          throw err;
+        }
+      }
+    }
     if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
         email: user.email,
@@ -54,7 +69,6 @@ export async function createSubscription(formData: FormData) {
         },
       });
       stripeCustomerId = customer.id;
-
       // Update restaurant with Stripe customer ID
       await supabase
         .from("restaurants")
@@ -66,7 +80,11 @@ export async function createSubscription(formData: FormData) {
     }
 
     // Get the correct Stripe price ID for the plan, currency, and interval
-    const priceId = getStripePriceId(plan, currency as keyof typeof PRICING, interval);
+    const priceId = getStripePriceId(
+      plan as keyof typeof PRICING,
+      currency as keyof (typeof PRICING)["starter"]["price"],
+      interval
+    );
 
     // Create Stripe Checkout session
     const session = await stripe.checkout.sessions.create({
@@ -87,7 +105,7 @@ export async function createSubscription(formData: FormData) {
           currency,
         },
       },
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment/return?session_id={CHECKOUT_SESSION_ID}&plan=${plan}&interval=${interval}`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/select-plan`,
     });
 

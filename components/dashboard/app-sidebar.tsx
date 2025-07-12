@@ -38,6 +38,7 @@ import {
   UtensilsCrossed,
   Table2,
   Wallet,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -66,23 +67,9 @@ import {
 } from "@/components/ui/animated-popover";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSidebarData } from "@/hooks/useSidebarData";
 
-// Mock data for the restaurant
-const restaurant = {
-  name: "Bella Vista Restaurant",
-  logo: "/placeholder.svg",
-  plan: "Pro",
-  status: "open", // 'open' | 'closed'
-};
-
-// Mock data for the user
-const user = {
-  name: "John Smith",
-  role: "Restaurant Owner",
-  avatar: "/placeholder.svg?height=32&width=32&text=JS",
-};
-
-// Mock data for notifications
+// Mock data for notifications (can be replaced with real data later)
 const notifications = [
   {
     id: 1,
@@ -185,7 +172,6 @@ const navigationData = {
       href: "/dashboard/printer",
       icon: Printer,
       description: "Receipt printer settings",
-      badge: restaurant.plan === "Elite" ? "Assisted Setup" : undefined,
       subItems: [
         {
           name: "Settings",
@@ -207,62 +193,35 @@ const navigationData = {
   ],
   settings: [
     {
-      name: "Restaurant",
+      name: "Settings",
       href: "/dashboard/settings",
-      icon: Building,
-      description: "Business information",
+      icon: Settings,
+      description: "Restaurant settings and preferences",
     },
     {
       name: "Billing",
       href: "/dashboard/billing",
-      icon: Receipt,
-      description: "Subscription and payments",
+      icon: CreditCard,
+      description: "Manage subscription and billing",
     },
     {
       name: "Payments",
       href: "/dashboard/payments",
-      icon: CreditCard,
+      icon: Wallet,
       description: "Payment processing settings",
     },
   ],
 };
 
-// Navigation items grouped by section
-const navigationItems = {
-  main: [
-    { name: "Dashboard", icon: Home, href: "/dashboard" },
-    { name: "Kitchen", icon: ChefHat, href: "/dashboard/kitchen" },
-    { name: "Orders", icon: Menu, href: "/dashboard/orders", badge: "3 New" },
-    { name: "Tables", icon: QrCode, href: "/dashboard/tables" },
-    { name: "Menu", icon: FileText, href: "/dashboard/menu" },
-  ],
-  management: [
-    { name: "Analytics", icon: BarChart3, href: "/dashboard/analytics" },
-    { name: "Staff", icon: Users, href: "/dashboard/staff" },
-    { name: "Payments", icon: CreditCard, href: "/dashboard/payments" },
-    { name: "Settings", icon: Settings, href: "/dashboard/settings" },
-  ],
-  tools: [
-    { name: "QR Codes", icon: QrCode, href: "/dashboard/qr-codes" },
-    { name: "Printer", icon: Printer, href: "/dashboard/printer" },
-    { name: "Order History", icon: Clock, href: "/dashboard/orders/history" },
-  ],
-};
-
-// Add this new component before the AppSidebar component
 function MobileMenuButton() {
   const { toggleSidebar } = useSidebar();
 
   return (
     <button
       onClick={toggleSidebar}
-      className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition-all hover:bg-green-500 hover:scale-105 active:scale-95 md:hidden focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2"
-      aria-label="Toggle Menu"
-      style={{
-        boxShadow: "0 4px 14px 0 rgba(22, 163, 74, 0.3)",
-      }}
+      className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white shadow-lg lg:hidden"
     >
-      <Menu className="h-6 w-6" />
+      <Menu className="h-5 w-5" />
     </button>
   );
 }
@@ -277,166 +236,57 @@ interface SidebarLink {
   }[];
 }
 
-const sidebarLinks: SidebarLink[] = [
-  {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: Home,
-  },
-  {
-    title: "Orders",
-    href: "/dashboard/orders",
-    icon: ShoppingBag,
-  },
-  {
-    title: "Menu",
-    href: "/dashboard/menu",
-    icon: UtensilsCrossed,
-  },
-  {
-    title: "Tables",
-    href: "/dashboard/tables",
-    icon: Table2,
-  },
-  {
-    title: "Kitchen",
-    href: "/dashboard/kitchen",
-    icon: ChefHat,
-  },
-  {
-    title: "Staff",
-    href: "/dashboard/staff",
-    icon: Users,
-  },
-  {
-    title: "Printer",
-    href: "/dashboard/printer",
-    icon: Printer,
-    submenu: [
-      {
-        title: "Settings",
-        href: "/dashboard/printer",
-      },
-      {
-        title: "Kitchen Orders",
-        href: "/dashboard/printer/kitchen-orders",
-      },
-      {
-        title: "Customer Receipts",
-        href: "/dashboard/printer/customer-receipt",
-      },
-    ],
-  },
-  {
-    title: "Analytics",
-    href: "/dashboard/analytics",
-    icon: BarChart3,
-  },
-  {
-    title: "Payments",
-    href: "/dashboard/payments",
-    icon: Wallet,
-  },
-  {
-    title: "Settings",
-    href: "/dashboard/settings",
-    icon: Settings,
-  },
-  {
-    title: "Help",
-    href: "/dashboard/help",
-    icon: HelpCircle,
-  },
-];
-
 function SidebarItem({ link }: { link: SidebarLink }) {
   const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
-  const isActive =
-    pathname === link.href || pathname.startsWith(link.href + "/");
-  const hasSubmenu = link.submenu && link.submenu.length > 0;
+  const isActive = pathname === link.href;
 
   return (
-    <>
-      <Link
-        href={hasSubmenu ? "#" : link.href}
-        onClick={hasSubmenu ? () => setIsOpen(!isOpen) : undefined}
-        className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-50",
-          isActive &&
-            "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-50"
-        )}
-      >
-        {link.icon && <link.icon className="h-4 w-4" />}
-        <span>{link.title}</span>
-        {hasSubmenu && (
-          <div className="ml-auto">
-            {isOpen ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </div>
-        )}
-      </Link>
-      <AnimatePresence>
-        {isOpen && hasSubmenu && link.submenu && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="ml-6 mt-1 space-y-1"
-          >
-            {link.submenu.map((subItem) => (
-              <Link
-                key={subItem.href}
-                href={subItem.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-50",
-                  pathname === subItem.href &&
-                    "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-50"
-                )}
-              >
-                <CircleDot className="h-3 w-3" />
-                <span>{subItem.title}</span>
-              </Link>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+    <Link
+      href={link.href}
+      className={cn(
+        "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        isActive
+          ? "bg-green-50 text-green-700 hover:bg-green-100"
+          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+      )}
+    >
+      {link.icon && (
+        <link.icon
+          className={cn(
+            "h-4 w-4 shrink-0",
+            isActive ? "text-green-700" : "text-gray-600"
+          )}
+        />
+      )}
+      <span>{link.title}</span>
+    </Link>
   );
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [mounted, setMounted] = React.useState(false);
-  const { state, isMobile } = useSidebar();
+  const [mounted, setMounted] = useState(false);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const pathname = usePathname();
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [openNotifications, setOpenNotifications] = React.useState(false);
-  const [openSections, setOpenSections] = React.useState<
-    Record<string, boolean>
-  >({
-    orders: pathname.startsWith("/dashboard/orders"),
-  });
+
+  // Use real-time data from the hook
+  const { restaurant, user, isLoading, error } = useSidebarData();
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
   const isActive = (href: string) => {
+    // Special case for Dashboard - only active when exactly /dashboard
     if (href === "/dashboard") {
-      return pathname === href;
+      return pathname === "/dashboard";
     }
-    return pathname.startsWith(href);
+    // For other items, check exact match or if path starts with href + "/"
+    return pathname === href || pathname.startsWith(href + "/");
   };
 
   const hasActiveChild = (item: any): boolean => {
-    if (item.subItems) {
-      return item.subItems.some((subItem: any) => isActive(subItem.href));
-    }
-    return false;
+    if (!item.subItems) return false;
+    return item.subItems.some((subItem: any) => isActive(subItem.href));
   };
 
   const renderNavItem = (item: any, isSubItem = false) => {
@@ -518,6 +368,64 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return null;
   }
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <>
+        <Sidebar {...props}>
+          <SidebarHeader className="border-b">
+            <div className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-xl bg-gray-100 flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                </div>
+                <div className="flex-1">
+                  <div className="h-4 bg-gray-100 rounded animate-pulse mb-2"></div>
+                  <div className="h-3 bg-gray-100 rounded animate-pulse w-16"></div>
+                </div>
+              </div>
+            </div>
+          </SidebarHeader>
+          <SidebarContent>
+            <div className="p-4">
+              <div className="space-y-2">
+                {[...Array(8)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-8 bg-gray-100 rounded animate-pulse"
+                  ></div>
+                ))}
+              </div>
+            </div>
+          </SidebarContent>
+        </Sidebar>
+        <MobileMenuButton />
+      </>
+    );
+  }
+
+  // Show error state
+  if (error || !restaurant || !user) {
+    return (
+      <>
+        <Sidebar {...props}>
+          <SidebarHeader className="border-b">
+            <div className="p-4">
+              <div className="text-center">
+                <div className="h-12 w-12 rounded-xl bg-red-100 flex items-center justify-center mx-auto mb-2">
+                  <CircleDot className="h-6 w-6 text-red-500" />
+                </div>
+                <p className="text-sm text-red-600">Failed to load data</p>
+                <p className="text-xs text-gray-500 mt-1">{error}</p>
+              </div>
+            </div>
+          </SidebarHeader>
+        </Sidebar>
+        <MobileMenuButton />
+      </>
+    );
+  }
+
   return (
     <>
       <Sidebar {...props}>
@@ -527,7 +435,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <div className="relative">
                 <Avatar className="h-12 w-12 rounded-xl border-2 border-white shadow-md">
                   <AvatarImage
-                    src={restaurant.logo}
+                    src={restaurant.logo_url || "/placeholder.svg"}
                     alt={restaurant.name}
                     className="object-cover"
                   />
@@ -542,7 +450,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   variant="outline"
                   className="absolute -bottom-1 -right-1 h-5 px-1.5 bg-white border-gray-200"
                 >
-                  {restaurant.plan}
+                  {restaurant.subscription_plan
+                    ? restaurant.subscription_plan.charAt(0).toUpperCase() +
+                      restaurant.subscription_plan.slice(1).toLowerCase()
+                    : ""}
                 </Badge>
               </div>
               <div className="flex-1 min-w-0">
@@ -585,7 +496,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <PopoverTrigger asChild>
               <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user.avatar} alt={user.name} />
+                  <AvatarImage
+                    src={user.avatar_url || undefined}
+                    alt={user.name}
+                  />
                   <AvatarFallback>
                     {user.name
                       .split(" ")
@@ -595,7 +509,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </Avatar>
                 <div className="flex flex-col">
                   <span className="font-medium">{user.name}</span>
-                  <span className="text-xs text-gray-500">{user.role}</span>
+                  <span className="text-xs text-gray-500 capitalize">
+                    {user.role}
+                  </span>
                 </div>
               </button>
             </PopoverTrigger>

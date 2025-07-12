@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   CreditCard,
@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Banknote,
   Loader2,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +19,6 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-  CardFooter,
 } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -27,8 +27,27 @@ import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
+import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
+import {
+  createStripeAccount,
+  createAccountUpdateLink,
+  refreshAccountStatus,
+} from "@/lib/actions/stripe-connect";
+import {
+  getPaymentStats,
+  getPaymentTransactions,
+  getStripeAccountInfo,
+  updatePaymentMethodSettings,
+  getPaymentMethodSettings,
+  type PaymentStats,
+  type PaymentTransaction,
+  type StripeAccountInfo,
+} from "@/lib/actions/payments";
+import PaymentStatsComponent from "@/components/dashboard/payments/PaymentStats";
+import PaymentTransactions from "@/components/dashboard/payments/PaymentTransactions";
+import { formatCurrency } from "@/lib/utils/currency";
 
-// Add these types at the top level
 type PaymentMethod = {
   id: string;
   name: string;
@@ -38,17 +57,6 @@ type PaymentMethod = {
   enabled: boolean;
 };
 
-// Mock data - replace with real data fetching
-const stripeAccount = {
-  id: "acct_1234567890abcdef",
-  isConnected: true,
-  status: "active",
-  chargesEnabled: true,
-  payoutsEnabled: true,
-  detailsSubmitted: true,
-};
-
-// Update the mock data
 const paymentMethods: PaymentMethod[] = [
   {
     id: "creditCard",
@@ -68,7 +76,6 @@ const paymentMethods: PaymentMethod[] = [
   },
 ];
 
-// Add these animation variants at the top level
 const containerVariants = {
   hidden: { opacity: 0 },
   show: {
@@ -89,33 +96,186 @@ const cardVariants = {
 export default function PaymentsPage() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [restaurantId, setRestaurantId] = useState<string | null>(null);
+
+  // Data states
+  const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null);
+  const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
+  const [stripeAccount, setStripeAccount] = useState<StripeAccountInfo | null>(
+    null
+  );
+  const [paymentMethodSettings, setPaymentMethodSettings] = useState({
+    cardEnabled: true,
+    cashEnabled: true,
+  });
+
+  // UI states
   const [originalMethods, setOriginalMethods] = useState(paymentMethods);
   const [methods, setMethods] = useState(paymentMethods);
+  const [transactionOffset, setTransactionOffset] = useState(0);
+  const [hasMoreTransactions, setHasMoreTransactions] = useState(true);
 
   const hasChanges =
     JSON.stringify(originalMethods) !== JSON.stringify(methods);
 
+  // Fetch initial data
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      const supabase = createClient();
+
+      // Get current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Please sign in to continue");
+        return;
+      }
+
+      // Get user's restaurant
+      const { data: restaurant, error } = await supabase
+        .from("restaurants")
+        .select("id")
+        .eq("owner_id", user.id)
+        .single();
+
+      if (error || !restaurant) {
+        toast.error("Restaurant not found");
+        return;
+      }
+
+      setRestaurantId(restaurant.id);
+
+      // Fetch all data in parallel
+      await Promise.all([
+        fetchPaymentStats(restaurant.id),
+        fetchTransactions(restaurant.id),
+        fetchStripeAccountInfo(restaurant.id),
+        fetchPaymentMethodSettings(restaurant.id),
+      ]);
+
+      setIsLoading(false);
+    };
+
+    fetchInitialData();
+  }, []);
+
+  const fetchPaymentStats = async (id: string) => {
+    try {
+      const stats = await getPaymentStats(id);
+      setPaymentStats(stats);
+    } catch (error) {
+      console.error("Error fetching payment stats:", error);
+    }
+  };
+
+  const fetchTransactions = async (
+    id: string,
+    offset: number = 0,
+    append: boolean = false
+  ) => {
+    try {
+      const newTransactions = await getPaymentTransactions(id, 20, offset);
+      if (append) {
+        setTransactions((prev) => [...prev, ...newTransactions]);
+      } else {
+        setTransactions(newTransactions);
+      }
+      setHasMoreTransactions(newTransactions.length === 20);
+      setTransactionOffset(offset + newTransactions.length);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+    }
+  };
+
+  const fetchStripeAccountInfo = async (id: string) => {
+    try {
+      const accountInfo = await getStripeAccountInfo(id);
+      setStripeAccount(accountInfo);
+    } catch (error) {
+      console.error("Error fetching Stripe account info:", error);
+    }
+  };
+
+  const fetchPaymentMethodSettings = async (id: string) => {
+    try {
+      const settings = await getPaymentMethodSettings(id);
+      setPaymentMethodSettings(settings);
+
+      // Update UI methods based on settings
+      const updatedMethods = paymentMethods.map((method) => ({
+        ...method,
+        enabled:
+          method.id === "creditCard"
+            ? settings.cardEnabled
+            : settings.cashEnabled,
+      }));
+      setMethods(updatedMethods);
+      setOriginalMethods(updatedMethods);
+    } catch (error) {
+      console.error("Error fetching payment method settings:", error);
+    }
+  };
+
   const handleConnectStripe = async () => {
+    if (!restaurantId) return;
+
     setIsConnecting(true);
-    // Redirect to Stripe Connect OAuth flow
-    window.location.href = "/api/stripe/connect";
+    try {
+      const result = await createStripeAccount();
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      if (result.accountLink) {
+        // Redirect to Stripe Connect onboarding
+        window.location.href = result.accountLink;
+      }
+    } catch (error) {
+      console.error("Error connecting Stripe:", error);
+      toast.error("Failed to connect Stripe account");
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   const handleRefreshConnection = async () => {
-    // Refresh Stripe account status
-    window.location.href = "/api/stripe/refresh-status";
+    if (!restaurantId) return;
+
+    setIsRefreshing(true);
+    try {
+      await fetchStripeAccountInfo(restaurantId);
+      toast.success("Account status refreshed");
+    } catch (error) {
+      toast.error("Failed to refresh account status");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleSaveChanges = async () => {
+    if (!restaurantId) return;
+
     setIsSaving(true);
     try {
-      // Here you would make an API call to save the changes
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate API call
+      const settings = {
+        cardEnabled:
+          methods.find((m) => m.id === "creditCard")?.enabled || false,
+        cashEnabled: methods.find((m) => m.id === "cash")?.enabled || false,
+      };
+
+      await updatePaymentMethodSettings(restaurantId, settings);
+
+      setPaymentMethodSettings(settings);
       setOriginalMethods(methods);
-      // Show success message or toast here
+      toast.success("Payment method settings updated");
     } catch (error) {
-      // Handle error here
       console.error("Failed to save payment methods:", error);
+      toast.error("Failed to save settings");
     } finally {
       setIsSaving(false);
     }
@@ -129,43 +289,97 @@ export default function PaymentsPage() {
     );
   };
 
-  return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="space-y-1"
-      >
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-          Payment Settings
-        </h1>
-        <p className="text-lg text-gray-500">
-          Configure how you accept payments from customers
-        </p>
-      </motion.div>
+  const handleLoadMoreTransactions = () => {
+    if (restaurantId) {
+      fetchTransactions(restaurantId, transactionOffset, true);
+    }
+  };
 
+  const handleRefreshData = async () => {
+    if (!restaurantId) return;
+
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        fetchPaymentStats(restaurantId),
+        fetchTransactions(restaurantId),
+        fetchStripeAccountInfo(restaurantId),
+      ]);
+      toast.success("Data refreshed");
+    } catch (error) {
+      toast.error("Failed to refresh data");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex items-center space-x-2">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span>Loading payment data...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-8 max-w-7xl mx-auto">
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="space-y-6"
+        className="space-y-8"
       >
+        {/* Payment Overview Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="flex items-center justify-between"
+        >
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+              Payment Overview
+            </h1>
+            <p className="text-lg text-gray-500">
+              Monitor your payment performance and configure settings
+            </p>
+          </div>
+          <Button
+            onClick={handleRefreshData}
+            disabled={isRefreshing}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+        </motion.div>
+
+        {/* Payment Statistics */}
+        {paymentStats && (
+          <PaymentStatsComponent
+            stats={paymentStats}
+            isLoading={isRefreshing}
+            onRefresh={handleRefreshData}
+          />
+        )}
+
         {/* Stripe Connection Status */}
-        {stripeAccount.isConnected && (
+        {stripeAccount?.charges_enabled && (
           <motion.div
             variants={cardVariants}
             whileHover="hover"
             className="transform transition-all duration-200"
           >
-            <Card
-              className={
-                stripeAccount.isConnected
-                  ? "border-green-200"
-                  : "border-amber-200"
-              }
-            >
+            <Card className="border-green-200">
               <CardContent className="p-6">
                 <div className="flex items-center gap-4">
                   <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
@@ -186,7 +400,7 @@ export default function PaymentsPage() {
         )}
 
         {/* Connect Stripe Account Section */}
-        {!stripeAccount.isConnected && (
+        {!stripeAccount?.charges_enabled && (
           <motion.div
             variants={cardVariants}
             whileHover="hover"
@@ -290,6 +504,12 @@ export default function PaymentsPage() {
               <CardTitle>Payment Methods</CardTitle>
               <CardDescription>
                 Choose which payment methods to accept from customers
+                {!stripeAccount?.charges_enabled && (
+                  <span className="block mt-2 text-amber-600">
+                    Currently only cash payments are available. Connect your
+                    Stripe account to accept card payments.
+                  </span>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -299,43 +519,91 @@ export default function PaymentsPage() {
                 animate="show"
                 className="space-y-4"
               >
-                {methods.map((method: PaymentMethod) => (
-                  <motion.div
-                    key={method.id}
-                    variants={cardVariants}
-                    whileHover={{ x: 5 }}
-                    className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent/5 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <method.icon
-                        className={cn("h-5 w-5", method.iconColor)}
-                      />
-                      <div>
-                        <Label htmlFor={method.id} className="text-base">
-                          {method.name}
-                        </Label>
-                        <p className="text-sm text-gray-500">
-                          {method.description}
-                        </p>
+                {methods.map((method: PaymentMethod) => {
+                  const isCardMethod = method.id === "creditCard";
+                  const isDisabled =
+                    isCardMethod && !stripeAccount?.charges_enabled;
+
+                  // Force credit card to be disabled when Stripe is not connected
+                  const switchChecked = isDisabled ? false : method.enabled;
+
+                  return (
+                    <motion.div
+                      key={method.id}
+                      variants={cardVariants}
+                      whileHover={{ x: 5 }}
+                      className={cn(
+                        "flex items-center justify-between p-4 rounded-lg border transition-colors",
+                        isDisabled
+                          ? "bg-gray-50 opacity-60 cursor-not-allowed"
+                          : "hover:bg-accent/5"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <method.icon
+                          className={cn("h-5 w-5", method.iconColor)}
+                        />
+                        <div>
+                          <Label
+                            htmlFor={method.id}
+                            className={cn(
+                              "text-base",
+                              isDisabled && "text-gray-400"
+                            )}
+                          >
+                            {method.name}
+                          </Label>
+                          <p className="text-sm text-gray-500">
+                            {method.description}
+                          </p>
+                          {isDisabled && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              Connect Stripe to enable card payments
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <Switch
-                      id={method.id}
-                      checked={method.enabled}
-                      onCheckedChange={(checked) =>
-                        handleMethodToggle(method.id, checked)
-                      }
-                      className="data-[state=checked]:bg-green-600"
-                    />
-                  </motion.div>
-                ))}
+                      <Switch
+                        id={method.id}
+                        checked={switchChecked}
+                        onCheckedChange={(checked) =>
+                          handleMethodToggle(method.id, checked)
+                        }
+                        disabled={isDisabled}
+                        className={cn(
+                          "data-[state=checked]:bg-green-600",
+                          isDisabled && "opacity-40 cursor-not-allowed"
+                        )}
+                      />
+                    </motion.div>
+                  );
+                })}
               </motion.div>
+
+              {hasChanges && (
+                <div className="pt-4 border-t">
+                  <Button
+                    onClick={handleSaveChanges}
+                    disabled={isSaving}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    {isSaving ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving Changes...
+                      </div>
+                    ) : (
+                      "Save Changes"
+                    )}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
 
         {/* Stripe Account Status */}
-        {stripeAccount.isConnected && (
+        {stripeAccount?.charges_enabled && (
           <motion.div
             variants={cardVariants}
             whileHover="hover"
@@ -367,7 +635,7 @@ export default function PaymentsPage() {
                       <div className="flex items-center gap-2">
                         <Badge className="bg-green-100 text-green-800">
                           <Check className="w-3 h-3 mr-1" />
-                          Active
+                          {stripeAccount.charges_enabled ? "Active" : "Pending"}
                         </Badge>
                       </div>
                     </motion.div>
@@ -467,8 +735,11 @@ export default function PaymentsPage() {
                     variant="outline"
                     className="flex-1"
                     onClick={handleRefreshConnection}
+                    disabled={isRefreshing}
                   >
-                    <RefreshCw className="w-4 h-4 mr-2" />
+                    <RefreshCw
+                      className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
+                    />
                     Refresh Connection
                   </Button>
                 </div>
@@ -476,6 +747,14 @@ export default function PaymentsPage() {
             </Card>
           </motion.div>
         )}
+
+        {/* Payment Transactions */}
+        <PaymentTransactions
+          transactions={transactions}
+          isLoading={isRefreshing}
+          onLoadMore={handleLoadMoreTransactions}
+          hasMore={hasMoreTransactions}
+        />
       </motion.div>
     </div>
   );

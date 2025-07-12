@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Upload,
@@ -17,6 +17,7 @@ import {
   Clock8,
   DollarSign,
   MapPin,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,10 +40,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  useRestaurantSettings,
-  CURRENCIES,
-} from "@/lib/store/restaurant-settings";
+import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
+import { CURRENCIES, COUNTRY_OPTIONS, type Currency } from "@/lib/constants";
+import { toast } from "sonner";
 
 const DAYS_OF_WEEK = [
   "monday",
@@ -59,6 +59,13 @@ const RESTAURANT_TYPES = [
   { value: "cafe", label: "Cafe" },
   { value: "bar", label: "Bar" },
   { value: "food-truck", label: "Food Truck" },
+] as const;
+
+const PRICE_RANGES = [
+  { value: "$", label: "$ (Under 15 CHF)" },
+  { value: "$$", label: "$$ (15-30 CHF)" },
+  { value: "$$$", label: "$$$ (31-60 CHF)" },
+  { value: "$$$$", label: "$$$$ (60+ CHF)" },
 ] as const;
 
 // Add animation variants at the top level
@@ -86,36 +93,54 @@ const itemVariants = {
 
 export default function SettingsPage() {
   const [isEditing, setIsEditing] = useState(false);
-  const { currency, setCurrency } = useRestaurantSettings();
-  const [restaurantInfo, setRestaurantInfo] = useState({
-    name: "Bella Vista",
-    email: "info@bellavista.ch",
-    phone: "+41 44 123 4567",
-    address: "Bahnhofstrasse 123",
-    city: "Zurich",
-    postalCode: "8001",
-    country: "Switzerland",
-    description: "Authentic Italian cuisine in the heart of Zurich",
-    website: "https://bellavista.ch",
-    cuisine: "Italian",
-    type: "restaurant",
-    currency: currency.value,
+  const [isSaving, setIsSaving] = useState(false);
+  const {
+    currency,
+    setCurrency,
+    restaurant,
+    isLoading,
+    error,
+    fetchRestaurant,
+    updateRestaurant,
+    toggleRestaurantStatus,
+    updateNotifications,
+  } = useRestaurantSettings();
+
+  // Fetch restaurant data on component mount
+  useEffect(() => {
+    fetchRestaurant();
+  }, [fetchRestaurant]);
+
+  // Initialize form data from restaurant
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
+    city: "",
+    postalCode: "",
+    country: "",
+    description: "",
+    website: "",
+    cuisine: "",
+    type: "restaurant" as const,
+    currency: currency,
+    taxRate: 0,
+    vatNumber: "",
+    priceRange: "$" as const,
+    seatingCapacity: "",
+    acceptsReservations: false,
+    deliveryAvailable: false,
+    takeoutAvailable: false,
     openingHours: {
-      monday: { open: "11:00", close: "22:00" },
-      tuesday: { open: "11:00", close: "22:00" },
-      wednesday: { open: "11:00", close: "22:00" },
-      thursday: { open: "11:00", close: "22:00" },
-      friday: { open: "11:00", close: "23:00" },
-      saturday: { open: "12:00", close: "23:00" },
-      sunday: { open: "12:00", close: "22:00" },
+      monday: { open: "09:00", close: "17:00" },
+      tuesday: { open: "09:00", close: "17:00" },
+      wednesday: { open: "09:00", close: "17:00" },
+      thursday: { open: "09:00", close: "17:00" },
+      friday: { open: "09:00", close: "17:00" },
+      saturday: { open: "10:00", close: "16:00" },
+      sunday: { open: "10:00", close: "16:00" },
     },
-    priceRange: "$$",
-    seatingCapacity: "80",
-    acceptsReservations: true,
-    deliveryAvailable: true,
-    takeoutAvailable: true,
-    taxRate: 7.7,
-    vatNumber: "CHE-123.456.789",
   });
 
   const [notifications, setNotifications] = useState({
@@ -126,17 +151,87 @@ export default function SettingsPage() {
     playSound: true,
   });
 
-  const handleSave = () => {
-    // Update currency in the store
-    const selectedCurrency = CURRENCIES.find(
-      (c) => c.value === restaurantInfo.currency
-    );
-    if (selectedCurrency) {
-      setCurrency(selectedCurrency);
-    }
+  // Update form data when restaurant data is loaded
+  useEffect(() => {
+    if (restaurant) {
+      setFormData({
+        name: restaurant.name || "",
+        email: restaurant.email || "",
+        phone: restaurant.phone || "",
+        address: restaurant.address || "",
+        city: restaurant.city || "",
+        postalCode: restaurant.postal_code || "",
+        country: restaurant.country || "",
+        description: restaurant.description || "",
+        website: restaurant.website || "",
+        cuisine: restaurant.cuisine || "",
+        type: restaurant.type || "restaurant",
+        currency: restaurant.currency || "CHF",
+        taxRate: restaurant.tax_rate || 0,
+        vatNumber: restaurant.vat_number || "",
+        priceRange: restaurant.price_range || "$",
+        seatingCapacity: restaurant.seating_capacity?.toString() || "",
+        acceptsReservations: restaurant.accepts_reservations || false,
+        deliveryAvailable: restaurant.delivery_available || false,
+        takeoutAvailable: restaurant.takeout_available || false,
+        openingHours: restaurant.opening_hours || {
+          monday: { open: "09:00", close: "17:00" },
+          tuesday: { open: "09:00", close: "17:00" },
+          wednesday: { open: "09:00", close: "17:00" },
+          thursday: { open: "09:00", close: "17:00" },
+          friday: { open: "09:00", close: "17:00" },
+          saturday: { open: "10:00", close: "16:00" },
+          sunday: { open: "10:00", close: "16:00" },
+        },
+      });
 
-    // Here you would typically save the changes to your backend
-    setIsEditing(false);
+      // Set notifications from database
+      if (restaurant.notification_settings) {
+        setNotifications(restaurant.notification_settings);
+      }
+    }
+  }, [restaurant]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      // Update restaurant data
+      await updateRestaurant({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        city: formData.city,
+        postal_code: formData.postalCode,
+        country: formData.country,
+        description: formData.description,
+        website: formData.website,
+        cuisine: formData.cuisine,
+        type: formData.type,
+        currency: formData.currency,
+        tax_rate: formData.taxRate,
+        vat_number: formData.vatNumber,
+        price_range: formData.priceRange,
+        seating_capacity: formData.seatingCapacity
+          ? parseInt(formData.seatingCapacity)
+          : null,
+        accepts_reservations: formData.acceptsReservations,
+        delivery_available: formData.deliveryAvailable,
+        takeout_available: formData.takeoutAvailable,
+        opening_hours: formData.openingHours,
+      });
+
+      // Update notification settings
+      await updateNotifications(notifications);
+
+      setIsEditing(false);
+      toast.success("Settings saved successfully");
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      toast.error("Failed to save settings");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleOpeningHourChange = (
@@ -144,24 +239,62 @@ export default function SettingsPage() {
     type: "open" | "close",
     value: string
   ) => {
-    setRestaurantInfo({
-      ...restaurantInfo,
+    setFormData({
+      ...formData,
       openingHours: {
-        ...restaurantInfo.openingHours,
+        ...formData.openingHours,
         [day]: {
-          ...restaurantInfo.openingHours[day],
+          ...formData.openingHours[day],
           [type]: value,
         },
       },
     });
   };
 
-  const priceRanges = [
-    { value: "$", label: "$ (Under 15 CHF)" },
-    { value: "$$", label: "$$ (15-30 CHF)" },
-    { value: "$$$", label: "$$$ (31-60 CHF)" },
-    { value: "$$$$", label: "$$$$ (60+ CHF)" },
-  ];
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading restaurant settings...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-red-600">
+            Error Loading Settings
+          </h2>
+          <p className="text-gray-600 mt-2">{error}</p>
+          <Button onClick={fetchRestaurant} className="mt-4" variant="outline">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show no restaurant state
+  if (!restaurant) {
+    return (
+      <div className="p-6">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900">
+            No Restaurant Found
+          </h2>
+          <p className="text-gray-600 mt-2">
+            Please set up your restaurant first.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
@@ -217,13 +350,19 @@ export default function SettingsPage() {
                         onClick={() =>
                           isEditing ? handleSave() : setIsEditing(true)
                         }
+                        disabled={isSaving}
                         className={
                           isEditing
                             ? "border-green-600 text-green-600 hover:bg-green-50"
                             : "bg-green-600 hover:bg-green-700 text-white"
                         }
                       >
-                        {isEditing ? (
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : isEditing ? (
                           "Save Changes"
                         ) : (
                           <>
@@ -249,7 +388,10 @@ export default function SettingsPage() {
                         <div className="space-y-3">
                           <div className="relative w-full h-[240px] bg-gray-100 rounded-lg overflow-hidden">
                             <img
-                              src="/placeholder.svg?height=240&width=800"
+                              src={
+                                restaurant.cover_url ||
+                                "/placeholder.svg?height=240&width=800"
+                              }
                               alt="Restaurant cover"
                               className="w-full h-full object-cover"
                             />
@@ -274,7 +416,10 @@ export default function SettingsPage() {
                           <div className="flex items-center gap-4">
                             <div className="relative w-32 h-32 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                               <img
-                                src="/placeholder.svg?height=128&width=128"
+                                src={
+                                  restaurant.logo_url ||
+                                  "/placeholder.svg?height=128&width=128"
+                                }
                                 alt="Restaurant logo"
                                 className="w-full h-full object-cover"
                               />
@@ -311,10 +456,10 @@ export default function SettingsPage() {
                           </Label>
                           <Input
                             id="name"
-                            value={restaurantInfo.name}
+                            value={formData.name}
                             onChange={(e) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 name: e.target.value,
                               })
                             }
@@ -328,11 +473,11 @@ export default function SettingsPage() {
                             Restaurant Type
                           </Label>
                           <Select
-                            value={restaurantInfo.type}
+                            value={formData.type}
                             onValueChange={(value) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
-                                type: value,
+                              setFormData({
+                                ...formData,
+                                type: value as typeof formData.type,
                               })
                             }
                             disabled={!isEditing}
@@ -356,10 +501,10 @@ export default function SettingsPage() {
                           </Label>
                           <Input
                             id="cuisine"
-                            value={restaurantInfo.cuisine}
+                            value={formData.cuisine}
                             onChange={(e) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 cuisine: e.target.value,
                               })
                             }
@@ -373,11 +518,11 @@ export default function SettingsPage() {
                             Price Range
                           </Label>
                           <Select
-                            value={restaurantInfo.priceRange}
+                            value={formData.priceRange}
                             onValueChange={(value) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
-                                priceRange: value,
+                              setFormData({
+                                ...formData,
+                                priceRange: value as typeof formData.priceRange,
                               })
                             }
                             disabled={!isEditing}
@@ -386,7 +531,7 @@ export default function SettingsPage() {
                               <SelectValue placeholder="Select price range" />
                             </SelectTrigger>
                             <SelectContent>
-                              {priceRanges.map((range) => (
+                              {PRICE_RANGES.map((range) => (
                                 <SelectItem
                                   key={range.value}
                                   value={range.value}
@@ -403,11 +548,11 @@ export default function SettingsPage() {
                             Currency
                           </Label>
                           <Select
-                            value={restaurantInfo.currency}
+                            value={formData.currency}
                             onValueChange={(value) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
-                                currency: value,
+                              setFormData({
+                                ...formData,
+                                currency: value as Currency,
                               })
                             }
                             disabled={!isEditing}
@@ -416,16 +561,19 @@ export default function SettingsPage() {
                               <SelectValue placeholder="Select currency" />
                             </SelectTrigger>
                             <SelectContent>
-                              {CURRENCIES.map((currency) => (
-                                <SelectItem
-                                  key={currency.value}
-                                  value={currency.value}
-                                >
-                                  {currency.label}
+                              {Object.values(CURRENCIES).map((currency) => (
+                                <SelectItem key={currency} value={currency}>
+                                  {currency}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
+                          {formData.country && (
+                            <p className="text-sm text-gray-500">
+                              💡 Currency automatically set based on your
+                              country selection
+                            </p>
+                          )}
                         </div>
 
                         <div className="md:col-span-2">
@@ -434,10 +582,10 @@ export default function SettingsPage() {
                           </Label>
                           <Textarea
                             id="description"
-                            value={restaurantInfo.description}
+                            value={formData.description}
                             onChange={(e) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 description: e.target.value,
                               })
                             }
@@ -463,10 +611,10 @@ export default function SettingsPage() {
                           <Input
                             id="email"
                             type="email"
-                            value={restaurantInfo.email}
+                            value={formData.email}
                             onChange={(e) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 email: e.target.value,
                               })
                             }
@@ -481,10 +629,10 @@ export default function SettingsPage() {
                           </Label>
                           <Input
                             id="phone"
-                            value={restaurantInfo.phone}
+                            value={formData.phone}
                             onChange={(e) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 phone: e.target.value,
                               })
                             }
@@ -501,11 +649,11 @@ export default function SettingsPage() {
                             id="taxRate"
                             type="number"
                             step="0.1"
-                            value={restaurantInfo.taxRate || ""}
+                            value={formData.taxRate || ""}
                             onChange={(e) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
-                                taxRate: parseFloat(e.target.value),
+                              setFormData({
+                                ...formData,
+                                taxRate: parseFloat(e.target.value) || 0,
                               })
                             }
                             className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
@@ -519,10 +667,10 @@ export default function SettingsPage() {
                           </Label>
                           <Input
                             id="vatNumber"
-                            value={restaurantInfo.vatNumber || ""}
+                            value={formData.vatNumber || ""}
                             onChange={(e) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 vatNumber: e.target.value,
                               })
                             }
@@ -540,10 +688,10 @@ export default function SettingsPage() {
                             <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                             <Input
                               id="website"
-                              value={restaurantInfo.website}
+                              value={formData.website}
                               onChange={(e) =>
-                                setRestaurantInfo({
-                                  ...restaurantInfo,
+                                setFormData({
+                                  ...formData,
                                   website: e.target.value,
                                 })
                               }
@@ -562,10 +710,10 @@ export default function SettingsPage() {
                           </Label>
                           <Input
                             id="seatingCapacity"
-                            value={restaurantInfo.seatingCapacity}
+                            value={formData.seatingCapacity}
                             onChange={(e) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 seatingCapacity: e.target.value,
                               })
                             }
@@ -593,10 +741,10 @@ export default function SettingsPage() {
                             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                             <Input
                               id="address"
-                              value={restaurantInfo.address}
+                              value={formData.address}
                               onChange={(e) =>
-                                setRestaurantInfo({
-                                  ...restaurantInfo,
+                                setFormData({
+                                  ...formData,
                                   address: e.target.value,
                                 })
                               }
@@ -612,10 +760,10 @@ export default function SettingsPage() {
                           </Label>
                           <Input
                             id="city"
-                            value={restaurantInfo.city}
+                            value={formData.city}
                             onChange={(e) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 city: e.target.value,
                               })
                             }
@@ -630,10 +778,10 @@ export default function SettingsPage() {
                           </Label>
                           <Input
                             id="postalCode"
-                            value={restaurantInfo.postalCode}
+                            value={formData.postalCode}
                             onChange={(e) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 postalCode: e.target.value,
                               })
                             }
@@ -646,18 +794,40 @@ export default function SettingsPage() {
                           <Label htmlFor="country" className="text-base">
                             Country
                           </Label>
-                          <Input
-                            id="country"
-                            value={restaurantInfo.country}
-                            onChange={(e) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
-                                country: e.target.value,
-                              })
-                            }
-                            className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                          <Select
+                            value={formData.country}
+                            onValueChange={(value) => {
+                              const newFormData = {
+                                ...formData,
+                                country: value,
+                              };
+
+                              // Auto-set currency based on country selection
+                              const selectedCountry = COUNTRY_OPTIONS.find(
+                                (country) => country.value === value
+                              );
+                              if (selectedCountry) {
+                                newFormData.currency = selectedCountry.currency;
+                              }
+
+                              setFormData(newFormData);
+                            }}
                             disabled={!isEditing}
-                          />
+                          >
+                            <SelectTrigger className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                              <SelectValue placeholder="Select your country" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {COUNTRY_OPTIONS.map((country) => (
+                                <SelectItem
+                                  key={country.value}
+                                  value={country.value}
+                                >
+                                  {country.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </motion.div>
@@ -683,7 +853,7 @@ export default function SettingsPage() {
                               <div className="flex-1">
                                 <Input
                                   type="time"
-                                  value={restaurantInfo.openingHours[day].open}
+                                  value={formData.openingHours[day].open}
                                   onChange={(e) =>
                                     handleOpeningHourChange(
                                       day,
@@ -699,7 +869,7 @@ export default function SettingsPage() {
                               <div className="flex-1">
                                 <Input
                                   type="time"
-                                  value={restaurantInfo.openingHours[day].close}
+                                  value={formData.openingHours[day].close}
                                   onChange={(e) =>
                                     handleOpeningHourChange(
                                       day,
@@ -719,6 +889,42 @@ export default function SettingsPage() {
 
                     <Separator />
 
+                    {/* Restaurant Status */}
+                    <motion.div variants={itemVariants} className="space-y-6">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Restaurant Status
+                      </h3>
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div className="space-y-1">
+                          <Label className="text-base font-medium">
+                            Restaurant Status
+                          </Label>
+                          <p className="text-sm text-gray-500">
+                            {restaurant.is_open
+                              ? "Currently open for business"
+                              : "Currently closed"}
+                          </p>
+                        </div>
+                        <Button
+                          onClick={toggleRestaurantStatus}
+                          variant={
+                            restaurant.is_open ? "destructive" : "default"
+                          }
+                          className={
+                            restaurant.is_open
+                              ? "bg-red-600 hover:bg-red-700"
+                              : "bg-green-600 hover:bg-green-700"
+                          }
+                        >
+                          {restaurant.is_open
+                            ? "Close Restaurant"
+                            : "Open Restaurant"}
+                        </Button>
+                      </div>
+                    </motion.div>
+
+                    <Separator />
+
                     {/* Service Options */}
                     <motion.div variants={itemVariants} className="space-y-6">
                       <h3 className="text-lg font-semibold text-gray-900">
@@ -728,10 +934,10 @@ export default function SettingsPage() {
                         <div className="flex items-center space-x-2">
                           <Switch
                             id="acceptsReservations"
-                            checked={restaurantInfo.acceptsReservations}
+                            checked={formData.acceptsReservations}
                             onCheckedChange={(checked) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 acceptsReservations: checked,
                               })
                             }
@@ -746,10 +952,10 @@ export default function SettingsPage() {
                         <div className="flex items-center space-x-2">
                           <Switch
                             id="deliveryAvailable"
-                            checked={restaurantInfo.deliveryAvailable}
+                            checked={formData.deliveryAvailable}
                             onCheckedChange={(checked) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 deliveryAvailable: checked,
                               })
                             }
@@ -764,10 +970,10 @@ export default function SettingsPage() {
                         <div className="flex items-center space-x-2">
                           <Switch
                             id="takeoutAvailable"
-                            checked={restaurantInfo.takeoutAvailable}
+                            checked={formData.takeoutAvailable}
                             onCheckedChange={(checked) =>
-                              setRestaurantInfo({
-                                ...restaurantInfo,
+                              setFormData({
+                                ...formData,
                                 takeoutAvailable: checked,
                               })
                             }
@@ -799,7 +1005,7 @@ export default function SettingsPage() {
                   <CardHeader>
                     <CardTitle>Notification Preferences</CardTitle>
                     <CardDescription>
-                      Choose what notifications you want to receive
+                      Choose which notifications you want to receive
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
@@ -815,27 +1021,27 @@ export default function SettingsPage() {
                               {key === "newOrders"
                                 ? "New Orders"
                                 : key === "paymentReceived"
-                                ? "Payment Received"
-                                : key === "tableRequests"
-                                ? "Table Requests"
-                                : key === "kitchenUpdates"
-                                ? "Kitchen Updates"
-                                : key === "playSound"
-                                ? "Play Sound"
-                                : key}
+                                  ? "Payment Received"
+                                  : key === "tableRequests"
+                                    ? "Table Requests"
+                                    : key === "kitchenUpdates"
+                                      ? "Kitchen Updates"
+                                      : key === "playSound"
+                                        ? "Play Sound"
+                                        : key}
                             </Label>
                             <p className="text-sm text-gray-500">
                               {key === "newOrders"
                                 ? "Get notified when new orders come in"
                                 : key === "paymentReceived"
-                                ? "Get notified when payments are processed"
-                                : key === "tableRequests"
-                                ? "Get notified when customers request assistance"
-                                : key === "kitchenUpdates"
-                                ? "Get notified about kitchen status updates"
-                                : key === "playSound"
-                                ? "Play a sound with notifications"
-                                : ""}
+                                  ? "Get notified when payments are processed"
+                                  : key === "tableRequests"
+                                    ? "Get notified when customers request assistance"
+                                    : key === "kitchenUpdates"
+                                      ? "Get notified about kitchen status updates"
+                                      : key === "playSound"
+                                        ? "Play a sound with notifications"
+                                        : ""}
                             </p>
                           </div>
                           <Switch
