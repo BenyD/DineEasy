@@ -21,6 +21,9 @@ interface BillingData {
   isLoading: boolean;
   error: string | null;
   restaurantId?: string;
+  subscriptionStatus?: string;
+  isCancelled?: boolean;
+  accessEndsAt?: Date | null;
 }
 
 export function useBillingData(): BillingData & { refresh: () => void } {
@@ -39,6 +42,9 @@ export function useBillingData(): BillingData & { refresh: () => void } {
     },
     isLoading: true,
     error: null,
+    subscriptionStatus: undefined,
+    isCancelled: false,
+    accessEndsAt: null,
   });
 
   const fetchBillingData = async () => {
@@ -118,6 +124,7 @@ export function useBillingData(): BillingData & { refresh: () => void } {
         currentPeriodEnd: currentSubscription?.current_period_end,
         trialEnd: currentSubscription?.trial_end,
         cancelAt: currentSubscription?.cancel_at,
+        canceledAt: currentSubscription?.canceled_at,
       });
 
       // Check if there's an active subscription
@@ -174,9 +181,35 @@ export function useBillingData(): BillingData & { refresh: () => void } {
 
       const limits = getPlanLimits(plan);
 
-      // Calculate next billing date based on subscription status
+      // Enhanced date calculations for different subscription states
       let nextBillingDate: Date | null = null;
+      let trialEndsAt: Date | null = null;
+      let accessEndsAt: Date | null = null;
+      let isCancelled = false;
+
       if (currentSubscription) {
+        // Set trial end date
+        if (currentSubscription.trial_end) {
+          trialEndsAt = new Date(currentSubscription.trial_end);
+        }
+
+        // Check if subscription is cancelled
+        if (
+          currentSubscription.status === "canceled" ||
+          currentSubscription.cancel_at
+        ) {
+          isCancelled = true;
+
+          // If cancelled, access ends at cancel_at date
+          if (currentSubscription.cancel_at) {
+            accessEndsAt = new Date(currentSubscription.cancel_at);
+          } else if (currentSubscription.current_period_end) {
+            // Fallback to current_period_end if cancel_at is not set
+            accessEndsAt = new Date(currentSubscription.current_period_end);
+          }
+        }
+
+        // Calculate next billing date based on subscription status
         if (
           currentSubscription.status === "trialing" &&
           currentSubscription.trial_end
@@ -207,26 +240,29 @@ export function useBillingData(): BillingData & { refresh: () => void } {
               );
             }
           }
-        } else if (
-          currentSubscription.status === "canceled" &&
-          currentSubscription.cancel_at
-        ) {
-          // If canceled, show when subscription will end
-          nextBillingDate = new Date(currentSubscription.cancel_at);
         } else if (currentSubscription.status === "incomplete_expired") {
           // If incomplete_expired, show when it expired
           nextBillingDate = currentSubscription.current_period_end
             ? new Date(currentSubscription.current_period_end)
             : null;
         }
+
+        // If cancelled and we don't have accessEndsAt, use nextBillingDate
+        if (isCancelled && !accessEndsAt && nextBillingDate) {
+          accessEndsAt = nextBillingDate;
+        }
       }
 
-      console.log("Next billing date calculation:", {
+      console.log("Enhanced billing date calculation:", {
         subscriptionStatus: currentSubscription?.status,
         nextBillingDate: nextBillingDate?.toISOString(),
+        trialEndsAt: trialEndsAt?.toISOString(),
+        accessEndsAt: accessEndsAt?.toISOString(),
+        isCancelled,
         isTrial: currentSubscription?.status === "trialing",
         trialEnd: currentSubscription?.trial_end,
         currentPeriodEnd: currentSubscription?.current_period_end,
+        cancelAt: currentSubscription?.cancel_at,
       });
 
       setData({
@@ -234,9 +270,7 @@ export function useBillingData(): BillingData & { refresh: () => void } {
         price,
         billingCycle: interval as "monthly" | "yearly",
         nextBillingDate,
-        trialEndsAt: currentSubscription?.trial_end
-          ? new Date(currentSubscription.trial_end)
-          : null,
+        trialEndsAt,
         hasActiveSubscription: hasActiveSubscription,
         currency: currency,
         usage: {
@@ -256,6 +290,10 @@ export function useBillingData(): BillingData & { refresh: () => void } {
         isLoading: false,
         error: null,
         restaurantId: restaurant.id,
+        subscriptionStatus:
+          currentSubscription?.status || restaurant.subscription_status,
+        isCancelled,
+        accessEndsAt,
       });
     } catch (error) {
       console.error("Error fetching billing data:", error);

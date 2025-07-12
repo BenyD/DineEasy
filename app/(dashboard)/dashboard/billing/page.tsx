@@ -11,6 +11,8 @@ import {
   Sparkles,
   XCircle,
   AlertTriangle,
+  Clock,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,10 +87,48 @@ export default function BillingPage() {
     : 0;
   const isTrialActive = daysLeft > 0;
 
-  // Check if subscription is cancelled
-  const isSubscriptionCancelled =
-    billingData.nextBillingDate &&
-    new Date(billingData.nextBillingDate) < new Date();
+  // Enhanced subscription status detection
+  const getSubscriptionStatus = () => {
+    if (!billingData.hasActiveSubscription) {
+      return {
+        status: "no_subscription" as const,
+        label: "No Subscription",
+        color: "bg-gray-100 text-gray-800",
+        icon: AlertCircle,
+      };
+    }
+
+    // Check if subscription is cancelled using the new isCancelled field
+    if (billingData.isCancelled) {
+      return {
+        status: "cancelled" as const,
+        label: "Cancelled",
+        color: "bg-red-100 text-red-800",
+        icon: XCircle,
+      };
+    }
+
+    if (isTrialActive) {
+      return {
+        status: "trial" as const,
+        label: "Trial",
+        color: "bg-blue-100 text-blue-800",
+        icon: Sparkles,
+      };
+    }
+
+    return {
+      status: "active" as const,
+      label: "Active",
+      color: "bg-green-100 text-green-800",
+      icon: CheckCircle,
+    };
+  };
+
+  const subscriptionStatus = getSubscriptionStatus();
+
+  // Check if subscription is cancelled (for access end date)
+  const isSubscriptionCancelled = subscriptionStatus.status === "cancelled";
 
   // Handle upgrade success message
   useEffect(() => {
@@ -137,9 +177,10 @@ export default function BillingPage() {
       if (res.error) {
         toast.error(res.error);
       } else {
-        toast.success(
-          "Subscription cancellation scheduled. You will retain access until the end of the billing period."
-        );
+        const message = isTrialActive
+          ? "Subscription cancelled. You will retain access until the end of your trial period."
+          : "Subscription cancelled. You will retain access until the end of your billing period.";
+        toast.success(message);
         // Refresh billing data to show updated status
         billingData.refresh();
       }
@@ -309,52 +350,219 @@ export default function BillingPage() {
         </motion.div>
       )}
 
-      {/* Cancellation Notice */}
+      {/* Enhanced Cancellation Notice */}
       {isSubscriptionCancelled && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="transform transition-all duration-200"
         >
-          <Alert variant="destructive" className="bg-red-50 border-red-200">
-            <XCircle className="h-4 w-4 text-red-600" />
-            <AlertTitle>Subscription Cancelled</AlertTitle>
-            <AlertDescription>
-              Your subscription has been cancelled and will end on{" "}
-              {formatDate(billingData.nextBillingDate)}. You can reactivate your
-              subscription at any time by visiting the change plan page.
-            </AlertDescription>
-          </Alert>
+          <Card className="border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 shadow-lg">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0">
+                  <div className="p-3 rounded-full bg-amber-100 border border-amber-200">
+                    <Clock className="h-6 w-6 text-amber-600" />
+                  </div>
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-amber-800">
+                        Subscription Cancelled
+                      </h3>
+                      <p className="text-sm text-amber-700 mt-1">
+                        Your subscription has been cancelled, but you still have
+                        access to all pro features.
+                      </p>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className="bg-amber-100 text-amber-800 border-amber-200"
+                    >
+                      <XCircle className="h-3 w-3 mr-1" />
+                      Cancelled
+                    </Badge>
+                  </div>
+
+                  <div className="bg-white rounded-lg p-4 border border-amber-200">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-700">
+                          Pro features available until
+                        </p>
+                        <p className="text-lg font-bold text-amber-800">
+                          {formatDate(
+                            billingData.accessEndsAt ||
+                              billingData.nextBillingDate
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {billingData.accessEndsAt ||
+                          billingData.nextBillingDate
+                            ? `${calculateDaysLeft((billingData.accessEndsAt || billingData.nextBillingDate)!)} days remaining`
+                            : "Date not available"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-amber-600">
+                          {billingData.accessEndsAt ||
+                          billingData.nextBillingDate
+                            ? calculateDaysLeft(
+                                (billingData.accessEndsAt ||
+                                  billingData.nextBillingDate)!
+                              )
+                            : 0}
+                        </div>
+                        <div className="text-xs text-gray-500">days left</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={() =>
+                        (window.location.href =
+                          "/dashboard/billing/change-plan")
+                      }
+                      className="bg-amber-600 hover:bg-amber-700 text-white flex-1"
+                    >
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Reactivate Subscription
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleStripePortal}
+                      disabled={isLoadingPortal}
+                      className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                    >
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      {isLoadingPortal ? "Loading..." : "Manage Billing"}
+                    </Button>
+                  </div>
+
+                  <div className="text-xs text-amber-600 bg-amber-100 rounded-md p-3 border border-amber-200">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium">What happens next?</p>
+                        <p className="mt-1">
+                          After your access ends, you'll be downgraded to the
+                          free plan. You can reactivate anytime to restore all
+                          pro features.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
       )}
 
-      {isTrialActive && (
+      {/* Enhanced Trial Active Notice */}
+      {isTrialActive && !isSubscriptionCancelled && (
         <motion.div
           variants={cardVariants}
           initial="hidden"
           animate="show"
           className="transform transition-all duration-200"
         >
-          <Alert variant="default" className="bg-blue-50 border-blue-200">
-            <AlertTitle>{`🎉 You're on your 14-day free trial — ${daysLeft} days remaining!`}</AlertTitle>
-            <AlertDescription>
-              You're currently on the {billingData.plan} plan. Your card will be
-              charged {billingData.currency} {billingData.price} on{" "}
-              {formatDate(billingData.nextBillingDate)} unless you cancel.
-              {billingData.plan.toLowerCase() !== "elite" && (
-                <div className="mt-3">
-                  <Button
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={() =>
-                      (window.location.href = "/dashboard/billing/change-plan")
-                    }
-                  >
-                    Upgrade Now
-                  </Button>
+          <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 shadow-lg">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0">
+                  <div className="p-3 rounded-full bg-blue-100 border border-blue-200">
+                    <Sparkles className="h-6 w-6 text-blue-600" />
+                  </div>
                 </div>
-              )}
-            </AlertDescription>
-          </Alert>
+                <div className="flex-1 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-blue-800">
+                        🎉 You're on your 14-day free trial!
+                      </h3>
+                      <p className="text-sm text-blue-700 mt-1">
+                        You're currently on the {billingData.plan} plan with
+                        full access to all features.
+                      </p>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className="bg-blue-100 text-blue-800 border-blue-200"
+                    >
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      Trial
+                    </Badge>
+                  </div>
+
+                  <div className="bg-white rounded-lg p-4 border border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-700">
+                          Trial ends on
+                        </p>
+                        <p className="text-lg font-bold text-blue-800">
+                          {formatDate(billingData.trialEndsAt)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {daysLeft} days remaining
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {daysLeft}
+                        </div>
+                        <div className="text-xs text-gray-500">days left</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    {billingData.plan.toLowerCase() !== "elite" && (
+                      <Button
+                        onClick={() =>
+                          (window.location.href =
+                            "/dashboard/billing/change-plan")
+                        }
+                        className="bg-blue-600 hover:bg-blue-700 text-white flex-1"
+                      >
+                        <ArrowRight className="h-4 w-4 mr-2" />
+                        Upgrade Now
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      onClick={handleStripePortal}
+                      disabled={isLoadingPortal}
+                      className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                    >
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      {isLoadingPortal ? "Loading..." : "Manage Billing"}
+                    </Button>
+                  </div>
+
+                  <div className="text-xs text-blue-600 bg-blue-100 rounded-md p-3 border border-blue-200">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium">
+                          What happens when your trial ends?
+                        </p>
+                        <p className="mt-1">
+                          Your card will be charged {billingData.currency}{" "}
+                          {billingData.price} on{" "}
+                          {formatDate(billingData.nextBillingDate)}. You can
+                          cancel anytime before then.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
       )}
 
@@ -377,20 +585,9 @@ export default function BillingPage() {
                   <CardTitle>Current Plan</CardTitle>
                   <CardDescription>Your subscription details</CardDescription>
                 </div>
-                <Badge
-                  className={`${
-                    isSubscriptionCancelled
-                      ? "bg-red-100 text-red-800"
-                      : isTrialActive
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-green-100 text-green-800"
-                  }`}
-                >
-                  {isSubscriptionCancelled
-                    ? "Cancelled"
-                    : isTrialActive
-                      ? "Trial"
-                      : "Active"}
+                <Badge className={subscriptionStatus.color}>
+                  <subscriptionStatus.icon className="h-3 w-3 mr-1" />
+                  {subscriptionStatus.label}
                 </Badge>
               </div>
             </CardHeader>
@@ -417,19 +614,36 @@ export default function BillingPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">
                     {isSubscriptionCancelled
-                      ? "Access ends"
+                      ? "Pro features valid until"
                       : isTrialActive
                         ? "Trial ends"
                         : "Next billing date"}
                   </span>
                   <span className="font-medium">
                     {formatDate(
-                      isTrialActive
-                        ? billingData.trialEndsAt
-                        : billingData.nextBillingDate
+                      isSubscriptionCancelled
+                        ? billingData.accessEndsAt ||
+                            billingData.nextBillingDate
+                        : isTrialActive
+                          ? billingData.trialEndsAt
+                          : billingData.nextBillingDate
                     )}
                   </span>
                 </div>
+                {isSubscriptionCancelled && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Days remaining</span>
+                    <span className="font-medium text-red-600">
+                      {billingData.accessEndsAt || billingData.nextBillingDate
+                        ? calculateDaysLeft(
+                            (billingData.accessEndsAt ||
+                              billingData.nextBillingDate)!
+                          )
+                        : 0}{" "}
+                      days
+                    </span>
+                  </div>
+                )}
               </div>
 
               <Separator />
@@ -483,6 +697,17 @@ export default function BillingPage() {
                     ) : (
                       "Cancel Subscription"
                     )}
+                  </Button>
+                )}
+                {isSubscriptionCancelled && (
+                  <Button
+                    variant="outline"
+                    className="flex-1 text-green-600 hover:text-green-700 hover:bg-green-50"
+                    onClick={() =>
+                      (window.location.href = "/dashboard/billing/change-plan")
+                    }
+                  >
+                    Reactivate Subscription
                   </Button>
                 )}
               </div>
@@ -598,53 +823,55 @@ export default function BillingPage() {
               </div>
 
               {/* Contextual Upgrade Card */}
-              {billingData.plan.toLowerCase() !== "elite" && (
-                <>
-                  <Separator />
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Ready to grow?</h4>
-                    <div className="rounded-lg bg-green-50 p-4 space-y-3">
-                      {billingData.plan.toLowerCase() === "pro" ? (
-                        <>
-                          <p className="text-sm text-green-800">
-                            Upgrade to Elite for unlimited tables, staff
-                            accounts, and enhanced analytics. Plus, get priority
-                            24/7 support and early access to AI features!
-                          </p>
-                          <Button
-                            className="w-full bg-green-600 hover:bg-green-700 text-white"
-                            onClick={() =>
-                              (window.location.href =
-                                "/dashboard/billing/change-plan")
-                            }
-                          >
-                            Upgrade to Elite
-                            <ArrowRight className="ml-2 h-4 w-4" />
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm text-green-800">
-                            Upgrade to Pro for more tables, staff accounts, and
-                            advanced features like role-based permissions and
-                            analytics!
-                          </p>
-                          <Button
-                            className="w-full bg-green-600 hover:bg-green-700 text-white"
-                            onClick={() =>
-                              (window.location.href =
-                                "/dashboard/billing/change-plan")
-                            }
-                          >
-                            Upgrade to Pro
-                            <ArrowRight className="ml-2 h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
+              {billingData.plan.toLowerCase() !== "elite" &&
+                !isSubscriptionCancelled && (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <h4 className="font-medium">Ready to grow?</h4>
+                      <div className="rounded-lg bg-green-50 p-4 space-y-3">
+                        {billingData.plan.toLowerCase() === "pro" ? (
+                          <>
+                            <p className="text-sm text-green-800">
+                              Upgrade to Elite for unlimited tables, staff
+                              accounts, and enhanced analytics. Plus, get
+                              priority 24/7 support and early access to AI
+                              features!
+                            </p>
+                            <Button
+                              className="w-full bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() =>
+                                (window.location.href =
+                                  "/dashboard/billing/change-plan")
+                              }
+                            >
+                              Upgrade to Elite
+                              <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-green-800">
+                              Upgrade to Pro for more tables, staff accounts,
+                              and advanced features like role-based permissions
+                              and analytics!
+                            </p>
+                            <Button
+                              className="w-full bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() =>
+                                (window.location.href =
+                                  "/dashboard/billing/change-plan")
+                              }
+                            >
+                              Upgrade to Pro
+                              <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
             </CardContent>
           </Card>
         </motion.div>
@@ -659,9 +886,19 @@ export default function BillingPage() {
               Cancel Subscription
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to cancel your subscription? You will retain
-              access until the end of the billing period (
-              {formatDate(billingData.nextBillingDate)}).
+              {isTrialActive ? (
+                <>
+                  Are you sure you want to cancel your subscription? You will
+                  retain access until the end of your trial period (
+                  {formatDate(billingData.trialEndsAt)}).
+                </>
+              ) : (
+                <>
+                  Are you sure you want to cancel your subscription? You will
+                  retain access until the end of the billing period (
+                  {formatDate(billingData.nextBillingDate)}).
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex gap-2">
