@@ -2,6 +2,11 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { constructWebhookEvent, stripe } from "@/lib/stripe";
+import {
+  sendInvoiceReceipt,
+  sendSubscriptionCancellationEmail,
+  sendRefundNotificationEmail,
+} from "@/lib/email";
 import type { Stripe } from "stripe";
 
 // Define types for database function responses
@@ -35,6 +40,7 @@ export async function POST(req: Request) {
   const signature = (await headers()).get("stripe-signature");
 
   if (!signature) {
+    console.error("Webhook signature missing");
     return new NextResponse("No signature", { status: 400 });
   }
 
@@ -47,6 +53,14 @@ export async function POST(req: Request) {
     );
     const supabase = createClient();
     const adminSupabase = createAdminClient();
+
+    // Enhanced logging with structured data
+    console.log("Processing webhook event:", {
+      type: event.type,
+      id: event.id,
+      created: new Date(event.created * 1000).toISOString(),
+      livemode: event.livemode,
+    });
 
     // Helper function to check if a customer has active subscriptions
     const hasActiveSubscriptions = async (
@@ -63,6 +77,33 @@ export async function POST(req: Request) {
         console.error("Error checking subscriptions:", error);
         return false;
       }
+    };
+
+    // Helper function for safe database operations with retry
+    const safeDatabaseOperation = async <T>(
+      operation: () => Promise<T>,
+      operationName: string,
+      maxRetries: number = 3
+    ): Promise<T> => {
+      let lastError: Error;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          return await operation();
+        } catch (error) {
+          lastError = error as Error;
+          console.error(`${operationName} attempt ${attempt} failed:`, error);
+
+          if (attempt < maxRetries) {
+            // Wait before retry with exponential backoff
+            await new Promise((resolve) =>
+              setTimeout(resolve, Math.pow(2, attempt) * 1000)
+            );
+          }
+        }
+      }
+
+      throw lastError!;
     };
 
     switch (event.type) {
@@ -516,6 +557,54 @@ export async function POST(req: Request) {
           });
         }
 
+        // Send cancellation email notification only if this is not a plan upgrade
+        if (!newSubscription) {
+          try {
+            // Get restaurant details for email
+            const { data: restaurant, error: restaurantError } =
+              await adminSupabase
+                .from("restaurants")
+                .select("name, email")
+                .eq("id", restaurantId)
+                .single();
+
+            if (!restaurantError && restaurant) {
+              const plan = subscription.metadata.plan || "Unknown Plan";
+              const interval = subscription.metadata.interval || "monthly";
+              const cancelDate = subscription.canceled_at
+                ? new Date(subscription.canceled_at * 1000).toLocaleDateString()
+                : new Date().toLocaleDateString();
+              const endDate = (subscription as any).current_period_end
+                ? new Date(
+                    (subscription as any).current_period_end * 1000
+                  ).toLocaleDateString()
+                : "Immediately";
+
+              await sendSubscriptionCancellationEmail(restaurant.email, {
+                subscriptionId: subscription.id,
+                plan: plan,
+                interval: interval,
+                cancelDate: cancelDate,
+                endDate: endDate,
+                restaurantName: restaurant.name,
+                reason: subscription.cancellation_details?.reason || undefined,
+              });
+
+              console.log(
+                "Subscription cancellation email sent to:",
+                restaurant.email
+              );
+            }
+          } catch (emailError) {
+            console.error("Error sending cancellation email:", emailError);
+            // Don't fail the webhook for email errors
+          }
+        } else {
+          console.log(
+            "Skipping cancellation email - this appears to be a plan upgrade"
+          );
+        }
+
         break;
       }
 
@@ -795,41 +884,246 @@ export async function POST(req: Request) {
           transfer_group: charge.transfer_group,
         });
 
-        // Only process charges that are customer payments to restaurants
+        // Check if this is a subscription payment that was refunded
         if (
           charge.metadata.subscriptionId ||
           charge.metadata.isUpgrade ||
           charge.metadata.isNewSubscription
         ) {
-          console.log("Skipping subscription charge:", charge.id);
-          break;
+          console.log("Processing subscription charge refund:", charge.id);
+
+          // Get the subscription to update its status
+          const subscriptionId = charge.metadata.subscriptionId;
+          if (subscriptionId) {
+            try {
+              const subscription =
+                await stripe.subscriptions.retrieve(subscriptionId);
+
+              console.log("Retrieved subscription for refunded charge:", {
+                subscriptionId: subscription.id,
+                status: subscription.status,
+                amountRefunded: charge.amount_refunded,
+              });
+
+              // Update subscription status if it was fully refunded
+              if (subscription.metadata.restaurantId) {
+                // Check if this was a full refund
+                const isFullRefund = charge.amount_refunded === charge.amount;
+
+                // Update subscription status based on refund type
+                let newStatus = subscription.status;
+                if (isFullRefund) {
+                  // For full refunds, mark as canceled
+                  newStatus = "canceled";
+                }
+
+                // First, update the restaurant subscription status
+                const { error: restaurantUpdateError } =
+                  await adminSupabase.rpc(
+                    "update_restaurant_subscription_status",
+                    {
+                      p_restaurant_id: subscription.metadata.restaurantId,
+                      p_subscription_status: newStatus,
+                      p_stripe_customer_id: subscription.customer as string,
+                    }
+                  );
+
+                if (restaurantUpdateError) {
+                  console.error(
+                    "Error updating restaurant subscription status after refund:",
+                    restaurantUpdateError
+                  );
+                  return new NextResponse(
+                    "Error updating restaurant subscription status",
+                    {
+                      status: 500,
+                    }
+                  );
+                }
+
+                // Then, update the subscription record
+                const { error: updateError } = await adminSupabase.rpc(
+                  "upsert_subscription",
+                  {
+                    p_stripe_subscription_id: subscription.id,
+                    p_restaurant_id: subscription.metadata.restaurantId,
+                    p_stripe_customer_id: subscription.customer as string,
+                    p_plan: subscription.metadata.plan,
+                    p_interval: subscription.metadata.interval,
+                    p_currency: subscription.metadata.currency || "USD",
+                    p_status: newStatus,
+                    p_current_period_start: new Date(
+                      (subscription as any).current_period_start * 1000
+                    ).toISOString(),
+                    p_current_period_end: new Date(
+                      (subscription as any).current_period_end * 1000
+                    ).toISOString(),
+                    p_trial_start: (subscription as any).trial_start
+                      ? new Date(
+                          (subscription as any).trial_start * 1000
+                        ).toISOString()
+                      : null,
+                    p_trial_end: (subscription as any).trial_end
+                      ? new Date(
+                          (subscription as any).trial_end * 1000
+                        ).toISOString()
+                      : null,
+                    p_cancel_at: (subscription as any).cancel_at
+                      ? new Date(
+                          (subscription as any).cancel_at * 1000
+                        ).toISOString()
+                      : null,
+                    p_canceled_at: (subscription as any).canceled_at
+                      ? new Date(
+                          (subscription as any).canceled_at * 1000
+                        ).toISOString()
+                      : null,
+                  }
+                );
+
+                if (updateError) {
+                  console.error(
+                    "Error updating subscription after refund:",
+                    updateError
+                  );
+                  return new NextResponse("Error updating subscription", {
+                    status: 500,
+                  });
+                }
+
+                console.log("Successfully updated subscription after refund:", {
+                  subscriptionId: subscription.id,
+                  restaurantId: subscription.metadata.restaurantId,
+                  newStatus: newStatus,
+                  isFullRefund: isFullRefund,
+                  amountRefunded: charge.amount_refunded,
+                });
+
+                // Send refund notification email only if this is not part of a plan upgrade
+                // Check if there are other active subscriptions for this restaurant
+                const { data: activeSubscriptions } = await adminSupabase
+                  .from("subscriptions")
+                  .select("id, status")
+                  .eq("restaurant_id", subscription.metadata.restaurantId)
+                  .neq("id", subscription.id) // Different from the refunded one
+                  .in("status", ["active", "trialing", "past_due"]);
+
+                const isPlanUpgrade =
+                  activeSubscriptions && activeSubscriptions.length > 0;
+
+                if (!isPlanUpgrade) {
+                  try {
+                    // Get restaurant details for email
+                    const { data: restaurant, error: restaurantError } =
+                      await adminSupabase
+                        .from("restaurants")
+                        .select("name, email")
+                        .eq("id", subscription.metadata.restaurantId)
+                        .single();
+
+                    if (!restaurantError && restaurant) {
+                      const refundReason =
+                        charge.metadata.refundReason || "Customer request";
+                      const refundDate = new Date().toLocaleDateString();
+                      const plan = subscription.metadata.plan || "Unknown Plan";
+
+                      await sendRefundNotificationEmail(restaurant.email, {
+                        refundId: charge.refunds?.data?.[0]?.id || "unknown",
+                        amount: charge.amount_refunded,
+                        currency: charge.currency,
+                        reason: refundReason,
+                        date: refundDate,
+                        restaurantName: restaurant.name,
+                        subscriptionPlan: plan,
+                        isFullRefund: isFullRefund,
+                      });
+
+                      console.log(
+                        "Subscription refund email sent to:",
+                        restaurant.email
+                      );
+                    }
+                  } catch (emailError) {
+                    console.error("Error sending refund email:", emailError);
+                    // Don't fail the webhook for email errors
+                  }
+                } else {
+                  console.log(
+                    "Skipping subscription refund email - this appears to be part of a plan upgrade"
+                  );
+                }
+              }
+            } catch (error) {
+              console.error("Error processing subscription refund:", error);
+            }
+          }
+        } else {
+          // Handle regular customer payment refunds (existing logic)
+          console.log("Processing regular customer payment refund:", charge.id);
+
+          // Get restaurant ID from transfer_group or metadata
+          let restaurantId =
+            charge.transfer_group || charge.metadata.restaurantId;
+
+          if (!restaurantId) {
+            console.log("No restaurant ID found for charge:", charge.id);
+            break;
+          }
+
+          // Update existing payment to refunded status
+          const { error: updateError } = await adminSupabase
+            .from("payments")
+            .update({
+              status: "refunded",
+              refund_id: charge.refunds?.data?.[0]?.id || null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("stripe_payment_id", charge.id);
+
+          if (updateError) {
+            console.error("Error updating payment to refunded:", updateError);
+            return new NextResponse("Error updating payment", { status: 500 });
+          }
+
+          console.log("Successfully updated payment to refunded:", charge.id);
+
+          // Send refund notification email for customer payments
+          try {
+            // Get restaurant details for email
+            const { data: restaurant, error: restaurantError } =
+              await adminSupabase
+                .from("restaurants")
+                .select("name, email")
+                .eq("id", restaurantId)
+                .single();
+
+            if (!restaurantError && restaurant) {
+              const refundReason =
+                charge.metadata.refundReason || "Customer request";
+              const refundDate = new Date().toLocaleDateString();
+              const isFullRefund = charge.amount_refunded === charge.amount;
+
+              await sendRefundNotificationEmail(restaurant.email, {
+                refundId: charge.refunds?.data?.[0]?.id || "unknown",
+                amount: charge.amount_refunded,
+                currency: charge.currency,
+                reason: refundReason,
+                date: refundDate,
+                restaurantName: restaurant.name,
+                isFullRefund: isFullRefund,
+              });
+
+              console.log(
+                "Customer payment refund email sent to:",
+                restaurant.email
+              );
+            }
+          } catch (emailError) {
+            console.error("Error sending refund email:", emailError);
+            // Don't fail the webhook for email errors
+          }
         }
 
-        // Get restaurant ID from transfer_group or metadata
-        let restaurantId =
-          charge.transfer_group || charge.metadata.restaurantId;
-
-        if (!restaurantId) {
-          console.log("No restaurant ID found for charge:", charge.id);
-          break;
-        }
-
-        // Update existing payment to refunded status
-        const { error: updateError } = await adminSupabase
-          .from("payments")
-          .update({
-            status: "refunded",
-            refund_id: charge.refunds?.data?.[0]?.id || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("stripe_payment_id", charge.id);
-
-        if (updateError) {
-          console.error("Error updating payment to refunded:", updateError);
-          return new NextResponse("Error updating payment", { status: 500 });
-        }
-
-        console.log("Successfully updated payment to refunded:", charge.id);
         break;
       }
 
@@ -1011,6 +1305,67 @@ export async function POST(req: Request) {
               ).toISOString(),
             },
           });
+
+          // Send invoice receipt email
+          try {
+            // Get customer email from Stripe
+            const customer = (await stripe.customers.retrieve(
+              subscription.customer as string
+            )) as Stripe.Customer;
+
+            if (customer.email && customer.email.length > 0) {
+              const customerEmail = customer.email;
+
+              // Get restaurant details
+              const { data: restaurant } = await adminSupabase
+                .from("restaurants")
+                .select("name")
+                .eq("id", subscription.metadata.restaurantId)
+                .single();
+
+              const billingPeriodStart = new Date(
+                (subscription as any).current_period_start * 1000
+              );
+              const billingPeriodEnd = new Date(
+                (subscription as any).current_period_end * 1000
+              );
+
+              // Check if this is a trial upgrade
+              const isTrialUpgrade =
+                subscription.metadata?.trial_preserved === "true";
+              const trialEndDate = subscription.metadata?.original_trial_end
+                ? new Date(
+                    parseInt(subscription.metadata.original_trial_end) * 1000
+                  ).toLocaleDateString()
+                : undefined;
+
+              await sendInvoiceReceipt(customerEmail, {
+                invoiceId: invoice.id || "unknown",
+                amount: invoice.amount_paid,
+                currency: invoice.currency,
+                description: `DineEasy ${subscription.metadata.plan} Plan - ${subscription.metadata.interval}`,
+                date: new Date().toLocaleDateString(),
+                customerName: customer.name || undefined,
+                restaurantName: restaurant?.name,
+                subscriptionPlan: subscription.metadata.plan,
+                billingPeriod: `${billingPeriodStart.toLocaleDateString()} - ${billingPeriodEnd.toLocaleDateString()}`,
+                isTrialUpgrade: isTrialUpgrade,
+                trialEndDate: trialEndDate,
+              });
+
+              console.log(
+                "Invoice receipt email sent for subscription payment:",
+                {
+                  subscriptionId: subscription.id,
+                  customerEmail: customer.email,
+                  invoiceId: invoice.id,
+                }
+              );
+            }
+          } catch (emailError) {
+            console.error("Error sending invoice receipt email:", emailError);
+            // Don't fail the webhook if email fails
+          }
         }
 
         break;
@@ -1291,6 +1646,7 @@ export async function POST(req: Request) {
               p_trial_end: toISOString((subscription as any).trial_end),
               p_cancel_at: toISOString((subscription as any).cancel_at),
               p_canceled_at: toISOString((subscription as any).canceled_at),
+              p_metadata: subscription.metadata || {},
             }
           );
 
@@ -1312,6 +1668,80 @@ export async function POST(req: Request) {
             status: subscription.status,
             isUpgrade: session.metadata?.isUpgrade === "true",
           });
+
+          // Send invoice receipt email for plan changes and new subscriptions
+          try {
+            // Get customer email from Stripe
+            const customer = (await stripe.customers.retrieve(
+              subscription.customer as string
+            )) as Stripe.Customer;
+
+            if (customer.email && customer.email.length > 0) {
+              // Get restaurant details
+              const { data: restaurant } = await adminSupabase
+                .from("restaurants")
+                .select("name")
+                .eq("id", subscription.metadata.restaurantId)
+                .single();
+
+              // Get the latest invoice for this subscription
+              const invoices = await stripe.invoices.list({
+                subscription: subscription.id,
+                limit: 1,
+              });
+
+              const latestInvoice = invoices.data[0];
+              const billingPeriodStart = new Date(
+                (subscription as any).current_period_start * 1000
+              );
+              const billingPeriodEnd = new Date(
+                (subscription as any).current_period_end * 1000
+              );
+
+              // Check if this is a trial upgrade
+              const isTrialUpgrade =
+                session.metadata?.isTrialUpgrade === "true";
+              const trialEndDate = subscription.metadata?.original_trial_end
+                ? new Date(
+                    parseInt(subscription.metadata.original_trial_end) * 1000
+                  ).toLocaleDateString()
+                : undefined;
+
+              // Determine the description based on the type of checkout
+              let description = `DineEasy ${subscription.metadata.plan} Plan - ${subscription.metadata.interval}`;
+              if (session.metadata?.isUpgrade === "true") {
+                description = `Plan Upgrade: ${subscription.metadata.plan} Plan - ${subscription.metadata.interval}`;
+              } else if (session.metadata?.isNewSubscription === "true") {
+                description = `New Subscription: ${subscription.metadata.plan} Plan - ${subscription.metadata.interval}`;
+              }
+
+              await sendInvoiceReceipt(customer.email, {
+                invoiceId: latestInvoice?.id || session.id,
+                amount: latestInvoice?.amount_paid || 0,
+                currency: subscription.metadata.currency || "USD",
+                description: description,
+                date: new Date().toLocaleDateString(),
+                customerName: customer.name || undefined,
+                restaurantName: restaurant?.name,
+                subscriptionPlan: subscription.metadata.plan,
+                billingPeriod: `${billingPeriodStart.toLocaleDateString()} - ${billingPeriodEnd.toLocaleDateString()}`,
+                isTrialUpgrade: isTrialUpgrade,
+                trialEndDate: trialEndDate,
+              });
+
+              console.log("Invoice receipt email sent for checkout session:", {
+                subscriptionId: subscription.id,
+                customerEmail: customer.email,
+                sessionId: session.id,
+                isUpgrade: session.metadata?.isUpgrade === "true",
+                isNewSubscription:
+                  session.metadata?.isNewSubscription === "true",
+              });
+            }
+          } catch (emailError) {
+            console.error("Error sending invoice receipt email:", emailError);
+            // Don't fail the webhook if email fails
+          }
         }
 
         break;

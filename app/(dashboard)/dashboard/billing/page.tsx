@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PLANS } from "@/lib/constants";
 import { useBillingData } from "@/hooks/useBillingData";
 import { createStripePortalSession } from "@/lib/actions/billing";
@@ -85,7 +86,8 @@ export default function BillingPage() {
   const daysLeft = billingData.trialEndsAt
     ? calculateDaysLeft(billingData.trialEndsAt)
     : 0;
-  const isTrialActive = daysLeft > 0;
+  const isTrialActive =
+    daysLeft > 0 || billingData.subscriptionStatus === "trialing";
 
   // Enhanced subscription status detection
   const getSubscriptionStatus = () => {
@@ -194,24 +196,95 @@ export default function BillingPage() {
   // Show loading state
   if (billingData.isLoading) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[400px]">
-        <div className="flex items-center space-x-2">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Loading billing information...</span>
+      <div className="p-6 space-y-8 max-w-6xl mx-auto">
+        <div className="space-y-1">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-6 w-96" />
+        </div>
+
+        <div className="grid gap-8 md:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-4 w-48" />
+                </div>
+                <Skeleton className="h-6 w-20" />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-40" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+              <Separator />
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex justify-between">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                ))}
+              </div>
+              <Separator />
+              <div className="space-y-4">
+                <Skeleton className="h-5 w-32" />
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-4 rounded-full" />
+                      <Skeleton className="h-4 w-48" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <Skeleton className="h-10 flex-1" />
+                <Skeleton className="h-10 flex-1" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-4 w-48" />
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="space-y-2">
+                  <div className="flex justify-between">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                  <Skeleton className="h-2 w-full" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
   }
 
-  // Show error state
+  // Show error state with retry option
   if (billingData.error) {
     return (
       <div className="p-6">
-        <div className="text-center">
+        <div className="text-center space-y-4">
           <h2 className="text-xl font-semibold text-red-600">
             Error Loading Billing
           </h2>
-          <p className="text-gray-600 mt-2">{billingData.error}</p>
+          <p className="text-gray-600">{billingData.error}</p>
+          <Button
+            onClick={() => billingData.refresh()}
+            variant="outline"
+            className="mt-4"
+          >
+            <Loader2 className="h-4 w-4 mr-2" />
+            Try Again
+          </Button>
         </div>
       </div>
     );
@@ -556,6 +629,16 @@ export default function BillingPage() {
                           {formatDate(billingData.nextBillingDate)}. You can
                           cancel anytime before then.
                         </p>
+                        {billingData.subscriptionStatus === "trialing" &&
+                          billingData.metadata?.trial_preserved === "true" && (
+                            <p className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                              <strong>Note:</strong> You upgraded during your
+                              trial period. Your trial continues until{" "}
+                              {formatDate(billingData.trialEndsAt)}, then
+                              regular billing begins on{" "}
+                              {formatDate(billingData.nextBillingDate)}.
+                            </p>
+                          )}
                       </div>
                     </div>
                   </div>

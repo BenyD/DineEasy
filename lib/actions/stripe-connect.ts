@@ -71,18 +71,18 @@ export async function createStripeAccount() {
       chargesEnabled: account.charges_enabled,
     });
 
-    // Update restaurant with Stripe Connect account ID
+    // Update restaurant with Stripe Connect account ID using the dedicated function
     console.log("Updating restaurant with Stripe account ID:", account.id);
 
-    const { error: updateError } = await supabase
-      .from("restaurants")
-      .update({
-        stripe_account_id: account.id,
-        stripe_account_enabled: account.charges_enabled,
-        stripe_account_requirements: account.requirements,
-        stripe_account_created_at: new Date().toISOString(),
-      })
-      .eq("id", restaurant.id);
+    const { error: updateError } = await supabase.rpc(
+      "update_restaurant_stripe_connect_status",
+      {
+        p_restaurant_id: restaurant.id,
+        p_stripe_account_id: account.id,
+        p_stripe_account_enabled: account.charges_enabled,
+        p_stripe_account_requirements: account.requirements,
+      }
+    );
 
     if (updateError) {
       console.error("Error updating restaurant with Stripe account ID:", {
@@ -138,14 +138,13 @@ export async function getStripeAccountStatus(restaurantId: string) {
       restaurant.stripe_account_id
     );
 
-    // Update restaurant with current account status
-    await supabase
-      .from("restaurants")
-      .update({
-        stripe_account_enabled: account.charges_enabled,
-        stripe_account_requirements: account.requirements,
-      })
-      .eq("id", restaurantId);
+    // Update restaurant with current account status using the dedicated function
+    await supabase.rpc("update_restaurant_stripe_connect_status", {
+      p_restaurant_id: restaurantId,
+      p_stripe_account_id: restaurant.stripe_account_id,
+      p_stripe_account_enabled: account.charges_enabled,
+      p_stripe_account_requirements: account.requirements,
+    });
 
     // Check if account is fully verified and ready
     const isFullyVerified =
@@ -212,14 +211,12 @@ export async function refreshAccountStatus(restaurantId: string) {
       restaurant.stripe_account_id
     );
 
-    await supabase
-      .from("restaurants")
-      .update({
-        stripe_account_enabled: account.charges_enabled,
-        stripe_account_requirements: account.requirements,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", restaurantId);
+    await supabase.rpc("update_restaurant_stripe_connect_status", {
+      p_restaurant_id: restaurantId,
+      p_stripe_account_id: restaurant.stripe_account_id,
+      p_stripe_account_enabled: account.charges_enabled,
+      p_stripe_account_requirements: account.requirements,
+    });
 
     return {
       success: true,

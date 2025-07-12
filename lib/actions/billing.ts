@@ -69,7 +69,30 @@ export async function createStripePortalSession() {
     return { portalUrl: url };
   } catch (error) {
     console.error("Error creating Stripe portal session:", error);
-    return { error: "Failed to create billing portal session" };
+
+    // Provide more specific error messages
+    if (error instanceof Error) {
+      if (error.message.includes("No such customer")) {
+        return {
+          error:
+            "Unable to find your billing information. Please contact support.",
+        };
+      }
+      if (error.message.includes("authentication")) {
+        return { error: "Please log in again to access your billing portal." };
+      }
+      if (error.message.includes("permission")) {
+        return {
+          error:
+            "You don't have permission to access billing. Please contact support.",
+        };
+      }
+    }
+
+    return {
+      error:
+        "Failed to open billing portal. Please try again or contact support.",
+    };
   }
 }
 
@@ -276,6 +299,37 @@ export async function createPlanChangeSession(
     }
   } catch (error) {
     console.error("Error creating plan change session:", error);
-    return { error: "Failed to create checkout session" };
+
+    // Provide more specific error messages
+    if (error instanceof Error) {
+      if (error.message.includes("No such price")) {
+        return {
+          error:
+            "Selected plan is not available in your currency. Please contact support.",
+        };
+      }
+      if (error.message.includes("customer")) {
+        return {
+          error:
+            "Unable to find your billing information. Please try again or contact support.",
+        };
+      }
+      if (error.message.includes("currency")) {
+        return {
+          error:
+            "Currency not supported. Please contact support to enable your preferred currency.",
+        };
+      }
+      if (error.message.includes("authentication")) {
+        return {
+          error: "Please log in again to continue with your plan change.",
+        };
+      }
+    }
+
+    return {
+      error:
+        "Failed to create checkout session. Please try again or contact support if the issue persists.",
+    };
   }
 }

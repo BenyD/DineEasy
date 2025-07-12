@@ -24,6 +24,10 @@ interface BillingData {
   subscriptionStatus?: string;
   isCancelled?: boolean;
   accessEndsAt?: Date | null;
+  metadata?: {
+    trial_preserved?: string;
+    original_trial_end?: string;
+  };
 }
 
 export function useBillingData(): BillingData & { refresh: () => void } {
@@ -47,7 +51,7 @@ export function useBillingData(): BillingData & { refresh: () => void } {
     accessEndsAt: null,
   });
 
-  const fetchBillingData = async () => {
+  const fetchBillingData = async (retryCount = 0) => {
     try {
       const supabase = createClient();
 
@@ -79,7 +83,8 @@ export function useBillingData(): BillingData & { refresh: () => void } {
             trial_start,
             trial_end,
             cancel_at,
-            canceled_at
+            canceled_at,
+            metadata
           )
         `
         )
@@ -90,24 +95,49 @@ export function useBillingData(): BillingData & { refresh: () => void } {
         throw restaurantError;
       }
 
-      // Fetch usage statistics
-      const [tablesResult, menuItemsResult, staffResult] = await Promise.all([
-        supabase
-          .from("tables")
-          .select("id", { count: "exact" })
-          .eq("restaurant_id", restaurant.id)
-          .eq("is_active", true),
-        supabase
-          .from("menu_items")
-          .select("id", { count: "exact" })
-          .eq("restaurant_id", restaurant.id)
-          .eq("is_available", true),
-        supabase
-          .from("staff")
-          .select("id", { count: "exact" })
-          .eq("restaurant_id", restaurant.id)
-          .eq("is_active", true),
-      ]);
+      // Fetch usage statistics with error handling
+      const [tablesResult, menuItemsResult, staffResult] =
+        await Promise.allSettled([
+          supabase
+            .from("tables")
+            .select("id", { count: "exact" })
+            .eq("restaurant_id", restaurant.id)
+            .eq("is_active", true),
+          supabase
+            .from("menu_items")
+            .select("id", { count: "exact" })
+            .eq("restaurant_id", restaurant.id)
+            .eq("is_available", true),
+          supabase
+            .from("staff")
+            .select("id", { count: "exact" })
+            .eq("restaurant_id", restaurant.id)
+            .eq("is_active", true),
+        ]);
+
+      // Handle usage data with fallbacks
+      const tablesCount =
+        tablesResult.status === "fulfilled" ? tablesResult.value.count || 0 : 0;
+      const menuItemsCount =
+        menuItemsResult.status === "fulfilled"
+          ? menuItemsResult.value.count || 0
+          : 0;
+      const staffCount =
+        staffResult.status === "fulfilled" ? staffResult.value.count || 1 : 1;
+
+      // Log any usage fetch errors
+      if (tablesResult.status === "rejected") {
+        console.warn("Failed to fetch tables count:", tablesResult.reason);
+      }
+      if (menuItemsResult.status === "rejected") {
+        console.warn(
+          "Failed to fetch menu items count:",
+          menuItemsResult.reason
+        );
+      }
+      if (staffResult.status === "rejected") {
+        console.warn("Failed to fetch staff count:", staffResult.reason);
+      }
 
       // Get current subscription
       const currentSubscription = restaurant.subscriptions?.[0];
@@ -125,6 +155,10 @@ export function useBillingData(): BillingData & { refresh: () => void } {
         trialEnd: currentSubscription?.trial_end,
         cancelAt: currentSubscription?.cancel_at,
         canceledAt: currentSubscription?.canceled_at,
+        metadata: currentSubscription?.metadata,
+        isTrialUpgrade:
+          currentSubscription?.metadata?.trial_preserved === "true",
+        originalTrialEnd: currentSubscription?.metadata?.original_trial_end,
       });
 
       // Check if there's an active subscription
@@ -188,9 +222,24 @@ export function useBillingData(): BillingData & { refresh: () => void } {
       let isCancelled = false;
 
       if (currentSubscription) {
-        // Set trial end date
+        // Set trial end date - check for preserved trial period from upgrades
         if (currentSubscription.trial_end) {
           trialEndsAt = new Date(currentSubscription.trial_end);
+        }
+
+        // Check if this is a trial upgrade (trial preserved during plan change)
+        const isTrialUpgrade =
+          currentSubscription.metadata?.trial_preserved === "true";
+        const originalTrialEnd =
+          currentSubscription.metadata?.original_trial_end;
+
+        if (isTrialUpgrade && originalTrialEnd) {
+          // Use the original trial end date for trial upgrades
+          trialEndsAt = new Date(parseInt(originalTrialEnd) * 1000);
+          console.log("Detected trial upgrade - using original trial end:", {
+            originalTrialEnd: originalTrialEnd,
+            trialEndsAt: trialEndsAt.toISOString(),
+          });
         }
 
         // Check if subscription is cancelled
@@ -260,7 +309,10 @@ export function useBillingData(): BillingData & { refresh: () => void } {
         accessEndsAt: accessEndsAt?.toISOString(),
         isCancelled,
         isTrial: currentSubscription?.status === "trialing",
+        isTrialUpgrade:
+          currentSubscription?.metadata?.trial_preserved === "true",
         trialEnd: currentSubscription?.trial_end,
+        originalTrialEnd: currentSubscription?.metadata?.original_trial_end,
         currentPeriodEnd: currentSubscription?.current_period_end,
         cancelAt: currentSubscription?.cancel_at,
       });
@@ -275,15 +327,15 @@ export function useBillingData(): BillingData & { refresh: () => void } {
         currency: currency,
         usage: {
           tables: {
-            used: tablesResult.count || 0,
+            used: tablesCount,
             limit: limits.tables === -1 ? 999 : limits.tables,
           },
           menuItems: {
-            used: menuItemsResult.count || 0,
+            used: menuItemsCount,
             limit: limits.menuItems === -1 ? 999 : limits.menuItems,
           },
           staff: {
-            used: staffResult.count || 1,
+            used: staffCount,
             limit: limits.staff === -1 ? 999 : limits.staff,
           },
         },
@@ -294,9 +346,31 @@ export function useBillingData(): BillingData & { refresh: () => void } {
           currentSubscription?.status || restaurant.subscription_status,
         isCancelled,
         accessEndsAt,
+        metadata: currentSubscription?.metadata || {},
       });
     } catch (error) {
       console.error("Error fetching billing data:", error);
+
+      // Retry logic for transient errors
+      if (retryCount < 2 && error instanceof Error) {
+        const isRetryableError =
+          error.message.includes("network") ||
+          error.message.includes("timeout") ||
+          error.message.includes("connection") ||
+          error.message.includes("rate limit");
+
+        if (isRetryableError) {
+          console.log(
+            `Retrying billing data fetch (attempt ${retryCount + 1})`
+          );
+          setTimeout(
+            () => fetchBillingData(retryCount + 1),
+            Math.pow(2, retryCount) * 1000
+          );
+          return;
+        }
+      }
+
       setData((prev) => ({
         ...prev,
         isLoading: false,

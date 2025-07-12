@@ -19,6 +19,11 @@ import { createClient } from "@/lib/supabase/client";
 import { createPlanChangeSession } from "@/lib/actions/billing";
 import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  calculateProration,
+  formatCurrency,
+  getProrationColor,
+} from "@/lib/utils/proration";
 
 interface Plan {
   id: string;
@@ -65,6 +70,10 @@ export default function ChangePlanPage() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [restaurantCurrency, setRestaurantCurrency] = useState<string>("CHF");
   const [isLoading, setIsLoading] = useState(false);
+  const [currentSubscriptionDetails, setCurrentSubscriptionDetails] = useState<{
+    currentPeriodStart: Date | null;
+    currentPeriodEnd: Date | null;
+  } | null>(null);
 
   // Fetch current plan data
   useEffect(() => {
@@ -87,7 +96,9 @@ export default function ChangePlanPage() {
             currency,
             subscriptions (
               plan,
-              interval
+              interval,
+              current_period_start,
+              current_period_end
             )
           `
           )
@@ -113,6 +124,16 @@ export default function ChangePlanPage() {
             billingCycle: subscription.interval as "monthly" | "yearly",
           });
           setAnnual(subscription.interval === "yearly");
+
+          // Store subscription details for proration calculation
+          setCurrentSubscriptionDetails({
+            currentPeriodStart: subscription.current_period_start
+              ? new Date(subscription.current_period_start)
+              : null,
+            currentPeriodEnd: subscription.current_period_end
+              ? new Date(subscription.current_period_end)
+              : null,
+          });
         } else {
           setCurrentPlan({
             id: "starter",
@@ -175,7 +196,34 @@ export default function ChangePlanPage() {
         }
       }
     } catch (error) {
-      toast.error("Failed to create checkout session");
+      console.error("Error creating checkout session:", error);
+
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes("No such price")) {
+          toast.error(
+            "Selected plan is not available in your currency. Please contact support."
+          );
+        } else if (error.message.includes("customer")) {
+          toast.error(
+            "Unable to find your billing information. Please try again or contact support."
+          );
+        } else if (error.message.includes("currency")) {
+          toast.error(
+            "Currency not supported. Please contact support to enable your preferred currency."
+          );
+        } else if (error.message.includes("authentication")) {
+          toast.error("Please log in again to continue with your plan change.");
+        } else {
+          toast.error(
+            "Failed to create checkout session. Please try again or contact support if the issue persists."
+          );
+        }
+      } else {
+        toast.error(
+          "Failed to create checkout session. Please try again or contact support if the issue persists."
+        );
+      }
     } finally {
       setIsLoading(false);
     }
@@ -511,6 +559,84 @@ export default function ChangePlanPage() {
           </div>
         </motion.div>
       )}
+
+      {/* Proration Information */}
+      {selectedPlan &&
+        currentPlan &&
+        currentSubscriptionDetails &&
+        !isInTrial && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="flex justify-center"
+          >
+            {(() => {
+              const proration = calculateProration(
+                currentPlan.id,
+                selectedPlan,
+                currentPlan.billingCycle,
+                annual ? "yearly" : "monthly",
+                restaurantCurrency,
+                currentSubscriptionDetails.currentPeriodStart || new Date(),
+                currentSubscriptionDetails.currentPeriodEnd || new Date()
+              );
+
+              return (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-2xl w-full">
+                  <h3 className="font-medium text-blue-800 mb-3">
+                    💳 Billing Details
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-blue-700">
+                        Current Plan:
+                      </span>
+                      <span className="font-medium text-blue-800">
+                        {formatCurrency(
+                          proration.currentPlanPrice,
+                          restaurantCurrency
+                        )}{" "}
+                        / {currentPlan.billingCycle}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-blue-700">New Plan:</span>
+                      <span className="font-medium text-blue-800">
+                        {formatCurrency(
+                          proration.newPlanPrice,
+                          restaurantCurrency
+                        )}{" "}
+                        / {annual ? "year" : "month"}
+                      </span>
+                    </div>
+                    <div className="border-t border-blue-200 pt-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-blue-800">
+                          Today's Charge:
+                        </span>
+                        <span
+                          className={`font-bold ${getProrationColor(proration.isUpgrade, proration.isDowngrade)}`}
+                        >
+                          {proration.prorationAmount > 0
+                            ? `+${formatCurrency(proration.prorationAmount, restaurantCurrency)}`
+                            : proration.prorationAmount < 0
+                              ? `-${formatCurrency(Math.abs(proration.prorationAmount), restaurantCurrency)}`
+                              : "No charge"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-blue-100 rounded-md p-3 border border-blue-200">
+                      <p className="text-sm text-blue-800 font-medium">
+                        {proration.message}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </motion.div>
+        )}
 
       {/* Action Buttons */}
       <motion.div
