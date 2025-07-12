@@ -1,8 +1,9 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -90,6 +91,8 @@ export default function SetupPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [formData, setFormData] = useState<FormData>({
     name: "",
     type: "",
@@ -115,6 +118,27 @@ export default function SetupPage() {
 
   const totalSteps = 3;
   const progress = (step / totalSteps) * 100;
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        toast.error("Please sign in to continue");
+        router.push("/login");
+        return;
+      }
+
+      setIsAuthenticated(true);
+      setIsCheckingAuth(false);
+    };
+
+    checkAuth();
+  }, [router]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -249,6 +273,20 @@ export default function SetupPage() {
     }
     handleNext();
   };
+
+  // Show loading state while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-green-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-white">

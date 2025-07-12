@@ -62,7 +62,7 @@ async function createOrGetPrice(
 
   const price = await stripe.prices.create({
     product: productId,
-    unit_amount: currency === "inr" ? amount : amount * 100, // INR is in paise, others in cents
+    unit_amount: amount * 100, // Convert all currencies to smallest unit (cents/paise)
     currency,
     recurring: {
       interval,
