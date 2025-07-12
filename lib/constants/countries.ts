@@ -38,12 +38,32 @@ export const COUNTRIES = {
 } as const;
 
 export const COUNTRY_OPTIONS = [
-  { value: "US", label: "🇺🇸 United States", currency: "USD" },
-  { value: "CH", label: "🇨🇭 Switzerland", currency: "CHF" },
-  { value: "EU", label: "🇪🇺 European Union", currency: "EUR" },
-  { value: "GB", label: "🇬🇧 United Kingdom", currency: "GBP" },
-  { value: "IN", label: "🇮🇳 India", currency: "INR" },
-  { value: "AU", label: "🇦🇺 Australia", currency: "AUD" },
+  {
+    value: "US",
+    label: "🇺🇸 United States",
+    currency: "USD",
+    stripeConnect: true,
+  },
+  {
+    value: "CH",
+    label: "🇨🇭 Switzerland",
+    currency: "CHF",
+    stripeConnect: true,
+  },
+  {
+    value: "EU",
+    label: "🇪🇺 European Union",
+    currency: "EUR",
+    stripeConnect: true,
+  },
+  {
+    value: "GB",
+    label: "🇬🇧 United Kingdom",
+    currency: "GBP",
+    stripeConnect: true,
+  },
+  { value: "IN", label: "🇮🇳 India", currency: "INR", stripeConnect: false },
+  { value: "AU", label: "🇦🇺 Australia", currency: "AUD", stripeConnect: true },
 ] as const;
 
 export type CountryCode = keyof typeof COUNTRIES;

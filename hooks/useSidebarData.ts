@@ -9,6 +9,7 @@ interface SidebarData {
     logo_url: string | null;
     status: "open" | "closed";
     subscription_plan: string | null;
+    type: string | null;
   } | null;
   user: {
     name: string;
@@ -48,6 +49,7 @@ export function useSidebarData(): SidebarData {
             `
             name,
             logo_url,
+            type,
             opening_hours,
             is_open,
             subscriptions (
@@ -101,6 +103,7 @@ export function useSidebarData(): SidebarData {
             logo_url: restaurant.logo_url,
             status: isOpen ? "open" : "closed",
             subscription_plan: subscriptionPlan,
+            type: restaurant.type,
           },
           user: {
             name: profile?.full_name || user.email?.split("@")[0] || "User",

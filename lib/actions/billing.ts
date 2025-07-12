@@ -226,6 +226,9 @@ export async function createPlanChangeSession(
                 currency: selectedCurrency,
                 isUpgrade: "true",
                 isTrialUpgrade: "true",
+                trial_preserved: "true",
+                original_trial_end:
+                  existingSubscription.trial_end?.toString() || "",
               },
             },
             success_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment/return?session_id={CHECKOUT_SESSION_ID}&plan=${planId}&interval=${interval}&upgraded=true&trial_preserved=true`,

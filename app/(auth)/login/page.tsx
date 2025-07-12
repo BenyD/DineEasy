@@ -53,7 +53,11 @@ export default function LoginPage() {
 
       // Get user's current onboarding status and redirect accordingly
       const onboardingStatus = await getOnboardingStatus(supabase);
-      redirectToOnboardingStep(onboardingStatus.step, router);
+      redirectToOnboardingStep(
+        onboardingStatus.step,
+        router,
+        onboardingStatus.emailVerified
+      );
 
       router.refresh();
     } catch (error: any) {

@@ -63,7 +63,11 @@ export default function SelectPlanPage() {
 
       if (onboardingStatus.step !== "select-plan") {
         // User has already completed this step or needs to go to a different step
-        redirectToOnboardingStep(onboardingStatus.step, router);
+        redirectToOnboardingStep(
+          onboardingStatus.step,
+          router,
+          onboardingStatus.emailVerified
+        );
         return;
       }
 

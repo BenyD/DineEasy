@@ -55,18 +55,18 @@ export function calculateProration(
   let message = "";
   if (isUpgrade) {
     if (prorationAmount > 0) {
-      message = `You'll be charged ${currency} ${(prorationAmount / 100).toFixed(2)} today for the upgrade, then ${currency} ${(newPrice / 100).toFixed(2)} on your next billing date.`;
+      message = `You'll be charged ${formatCurrency(prorationAmount, currency)} today for the upgrade, then ${formatCurrency(newPrice, currency)} on your next billing date.`;
     } else {
-      message = `Your upgrade is free! You'll be charged ${currency} ${(newPrice / 100).toFixed(2)} on your next billing date.`;
+      message = `Your upgrade is free! You'll be charged ${formatCurrency(newPrice, currency)} on your next billing date.`;
     }
   } else if (isDowngrade) {
     if (prorationAmount < 0) {
-      message = `You'll receive a credit of ${currency} ${Math.abs(prorationAmount / 100).toFixed(2)} for the downgrade, then ${currency} ${(newPrice / 100).toFixed(2)} on your next billing date.`;
+      message = `You'll receive a credit of ${formatCurrency(Math.abs(prorationAmount), currency)} for the downgrade, then ${formatCurrency(newPrice, currency)} on your next billing date.`;
     } else {
-      message = `Your downgrade is free! You'll be charged ${currency} ${(newPrice / 100).toFixed(2)} on your next billing date.`;
+      message = `Your downgrade is free! You'll be charged ${formatCurrency(newPrice, currency)} on your next billing date.`;
     }
   } else {
-    message = `No charge today. You'll continue paying ${currency} ${(newPrice / 100).toFixed(2)} on your next billing date.`;
+    message = `No charge today. You'll continue paying ${formatCurrency(newPrice, currency)} on your next billing date.`;
   }
 
   return {
@@ -86,11 +86,14 @@ export function formatCurrency(amount: number, currency: string): string {
   const currencySymbols: Record<string, string> = {
     USD: "$",
     EUR: "€",
-    CHF: "CHF",
+    CHF: "CHF ",
+    GBP: "£",
+    INR: "₹",
+    AUD: "A$",
   };
 
   const symbol = currencySymbols[currency] || currency;
-  return `${symbol}${(amount / 100).toFixed(2)}`;
+  return `${symbol}${amount.toFixed(2)}`;
 }
 
 export function getProrationColor(

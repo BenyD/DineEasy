@@ -41,6 +41,19 @@ interface CurrentPlan {
   billingCycle: BillingCycle;
 }
 
+interface SubscriptionDetails {
+  currentPeriodStart: Date | null;
+  currentPeriodEnd: Date | null;
+  trialStart: Date | null;
+  trialEnd: Date | null;
+  status: string;
+  isInTrial: boolean;
+  daysLeftInTrial: number;
+  isCancelled: boolean;
+  cancelAt: Date | null;
+  metadata: Record<string, any>;
+}
+
 // Current plan will be fetched from the database
 
 // Add animation variants at the top level
@@ -70,10 +83,8 @@ export default function ChangePlanPage() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [restaurantCurrency, setRestaurantCurrency] = useState<string>("CHF");
   const [isLoading, setIsLoading] = useState(false);
-  const [currentSubscriptionDetails, setCurrentSubscriptionDetails] = useState<{
-    currentPeriodStart: Date | null;
-    currentPeriodEnd: Date | null;
-  } | null>(null);
+  const [subscriptionDetails, setSubscriptionDetails] =
+    useState<SubscriptionDetails | null>(null);
 
   // Fetch current plan data
   useEffect(() => {
@@ -95,10 +106,18 @@ export default function ChangePlanPage() {
             `
             currency,
             subscriptions (
+              id,
               plan,
               interval,
+              status,
               current_period_start,
-              current_period_end
+              current_period_end,
+              trial_start,
+              trial_end,
+              cancel_at,
+              canceled_at,
+              metadata,
+              created_at
             )
           `
           )
@@ -114,7 +133,40 @@ export default function ChangePlanPage() {
           setRestaurantCurrency(restaurant.currency);
         }
 
-        const subscription = restaurant.subscriptions?.[0];
+        // Get current subscription - ensure we get the most recent one
+        const subscriptions = restaurant.subscriptions || [];
+        const subscription =
+          subscriptions.length > 0
+            ? subscriptions.sort(
+                (a, b) =>
+                  new Date(b.created_at).getTime() -
+                  new Date(a.created_at).getTime()
+              )[0]
+            : null;
+
+        // Debug logging for change plan page
+        console.log("Change plan page - subscription data:", {
+          allSubscriptions: subscriptions.map((s) => ({
+            id: s.id,
+            plan: s.plan,
+            status: s.status,
+            created_at: s.created_at,
+            cancel_at: s.cancel_at,
+            canceled_at: s.canceled_at,
+          })),
+          selectedSubscription: subscription
+            ? {
+                id: subscription.id,
+                plan: subscription.plan,
+                status: subscription.status,
+                created_at: subscription.created_at,
+                cancel_at: subscription.cancel_at,
+                canceled_at: subscription.canceled_at,
+              }
+            : null,
+          subscriptionCount: subscriptions.length,
+        });
+
         if (subscription) {
           setCurrentPlan({
             id: subscription.plan,
@@ -125,20 +177,74 @@ export default function ChangePlanPage() {
           });
           setAnnual(subscription.interval === "yearly");
 
-          // Store subscription details for proration calculation
-          setCurrentSubscriptionDetails({
+          // Calculate trial status and details
+          const now = new Date();
+          const trialEnd = subscription.trial_end
+            ? new Date(subscription.trial_end)
+            : null;
+          const isInTrial = !!(
+            subscription.status === "trialing" &&
+            trialEnd &&
+            trialEnd > now
+          );
+
+          // Calculate days left in trial
+          let daysLeftInTrial = 0;
+          if (isInTrial && trialEnd) {
+            const diff = trialEnd.getTime() - now.getTime();
+            daysLeftInTrial = Math.max(
+              0,
+              Math.ceil(diff / (1000 * 60 * 60 * 24))
+            );
+          }
+
+          // Check if subscription is cancelled
+          const isCancelled =
+            subscription.status === "canceled" ||
+            (subscription.cancel_at !== null &&
+              subscription.cancel_at !== undefined);
+          const cancelAt = subscription.cancel_at
+            ? new Date(subscription.cancel_at)
+            : null;
+
+          // Store comprehensive subscription details
+          setSubscriptionDetails({
             currentPeriodStart: subscription.current_period_start
               ? new Date(subscription.current_period_start)
               : null,
             currentPeriodEnd: subscription.current_period_end
               ? new Date(subscription.current_period_end)
               : null,
+            trialStart: subscription.trial_start
+              ? new Date(subscription.trial_start)
+              : null,
+            trialEnd: trialEnd,
+            status: subscription.status,
+            isInTrial,
+            daysLeftInTrial,
+            isCancelled,
+            cancelAt,
+            metadata: subscription.metadata || {},
           });
         } else {
           setCurrentPlan({
             id: "starter",
             name: "Starter",
             billingCycle: "monthly",
+          });
+
+          // No subscription means no trial
+          setSubscriptionDetails({
+            currentPeriodStart: null,
+            currentPeriodEnd: null,
+            trialStart: null,
+            trialEnd: null,
+            status: "no_subscription",
+            isInTrial: false,
+            daysLeftInTrial: 0,
+            isCancelled: false,
+            cancelAt: null,
+            metadata: {},
           });
         }
       } catch (error) {
@@ -229,21 +335,23 @@ export default function ChangePlanPage() {
     }
   };
 
-  // Get current subscription status
+  // Get current subscription status with proper trial detection
   const getCurrentSubscriptionStatus = () => {
-    if (!currentPlan) return null;
+    if (!subscriptionDetails) return null;
 
-    // This would need to be fetched from the billing data hook
-    // For now, we'll assume trial status based on the plan
     return {
-      isInTrial:
-        currentPlan.id === "starter" && currentPlan.billingCycle === "monthly",
-      daysLeft: 14, // This should come from billing data
+      isInTrial: subscriptionDetails.isInTrial,
+      daysLeft: subscriptionDetails.daysLeftInTrial,
+      status: subscriptionDetails.status,
+      isCancelled: subscriptionDetails.isCancelled,
+      trialEnd: subscriptionDetails.trialEnd,
+      cancelAt: subscriptionDetails.cancelAt,
     };
   };
 
   const subscriptionStatus = getCurrentSubscriptionStatus();
   const isInTrial = subscriptionStatus?.isInTrial;
+  const isCancelled = subscriptionStatus?.isCancelled;
 
   const plans: Plan[] = [
     {
@@ -356,14 +464,48 @@ export default function ChangePlanPage() {
                 )}{" "}
                 / {annual ? "year" : "month"}
               </p>
+
+              {/* Trial Status */}
               {isInTrial && (
                 <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <p className="text-sm text-yellow-800">
-                    🎉 <strong>Trial Period Active</strong> - Upgrades preserve
-                    your trial period!
+                    🎉 <strong>Trial Period Active</strong> -{" "}
+                    {subscriptionStatus?.daysLeft} days remaining
+                  </p>
+                  <p className="text-xs text-yellow-700 mt-1">
+                    Upgrades preserve your trial period!
                   </p>
                 </div>
               )}
+
+              {/* Cancelled Status */}
+              {isCancelled && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">
+                    ⚠️ <strong>Subscription Cancelled</strong>
+                  </p>
+                  <p className="text-xs text-red-700 mt-1">
+                    Access ends on{" "}
+                    {subscriptionStatus?.cancelAt?.toLocaleDateString() ||
+                      subscriptionStatus?.trialEnd?.toLocaleDateString()}
+                  </p>
+                </div>
+              )}
+
+              {/* Post-Trial Status */}
+              {!isInTrial &&
+                !isCancelled &&
+                subscriptionStatus?.status === "active" && (
+                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-800">
+                      ✅ <strong>Active Subscription</strong>
+                    </p>
+                    <p className="text-xs text-green-700 mt-1">
+                      Next billing:{" "}
+                      {subscriptionDetails?.currentPeriodEnd?.toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
             </div>
           </div>
         </motion.div>
@@ -561,82 +703,166 @@ export default function ChangePlanPage() {
       )}
 
       {/* Proration Information */}
-      {selectedPlan &&
-        currentPlan &&
-        currentSubscriptionDetails &&
-        !isInTrial && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="flex justify-center"
-          >
-            {(() => {
-              const proration = calculateProration(
-                currentPlan.id,
-                selectedPlan,
-                currentPlan.billingCycle,
-                annual ? "yearly" : "monthly",
-                restaurantCurrency,
-                currentSubscriptionDetails.currentPeriodStart || new Date(),
-                currentSubscriptionDetails.currentPeriodEnd || new Date()
-              );
+      {selectedPlan && currentPlan && subscriptionDetails && !isInTrial && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="flex justify-center"
+        >
+          {(() => {
+            const proration = calculateProration(
+              currentPlan.id,
+              selectedPlan,
+              currentPlan.billingCycle,
+              annual ? "yearly" : "monthly",
+              restaurantCurrency,
+              subscriptionDetails.currentPeriodStart || new Date(),
+              subscriptionDetails.currentPeriodEnd || new Date()
+            );
 
-              return (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-2xl w-full">
-                  <h3 className="font-medium text-blue-800 mb-3">
-                    💳 Billing Details
-                  </h3>
-                  <div className="space-y-3">
+            return (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-2xl w-full">
+                <h3 className="font-medium text-blue-800 mb-3">
+                  💳 Billing Details
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-blue-700">Current Plan:</span>
+                    <span className="font-medium text-blue-800">
+                      {formatCurrency(
+                        proration.currentPlanPrice,
+                        restaurantCurrency
+                      )}{" "}
+                      / {currentPlan.billingCycle}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-blue-700">New Plan:</span>
+                    <span className="font-medium text-blue-800">
+                      {formatCurrency(
+                        proration.newPlanPrice,
+                        restaurantCurrency
+                      )}{" "}
+                      / {annual ? "year" : "month"}
+                    </span>
+                  </div>
+                  <div className="border-t border-blue-200 pt-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-blue-700">
-                        Current Plan:
+                      <span className="text-sm font-medium text-blue-800">
+                        Today's Charge:
                       </span>
-                      <span className="font-medium text-blue-800">
-                        {formatCurrency(
-                          proration.currentPlanPrice,
-                          restaurantCurrency
-                        )}{" "}
-                        / {currentPlan.billingCycle}
+                      <span
+                        className={`font-bold ${getProrationColor(proration.isUpgrade, proration.isDowngrade)}`}
+                      >
+                        {proration.prorationAmount > 0
+                          ? `+${formatCurrency(proration.prorationAmount, restaurantCurrency)}`
+                          : proration.prorationAmount < 0
+                            ? `-${formatCurrency(Math.abs(proration.prorationAmount), restaurantCurrency)}`
+                            : "No charge"}
                       </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-blue-700">New Plan:</span>
-                      <span className="font-medium text-blue-800">
-                        {formatCurrency(
-                          proration.newPlanPrice,
-                          restaurantCurrency
-                        )}{" "}
-                        / {annual ? "year" : "month"}
-                      </span>
-                    </div>
-                    <div className="border-t border-blue-200 pt-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-blue-800">
-                          Today's Charge:
-                        </span>
-                        <span
-                          className={`font-bold ${getProrationColor(proration.isUpgrade, proration.isDowngrade)}`}
-                        >
-                          {proration.prorationAmount > 0
-                            ? `+${formatCurrency(proration.prorationAmount, restaurantCurrency)}`
-                            : proration.prorationAmount < 0
-                              ? `-${formatCurrency(Math.abs(proration.prorationAmount), restaurantCurrency)}`
-                              : "No charge"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="bg-blue-100 rounded-md p-3 border border-blue-200">
-                      <p className="text-sm text-blue-800 font-medium">
-                        {proration.message}
-                      </p>
                     </div>
                   </div>
+                  <div className="bg-blue-100 rounded-md p-3 border border-blue-200">
+                    <p className="text-sm text-blue-800 font-medium">
+                      {proration.message}
+                    </p>
+                  </div>
                 </div>
-              );
-            })()}
-          </motion.div>
-        )}
+              </div>
+            );
+          })()}
+        </motion.div>
+      )}
+
+      {/* Trial Upgrade Information */}
+      {selectedPlan && currentPlan && isInTrial && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="flex justify-center"
+        >
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-2xl w-full">
+            <h3 className="font-medium text-yellow-800 mb-3">
+              🎉 Trial Upgrade - No Charges Today!
+            </h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-yellow-700">Current Plan:</span>
+                <span className="font-medium text-yellow-800">
+                  {currentPlan.name} Plan (Trial)
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-yellow-700">New Plan:</span>
+                <span className="font-medium text-yellow-800">
+                  {selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)}{" "}
+                  Plan
+                </span>
+              </div>
+              <div className="border-t border-yellow-200 pt-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-yellow-800">
+                    Today's Charge:
+                  </span>
+                  <span className="font-bold text-green-600">No charge</span>
+                </div>
+              </div>
+              <div className="bg-yellow-100 rounded-md p-3 border border-yellow-200">
+                <p className="text-sm text-yellow-800 font-medium">
+                  Your trial period continues unchanged! You'll be charged{" "}
+                  {formatCurrency(
+                    annual
+                      ? PRICING[selectedPlan as keyof typeof PRICING].price[
+                          restaurantCurrency as keyof typeof PRICING.starter.price
+                        ]?.yearly || 0
+                      : PRICING[selectedPlan as keyof typeof PRICING].price[
+                          restaurantCurrency as keyof typeof PRICING.starter.price
+                        ]?.monthly || 0,
+                    restaurantCurrency as any
+                  )}{" "}
+                  when your trial ends on{" "}
+                  {subscriptionDetails?.trialEnd?.toLocaleDateString() ||
+                    "your trial end date"}
+                  .
+                </p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Cancelled Subscription Warning */}
+      {selectedPlan && isCancelled && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="flex justify-center"
+        >
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-w-2xl w-full">
+            <h3 className="font-medium text-red-800 mb-3">
+              ⚠️ Reactivate Your Subscription
+            </h3>
+            <div className="space-y-3">
+              <div className="bg-red-100 rounded-md p-3 border border-red-200">
+                <p className="text-sm text-red-800 font-medium">
+                  Your subscription was cancelled. Upgrading will reactivate
+                  your subscription and you'll be charged immediately.
+                </p>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-red-700">Access ends:</span>
+                <span className="font-medium text-red-800">
+                  {subscriptionStatus?.cancelAt?.toLocaleDateString() ||
+                    subscriptionStatus?.trialEnd?.toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Action Buttons */}
       <motion.div
@@ -658,6 +884,8 @@ export default function ChangePlanPage() {
               </>
             ) : selectedPlan && isInTrial ? (
               "Upgrade Now (Trial Preserved)"
+            ) : selectedPlan && isCancelled ? (
+              "Reactivate & Upgrade"
             ) : (
               "Continue to Checkout"
             )}

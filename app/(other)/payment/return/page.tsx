@@ -80,16 +80,26 @@ export default function PaymentReturnPage() {
             const isUpgrade =
               sessionId &&
               (upgraded === "true" || searchParams.get("upgraded") === "true");
+            const isTrialUpgrade =
+              isUpgrade &&
+              (trialPreserved === "true" ||
+                searchParams.get("trial_preserved") === "true");
 
             status = {
               status: "success",
-              type: isUpgrade ? "plan_upgrade" : "new_subscription",
-              message: isUpgrade
-                ? "Your plan has been upgraded successfully!"
-                : "Your subscription has been created successfully!",
+              type: isTrialUpgrade
+                ? "trial_upgrade"
+                : isUpgrade
+                  ? "plan_upgrade"
+                  : "new_subscription",
+              message: isTrialUpgrade
+                ? "Your plan has been upgraded successfully! Your trial period continues unchanged."
+                : isUpgrade
+                  ? "Your plan has been upgraded successfully!"
+                  : "Your subscription has been created successfully!",
               plan: plan || undefined,
               interval: interval || undefined,
-              isTrial: !isUpgrade, // Only new subscriptions are in trial
+              isTrial: !isUpgrade, // Only new subscriptions are in trial (not upgrades)
               trialDays: isUpgrade ? undefined : 14,
             };
           } else {

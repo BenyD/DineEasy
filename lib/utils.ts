@@ -74,6 +74,7 @@ export type OnboardingStep =
 export interface OnboardingStatus {
   step: OnboardingStep;
   isAuthenticated: boolean;
+  emailVerified: boolean;
   hasRestaurant: boolean;
   subscriptionStatus: string | null;
   hasStripeAccount: boolean;
@@ -98,6 +99,24 @@ export async function getOnboardingStatus(
       return {
         step: "auth",
         isAuthenticated: false,
+        emailVerified: false,
+        hasRestaurant: false,
+        subscriptionStatus: null,
+        hasStripeAccount: false,
+        stripeAccountEnabled: false,
+      };
+    }
+
+    // Check if user's email is verified
+    const { data: emailVerified, error: verificationError } =
+      await supabase.rpc("is_email_verified", { p_user_id: user.id });
+
+    // If email is not verified, redirect to verify-email page
+    if (verificationError || !emailVerified) {
+      return {
+        step: "auth",
+        isAuthenticated: true,
+        emailVerified: false,
         hasRestaurant: false,
         subscriptionStatus: null,
         hasStripeAccount: false,
@@ -118,6 +137,7 @@ export async function getOnboardingStatus(
       return {
         step: "setup",
         isAuthenticated: true,
+        emailVerified: true,
         hasRestaurant: false,
         subscriptionStatus: null,
         hasStripeAccount: false,
@@ -134,6 +154,7 @@ export async function getOnboardingStatus(
       return {
         step: "select-plan",
         isAuthenticated: true,
+        emailVerified: true,
         hasRestaurant: true,
         subscriptionStatus: restaurant.subscription_status,
         hasStripeAccount: !!restaurant.stripe_account_id,
@@ -146,6 +167,7 @@ export async function getOnboardingStatus(
       return {
         step: "connect-stripe",
         isAuthenticated: true,
+        emailVerified: true,
         hasRestaurant: true,
         subscriptionStatus: restaurant.subscription_status,
         hasStripeAccount: false,
@@ -158,6 +180,7 @@ export async function getOnboardingStatus(
       return {
         step: "connect-stripe",
         isAuthenticated: true,
+        emailVerified: true,
         hasRestaurant: true,
         subscriptionStatus: restaurant.subscription_status,
         hasStripeAccount: true,
@@ -169,6 +192,7 @@ export async function getOnboardingStatus(
     return {
       step: "complete",
       isAuthenticated: true,
+      emailVerified: true,
       hasRestaurant: true,
       subscriptionStatus: restaurant.subscription_status,
       hasStripeAccount: true,
@@ -180,6 +204,7 @@ export async function getOnboardingStatus(
     return {
       step: "auth",
       isAuthenticated: false,
+      emailVerified: false,
       hasRestaurant: false,
       subscriptionStatus: null,
       hasStripeAccount: false,
@@ -191,10 +216,19 @@ export async function getOnboardingStatus(
 /**
  * Redirects user to the appropriate onboarding step based on their current status
  */
-export function redirectToOnboardingStep(step: OnboardingStep, router: any) {
+export function redirectToOnboardingStep(
+  step: OnboardingStep,
+  router: any,
+  emailVerified?: boolean
+) {
   switch (step) {
     case "auth":
-      router.push("/login");
+      // If user is authenticated but email not verified, redirect to verify-email
+      if (emailVerified === false) {
+        router.push("/verify-email");
+      } else {
+        router.push("/login");
+      }
       break;
     case "setup":
       router.push("/setup");

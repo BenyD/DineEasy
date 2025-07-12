@@ -41,6 +41,7 @@ import { completeOnboarding } from "@/lib/actions/restaurant";
 import { toast } from "sonner";
 import { Logo } from "@/components/layout/Logo";
 import { getOnboardingStatus, redirectToOnboardingStep } from "@/lib/utils";
+import { COUNTRY_OPTIONS } from "@/lib/constants";
 
 export default function ConnectPage() {
   const router = useRouter();
@@ -73,7 +74,11 @@ export default function ConnectPage() {
 
       if (onboardingStatus.step !== "connect-stripe") {
         // User has already completed this step or needs to go to a different step
-        redirectToOnboardingStep(onboardingStatus.step, router);
+        redirectToOnboardingStep(
+          onboardingStatus.step,
+          router,
+          onboardingStatus.emailVerified
+        );
         return;
       }
 

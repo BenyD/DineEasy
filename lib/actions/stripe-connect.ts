@@ -41,18 +41,31 @@ export async function createStripeAccount() {
     }
 
     // Create a new Stripe Connect account
-    // Note: Using "standard" type for maximum flexibility
-    // Alternative: Use "express" type for simpler onboarding (less customization but easier UX)
+    // Note: Stripe Connect has geographic restrictions
+    // A Swiss platform can only create accounts for certain countries
+    const supportedCountries = ["CH", "US", "EU", "GB", "AU"]; // Remove IN (India)
+    const restaurantCountry = restaurant.country || "CH";
+
+    if (!supportedCountries.includes(restaurantCountry)) {
+      console.error(
+        "Unsupported country for Stripe Connect:",
+        restaurantCountry
+      );
+      return {
+        error: `Stripe Connect is not available for businesses in ${restaurantCountry}. Please contact support for alternative payment solutions.`,
+      };
+    }
+
     console.log("Creating Stripe Connect account for restaurant:", {
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
-      country: restaurant.country || "CH",
+      country: restaurantCountry,
       email: user.email,
     });
 
     const account = await stripe.accounts.create({
       type: "express", // Could be "express" for simpler onboarding
-      country: (restaurant.country || "CH") as string,
+      country: restaurantCountry as string,
       email: user.email,
       business_type: "company",
       company: {
@@ -75,12 +88,12 @@ export async function createStripeAccount() {
     console.log("Updating restaurant with Stripe account ID:", account.id);
 
     const { error: updateError } = await supabase.rpc(
-      "update_restaurant_stripe_connect_status",
+      "update_stripe_connect_status",
       {
         p_restaurant_id: restaurant.id,
         p_stripe_account_id: account.id,
-        p_stripe_account_enabled: account.charges_enabled,
-        p_stripe_account_requirements: account.requirements,
+        p_charges_enabled: account.charges_enabled,
+        p_requirements: account.requirements,
       }
     );
 
@@ -139,11 +152,11 @@ export async function getStripeAccountStatus(restaurantId: string) {
     );
 
     // Update restaurant with current account status using the dedicated function
-    await supabase.rpc("update_restaurant_stripe_connect_status", {
+    await supabase.rpc("update_stripe_connect_status", {
       p_restaurant_id: restaurantId,
       p_stripe_account_id: restaurant.stripe_account_id,
-      p_stripe_account_enabled: account.charges_enabled,
-      p_stripe_account_requirements: account.requirements,
+      p_charges_enabled: account.charges_enabled,
+      p_requirements: account.requirements,
     });
 
     // Check if account is fully verified and ready
@@ -193,6 +206,65 @@ export async function createAccountUpdateLink(restaurantId: string) {
   }
 }
 
+export async function createStripeDashboardLink(restaurantId: string) {
+  const supabase = createClient();
+
+  const { data: restaurant, error } = await supabase
+    .from("restaurants")
+    .select("stripe_account_id")
+    .eq("id", restaurantId)
+    .single();
+
+  if (error || !restaurant || !restaurant.stripe_account_id) {
+    return { error: "Restaurant or Stripe account not found" };
+  }
+
+  try {
+    // Create a login link for the specific Stripe Connect account
+    const loginLink = await stripe.accounts.createLoginLink(
+      restaurant.stripe_account_id
+    );
+
+    return { dashboardUrl: loginLink.url };
+  } catch (error) {
+    console.error("Error creating Stripe dashboard link:", error);
+    return { error: "Failed to create dashboard link" };
+  }
+}
+
+export async function getStripeAccountRequirements(restaurantId: string) {
+  const supabase = createClient();
+
+  const { data: restaurant, error } = await supabase
+    .from("restaurants")
+    .select("stripe_account_id, stripe_account_requirements")
+    .eq("id", restaurantId)
+    .single();
+
+  if (error || !restaurant || !restaurant.stripe_account_id) {
+    return { error: "Restaurant or Stripe account not found" };
+  }
+
+  try {
+    const account = await stripe.accounts.retrieve(
+      restaurant.stripe_account_id
+    );
+
+    return {
+      requirements: account.requirements,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      detailsSubmitted: account.details_submitted,
+      currentlyDue: account.requirements?.currently_due || [],
+      eventuallyDue: account.requirements?.eventually_due || [],
+      pastDue: account.requirements?.past_due || [],
+    };
+  } catch (error) {
+    console.error("Error retrieving Stripe account requirements:", error);
+    return { error: "Failed to get account requirements" };
+  }
+}
+
 export async function refreshAccountStatus(restaurantId: string) {
   const supabase = createClient();
 
@@ -211,11 +283,11 @@ export async function refreshAccountStatus(restaurantId: string) {
       restaurant.stripe_account_id
     );
 
-    await supabase.rpc("update_restaurant_stripe_connect_status", {
+    await supabase.rpc("update_stripe_connect_status", {
       p_restaurant_id: restaurantId,
       p_stripe_account_id: restaurant.stripe_account_id,
-      p_stripe_account_enabled: account.charges_enabled,
-      p_stripe_account_requirements: account.requirements,
+      p_charges_enabled: account.charges_enabled,
+      p_requirements: account.requirements,
     });
 
     return {

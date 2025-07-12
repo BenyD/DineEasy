@@ -51,9 +51,20 @@ export async function resendVerificationEmail(email: string) {
       return { error: "User not found" };
     }
 
-    // Check if email is already verified
-    if (user.email_confirmed_at) {
-      return { error: "Email is already verified" };
+    // Check if user has already verified their email through our custom system
+    const { data: verificationStatus, error: statusError } = await supabase.rpc(
+      "is_email_verified",
+      { p_user_id: user.id }
+    );
+
+    if (statusError) {
+      console.error("Error checking verification status:", statusError);
+      // Continue anyway, don't block resending
+    } else if (verificationStatus === true) {
+      // User has already verified their email, but allow resending for expired links
+      console.log(
+        "User has verified email, but allowing resend for expired links"
+      );
     }
 
     // Ensure profile record exists
@@ -154,6 +165,10 @@ export async function signUp(formData: FormData) {
       console.error("No user data returned from signup");
       return { error: "No user returned" };
     }
+
+    // Note: Supabase might automatically set email_confirmed_at during signup
+    // We'll handle this in the verification process by checking our custom verification records
+    // rather than relying on Supabase's email_confirmed_at field
 
     // Generate verification token
     const verificationToken = generateEmailVerificationToken();
@@ -437,6 +452,105 @@ export async function updatePassword(formData: FormData) {
   redirect("/dashboard");
 }
 
+export async function updateEmailAndResendVerification(
+  currentEmail: string,
+  newEmail: string
+) {
+  const supabase = createClient();
+  const adminSupabase = createAdminClient();
+
+  try {
+    // Get user by current email
+    const {
+      data: { users },
+      error: userError,
+    } = await adminSupabase.auth.admin.listUsers();
+
+    if (userError) {
+      console.error("Error listing users:", userError);
+      return { error: "Failed to process request" };
+    }
+
+    const user = users?.find((u) => u.email === currentEmail);
+
+    if (!user) {
+      console.error("User not found with email:", currentEmail);
+      return { error: "User not found" };
+    }
+
+    // Check if new email is already in use
+    const existingUser = users?.find((u) => u.email === newEmail);
+    if (existingUser) {
+      return { error: "Email address is already in use" };
+    }
+
+    // Check if user has already verified their email through our custom system
+    const { data: verificationStatus, error: statusError } = await supabase.rpc(
+      "is_email_verified",
+      { p_user_id: user.id }
+    );
+
+    if (statusError) {
+      console.error("Error checking verification status:", statusError);
+      // Continue anyway, don't block email change
+    } else if (verificationStatus === true) {
+      // User has verified their email, but changing email requires new verification
+      console.log(
+        "User has verified email, but new email requires verification"
+      );
+    }
+
+    // Check rate limit
+    const canResend = await checkRateLimit(supabase, user.id);
+    if (!canResend) {
+      return {
+        error: "Too many attempts. Please wait 5 minutes before trying again.",
+      };
+    }
+
+    // Update user email in Supabase Auth
+    const { error: updateError } =
+      await adminSupabase.auth.admin.updateUserById(user.id, {
+        email: newEmail,
+      });
+
+    if (updateError) {
+      console.error("Error updating user email:", updateError);
+      return { error: "Failed to update email address" };
+    }
+
+    // Generate new verification token
+    const verificationToken = generateEmailVerificationToken();
+
+    // Store new verification record
+    const { error: verificationError } = await adminSupabase
+      .from("email_verifications")
+      .insert({
+        user_id: user.id,
+        email: newEmail,
+        token: verificationToken,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+        created_at: new Date().toISOString(),
+      });
+
+    if (verificationError) {
+      console.error("Error creating verification record:", verificationError);
+      return { error: "Error creating verification token" };
+    }
+
+    // Send verification email to new address
+    await sendVerificationEmail(newEmail, verificationToken);
+
+    return {
+      success: true,
+      message: "Email updated and verification sent to new address",
+    };
+  } catch (error) {
+    console.error("Error in updateEmailAndResendVerification:", error);
+    return { error: "Failed to update email and resend verification" };
+  }
+}
+
 export async function debugEmailVerification(email: string) {
   const supabase = createClient();
   const adminSupabase = createAdminClient();
@@ -473,6 +587,12 @@ export async function debugEmailVerification(email: string) {
       return { error: "User not found" };
     }
 
+    // Get custom verification status
+    const { data: verificationStatus, error: statusError } = await supabase.rpc(
+      "get_user_verification_status",
+      { p_user_id: user.id }
+    );
+
     // Check if profile exists
     const { data: profile, error: profileError } = await adminSupabase
       .from("profiles")
@@ -493,6 +613,8 @@ export async function debugEmailVerification(email: string) {
       profileExists: !!profile,
       verifications: verifications || [],
       tableExists: true,
+      customVerificationStatus: verificationStatus || null,
+      customVerificationError: statusError || null,
     };
   } catch (error) {
     console.error("Debug error:", error);

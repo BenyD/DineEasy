@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Mail, RotateCw } from "lucide-react";
+import { Mail, RotateCw, Edit, X, Check } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/layout/Logo";
 import {
   resendVerificationEmail,
+  updateEmailAndResendVerification,
   debugEmailVerification,
 } from "@/lib/actions/auth";
 import { getOnboardingStatus, redirectToOnboardingStep } from "@/lib/utils";
@@ -38,6 +41,40 @@ export default function VerifyEmailPage() {
   const [error, setError] = useState<string>("");
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [isResending, setIsResending] = useState(false);
+  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [currentEmail, setCurrentEmail] = useState(email || "");
+  const [showEmailInput, setShowEmailInput] = useState(false);
+  const [tempEmail, setTempEmail] = useState("");
+
+  // Update currentEmail when email parameter changes
+  useEffect(() => {
+    if (email) {
+      setCurrentEmail(email);
+    }
+  }, [email]);
+
+  // Try to get email from user session if not in URL
+  useEffect(() => {
+    const getEmailFromSession = async () => {
+      if (!email && !currentEmail) {
+        try {
+          const supabase = createClient();
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (user?.email) {
+            setCurrentEmail(user.email);
+          }
+        } catch (error) {
+          console.log("Could not get email from session");
+        }
+      }
+    };
+
+    getEmailFromSession();
+  }, [email, currentEmail]);
 
   useEffect(() => {
     const verifyEmail = async () => {
@@ -103,7 +140,11 @@ export default function VerifyEmailPage() {
         const onboardingStatus = await getOnboardingStatus(supabase);
         setVerificationStatus("success");
         setTimeout(() => {
-          redirectToOnboardingStep(onboardingStatus.step, router);
+          redirectToOnboardingStep(
+            onboardingStatus.step,
+            router,
+            onboardingStatus.emailVerified
+          );
         }, 2000);
       } catch (error) {
         console.error("Error during email verification:", error);
@@ -116,14 +157,18 @@ export default function VerifyEmailPage() {
   }, [token, router]);
 
   const handleResendEmail = async () => {
-    if (!email) {
-      toast.error("No email address found");
+    const emailToUse = currentEmail || tempEmail;
+
+    if (!emailToUse) {
+      // Show email input if no email is available
+      setShowEmailInput(true);
+      toast.error("Please enter your email address");
       return;
     }
 
     setIsResending(true);
     try {
-      const result = await resendVerificationEmail(email);
+      const result = await resendVerificationEmail(emailToUse);
 
       if (result.error) {
         toast.error(result.error);
@@ -131,6 +176,12 @@ export default function VerifyEmailPage() {
         toast.success(
           result.message || "Verification email resent successfully"
         );
+        // Update current email if we used temp email
+        if (!currentEmail && tempEmail) {
+          setCurrentEmail(tempEmail);
+          setTempEmail("");
+          setShowEmailInput(false);
+        }
       }
     } catch (error) {
       toast.error("Failed to resend verification email");
@@ -139,14 +190,59 @@ export default function VerifyEmailPage() {
     }
   };
 
+  const handleUpdateEmail = async () => {
+    if (!newEmail.trim()) {
+      toast.error("Please enter a new email address");
+      return;
+    }
+
+    if (!currentEmail) {
+      toast.error("No current email address found");
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newEmail)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    if (newEmail === currentEmail) {
+      toast.error("New email must be different from current email");
+      return;
+    }
+
+    setIsUpdatingEmail(true);
+    try {
+      const result = await updateEmailAndResendVerification(
+        currentEmail,
+        newEmail
+      );
+
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success(result.message || "Email updated and verification sent");
+        setCurrentEmail(newEmail);
+        setNewEmail("");
+        setShowEmailForm(false);
+      }
+    } catch (error) {
+      toast.error("Failed to update email");
+    } finally {
+      setIsUpdatingEmail(false);
+    }
+  };
+
   const handleDebug = async () => {
-    if (!email) {
+    if (!currentEmail) {
       toast.error("No email address found");
       return;
     }
 
     try {
-      const result = await debugEmailVerification(email);
+      const result = await debugEmailVerification(currentEmail);
       console.log("Debug result:", result);
 
       if (result.error) {
@@ -179,29 +275,170 @@ export default function VerifyEmailPage() {
           <>
             <h1 className="text-2xl font-bold">Check your email</h1>
             <p className="text-gray-500">
-              We sent you a verification link. Please check your email and click
-              the link to verify your account.
+              We sent you a verification link to{" "}
+              <span className="font-medium text-gray-700">
+                {currentEmail || "your email address"}
+              </span>
+              . Please check your email and click the link to verify your
+              account.
             </p>
+
             <div className="flex flex-col items-center gap-4 mt-6">
               <p className="text-sm text-gray-500">
-                Didn't receive the email? Check your spam folder or click below
-                to resend.
+                Current email:{" "}
+                <span className="font-medium">
+                  {currentEmail || "Not available"}
+                </span>
               </p>
-              <Button
-                onClick={handleResendEmail}
-                variant="outline"
-                disabled={isResending}
-                className="w-full max-w-xs"
-              >
-                {isResending ? (
-                  <>
-                    <RotateCw className="h-4 w-4 mr-2 animate-spin" />
-                    Resending...
-                  </>
-                ) : (
-                  "Resend Verification Email"
-                )}
-              </Button>
+
+              {/* Email Input for Missing Email */}
+              {showEmailInput && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="w-full max-w-xs space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200"
+                >
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="tempEmail"
+                      className="text-sm font-medium text-blue-900"
+                    >
+                      Enter your email address
+                    </Label>
+                    <Input
+                      id="tempEmail"
+                      type="email"
+                      value={tempEmail}
+                      onChange={(e) => setTempEmail(e.target.value)}
+                      placeholder="Enter your email address"
+                      className="h-10"
+                      disabled={isResending}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleResendEmail}
+                      disabled={isResending || !tempEmail.trim()}
+                      size="sm"
+                      className="flex-1"
+                    >
+                      {isResending ? (
+                        <>
+                          <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="h-4 w-4 mr-2" />
+                          Send Verification
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setShowEmailInput(false);
+                        setTempEmail("");
+                      }}
+                      variant="outline"
+                      size="sm"
+                      disabled={isResending}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Email Change Form */}
+              {showEmailForm && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="w-full max-w-xs space-y-4 p-4 bg-gray-50 rounded-lg border"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="newEmail" className="text-sm font-medium">
+                      New Email Address
+                    </Label>
+                    <Input
+                      id="newEmail"
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder="Enter new email address"
+                      className="h-10"
+                      disabled={isUpdatingEmail}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleUpdateEmail}
+                      disabled={isUpdatingEmail || !newEmail.trim()}
+                      size="sm"
+                      className="flex-1"
+                    >
+                      {isUpdatingEmail ? (
+                        <>
+                          <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4 mr-2" />
+                          Update Email
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setShowEmailForm(false);
+                        setNewEmail("");
+                      }}
+                      variant="outline"
+                      size="sm"
+                      disabled={isUpdatingEmail}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-3 w-full max-w-xs">
+                <Button
+                  onClick={handleResendEmail}
+                  variant="outline"
+                  disabled={isResending}
+                  className="w-full"
+                >
+                  {isResending ? (
+                    <>
+                      <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                      Resending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4 mr-2" />
+                      {currentEmail
+                        ? `Resend to ${currentEmail}`
+                        : "Resend Verification Email"}
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  onClick={() => setShowEmailForm(!showEmailForm)}
+                  variant="ghost"
+                  size="sm"
+                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  {showEmailForm ? "Cancel" : "Change Email Address"}
+                </Button>
+              </div>
             </div>
           </>
         )}
@@ -244,42 +481,180 @@ export default function VerifyEmailPage() {
             )}
 
             <div className="flex flex-col items-center gap-4 mt-6">
-              <Button
-                onClick={() => window.location.reload()}
-                variant="ghost"
-                size="sm"
-                className="text-green-600 hover:text-green-700 hover:bg-green-50"
-              >
-                <RotateCw className="h-4 w-4 mr-2" />
-                Try Again
-              </Button>
-              {email && (
-                <>
-                  <Button
-                    onClick={handleResendEmail}
-                    variant="outline"
-                    disabled={isResending}
-                    className="w-full max-w-xs"
-                  >
-                    {isResending ? (
-                      <>
-                        <RotateCw className="h-4 w-4 mr-2 animate-spin" />
-                        Resending...
-                      </>
-                    ) : (
-                      "Resend Verification Email"
-                    )}
-                  </Button>
-                  <Button
-                    onClick={handleDebug}
-                    variant="ghost"
-                    size="sm"
-                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                  >
-                    Debug Info
-                  </Button>
-                </>
+              <p className="text-sm text-gray-500">
+                Current email:{" "}
+                <span className="font-medium">
+                  {currentEmail || "Not available"}
+                </span>
+              </p>
+
+              {/* Email Input for Missing Email */}
+              {showEmailInput && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="w-full max-w-xs space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200"
+                >
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="tempEmail"
+                      className="text-sm font-medium text-blue-900"
+                    >
+                      Enter your email address
+                    </Label>
+                    <Input
+                      id="tempEmail"
+                      type="email"
+                      value={tempEmail}
+                      onChange={(e) => setTempEmail(e.target.value)}
+                      placeholder="Enter your email address"
+                      className="h-10"
+                      disabled={isResending}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleResendEmail}
+                      disabled={isResending || !tempEmail.trim()}
+                      size="sm"
+                      className="flex-1"
+                    >
+                      {isResending ? (
+                        <>
+                          <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="h-4 w-4 mr-2" />
+                          Send Verification
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setShowEmailInput(false);
+                        setTempEmail("");
+                      }}
+                      variant="outline"
+                      size="sm"
+                      disabled={isResending}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </motion.div>
               )}
+
+              {/* Email Change Form */}
+              {showEmailForm && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="w-full max-w-xs space-y-4 p-4 bg-gray-50 rounded-lg border"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="newEmail" className="text-sm font-medium">
+                      New Email Address
+                    </Label>
+                    <Input
+                      id="newEmail"
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder="Enter new email address"
+                      className="h-10"
+                      disabled={isUpdatingEmail}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleUpdateEmail}
+                      disabled={isUpdatingEmail || !newEmail.trim()}
+                      size="sm"
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      {isUpdatingEmail ? (
+                        <>
+                          <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4 mr-2" />
+                          Update Email
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setShowEmailForm(false);
+                        setNewEmail("");
+                      }}
+                      variant="outline"
+                      size="sm"
+                      disabled={isUpdatingEmail}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-3 w-full max-w-xs">
+                <Button
+                  onClick={() => window.location.reload()}
+                  variant="ghost"
+                  size="sm"
+                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                >
+                  <RotateCw className="h-4 w-4 mr-2" />
+                  Try Again
+                </Button>
+
+                <Button
+                  onClick={handleResendEmail}
+                  variant="outline"
+                  disabled={isResending}
+                  className="w-full"
+                >
+                  {isResending ? (
+                    <>
+                      <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                      Resending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4 mr-2" />
+                      {currentEmail
+                        ? `Resend to ${currentEmail}`
+                        : "Resend Verification Email"}
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  onClick={() => setShowEmailForm(!showEmailForm)}
+                  variant="ghost"
+                  size="sm"
+                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  {showEmailForm ? "Cancel" : "Change Email Address"}
+                </Button>
+
+                <Button
+                  onClick={handleDebug}
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                >
+                  Debug Info
+                </Button>
+              </div>
             </div>
           </>
         )}

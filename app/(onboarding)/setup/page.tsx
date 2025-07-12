@@ -52,6 +52,41 @@ const RESTAURANT_TYPES = [
   { value: "food-truck", label: "Food Truck" },
 ] as const;
 
+const CUISINE_TYPES = [
+  { value: "italian", label: "Italian" },
+  { value: "japanese", label: "Japanese" },
+  { value: "chinese", label: "Chinese" },
+  { value: "indian", label: "Indian" },
+  { value: "mexican", label: "Mexican" },
+  { value: "thai", label: "Thai" },
+  { value: "french", label: "French" },
+  { value: "mediterranean", label: "Mediterranean" },
+  { value: "american", label: "American" },
+  { value: "greek", label: "Greek" },
+  { value: "spanish", label: "Spanish" },
+  { value: "korean", label: "Korean" },
+  { value: "vietnamese", label: "Vietnamese" },
+  { value: "lebanese", label: "Lebanese" },
+  { value: "turkish", label: "Turkish" },
+  { value: "moroccan", label: "Moroccan" },
+  { value: "brazilian", label: "Brazilian" },
+  { value: "peruvian", label: "Peruvian" },
+  { value: "caribbean", label: "Caribbean" },
+  { value: "african", label: "African" },
+  { value: "middle-eastern", label: "Middle Eastern" },
+  { value: "seafood", label: "Seafood" },
+  { value: "steakhouse", label: "Steakhouse" },
+  { value: "pizza", label: "Pizza" },
+  { value: "burger", label: "Burgers" },
+  { value: "sushi", label: "Sushi" },
+  { value: "bbq", label: "BBQ" },
+  { value: "vegetarian", label: "Vegetarian" },
+  { value: "vegan", label: "Vegan" },
+  { value: "gluten-free", label: "Gluten-Free" },
+  { value: "fusion", label: "Fusion" },
+  { value: "other", label: "Other" },
+] as const;
+
 // Currency options for the setup form
 const CURRENCY_OPTIONS = [
   { value: "USD", label: "US Dollar ($)" },
@@ -121,6 +156,174 @@ export default function SetupPage() {
     takeout_available: false,
   });
 
+  // Add state to track previous values for change detection
+  const [previousValues, setPreviousValues] = useState({
+    country: "",
+    currency: "USD",
+  });
+
+  // Add validation state
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, string>
+  >({});
+
+  // Validation functions
+  const validateField = (name: string, value: any): string | null => {
+    switch (name) {
+      case "name":
+        return !value?.trim() ? "Restaurant name is required" : null;
+      case "type":
+        return !value ? "Restaurant type is required" : null;
+      case "email":
+        if (!value?.trim()) return "Business email is required";
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return !emailRegex.test(value)
+          ? "Please enter a valid email address"
+          : null;
+      case "phone":
+        if (!value?.trim()) return null; // Optional field
+        const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+        const cleanPhone = value.replace(/[\s\-\(\)]/g, "");
+        return !phoneRegex.test(cleanPhone)
+          ? "Please enter a valid phone number"
+          : null;
+      case "website":
+        if (!value?.trim()) return null; // Optional field
+        try {
+          new URL(value.startsWith("http") ? value : `https://${value}`);
+          return null;
+        } catch {
+          return "Please enter a valid website URL";
+        }
+      case "address":
+        return !value?.trim() ? "Street address is required" : null;
+      case "city":
+        return !value?.trim() ? "City is required" : null;
+      case "postal_code":
+        return !value?.trim() ? "Postal code is required" : null;
+      case "country":
+        return !value ? "Country is required" : null;
+      case "currency":
+        return !value ? "Currency is required" : null;
+      case "tax_rate":
+        if (!value || parseFloat(value) < 0)
+          return "Valid tax rate is required";
+        return null;
+      default:
+        return null;
+    }
+  };
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value,
+    });
+
+    // Real-time validation
+    const error = validateField(name, value);
+    setValidationErrors((prev) => ({
+      ...prev,
+      [name]: error || "",
+    }));
+  };
+
+  // Add a helper to map currency to country
+  const getCountryByCurrency = (currency: string) => {
+    const country = COUNTRY_OPTIONS.find((c) => c.currency === currency);
+    return country ? country.value : "";
+  };
+
+  // Auto-sync country and currency on step 1
+  useEffect(() => {
+    if (step === 1) {
+      // Auto-set country based on currency if country is not set
+      if (!formData.country && formData.currency) {
+        const countryForCurrency = getCountryByCurrency(formData.currency);
+        if (countryForCurrency) {
+          setFormData((prev) => ({ ...prev, country: countryForCurrency }));
+        }
+      }
+      // Auto-set currency based on country if currency doesn't match
+      if (formData.country && formData.currency) {
+        const countryForCurrency = getCountryByCurrency(formData.currency);
+        if (
+          countryForCurrency &&
+          COUNTRY_OPTIONS.find((c) => c.value === formData.country)
+            ?.currency !== formData.currency
+        ) {
+          setFormData((prev) => ({ ...prev, country: countryForCurrency }));
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.currency, step]);
+
+  const handleSelectChange = (name: string, value: string) => {
+    let newFormData = {
+      ...formData,
+      [name]: value,
+    };
+
+    let showFeedback = false;
+    let feedbackMessage = "";
+
+    // Auto-set currency based on country selection
+    if (name === "country") {
+      const selectedCountry = COUNTRY_OPTIONS.find(
+        (country) => country.value === value
+      );
+      if (selectedCountry && selectedCountry.currency !== formData.currency) {
+        newFormData.currency = selectedCountry.currency;
+        showFeedback = true;
+        feedbackMessage = `Currency automatically updated to ${selectedCountry.currency} for ${selectedCountry.label.split(" ")[1]}`;
+      }
+    }
+
+    // Auto-set country based on currency selection
+    if (name === "currency") {
+      const countryForCurrency = getCountryByCurrency(value);
+      const currentCountry = COUNTRY_OPTIONS.find(
+        (c) => c.value === formData.country
+      );
+
+      // Only update if country is not set or doesn't match the currency
+      if (
+        !formData.country ||
+        (currentCountry && currentCountry.currency !== value)
+      ) {
+        if (countryForCurrency) {
+          newFormData.country = countryForCurrency;
+          showFeedback = true;
+          const countryName =
+            COUNTRY_OPTIONS.find(
+              (c) => c.value === countryForCurrency
+            )?.label.split(" ")[1] || countryForCurrency;
+          feedbackMessage = `Country automatically updated to ${countryName} for ${value} currency`;
+        }
+      }
+    }
+
+    // Update previous values
+    setPreviousValues({
+      country: formData.country,
+      currency: formData.currency,
+    });
+
+    setFormData(newFormData);
+
+    // Show feedback toast if automatic update occurred
+    if (showFeedback) {
+      toast.info("Auto-update", {
+        description: feedbackMessage,
+        duration: 3000,
+      });
+    }
+  };
+
   const totalSteps = 3;
   const progress = (step / totalSteps) * 100;
 
@@ -143,7 +346,11 @@ export default function SetupPage() {
 
       if (onboardingStatus.step !== "setup") {
         // User has already completed this step or needs to go to a different step
-        redirectToOnboardingStep(onboardingStatus.step, router);
+        redirectToOnboardingStep(
+          onboardingStatus.step,
+          router,
+          onboardingStatus.emailVerified
+        );
         return;
       }
 
@@ -153,69 +360,6 @@ export default function SetupPage() {
 
     checkAuth();
   }, [router]);
-
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  // Add a helper to map currency to country
-  const getCountryByCurrency = (currency: string) => {
-    const country = COUNTRY_OPTIONS.find((c) => c.currency === currency);
-    return country ? country.value : "";
-  };
-
-  // Auto-select country when currency changes and step is 3
-  useEffect(() => {
-    if (step === 3) {
-      const countryForCurrency = getCountryByCurrency(formData.currency);
-      if (
-        (!formData.country && countryForCurrency) ||
-        (formData.country &&
-          COUNTRY_OPTIONS.find((c) => c.value === formData.country)
-            ?.currency !== formData.currency)
-      ) {
-        setFormData((prev) => ({ ...prev, country: countryForCurrency }));
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.currency, step]);
-
-  const handleSelectChange = (name: string, value: string) => {
-    let newFormData = {
-      ...formData,
-      [name]: value,
-    };
-
-    // Auto-set currency based on country selection
-    if (name === "country") {
-      const selectedCountry = COUNTRY_OPTIONS.find(
-        (country) => country.value === value
-      );
-      if (selectedCountry) {
-        newFormData.currency = selectedCountry.currency;
-      }
-    }
-
-    // Auto-set country based on currency selection
-    if (name === "currency") {
-      const countryForCurrency = getCountryByCurrency(value);
-      // Only update if country is not set or doesn't match the currency
-      if (
-        !formData.country ||
-        COUNTRY_OPTIONS.find((c) => c.value === formData.country)?.currency !==
-          value
-      ) {
-        newFormData.country = countryForCurrency;
-      }
-    }
-
-    setFormData(newFormData);
-  };
 
   const handleSwitchChange = (name: string, checked: boolean) => {
     setFormData({
@@ -236,7 +380,50 @@ export default function SetupPage() {
     }
   };
 
+  const validateCurrentStep = (): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+
+    if (step === 1) {
+      if (!formData.name?.trim()) errors.push("Restaurant name is required");
+      if (!formData.type) errors.push("Restaurant type is required");
+      if (!formData.currency) errors.push("Currency is required");
+      if (!formData.tax_rate || parseFloat(formData.tax_rate) < 0) {
+        errors.push("Valid tax rate is required");
+      }
+    }
+
+    if (step === 2) {
+      if (!formData.email?.trim()) {
+        errors.push("Business email is required");
+      } else {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+          errors.push("Please enter a valid business email address");
+        }
+      }
+    }
+
+    if (step === 3) {
+      if (!formData.address?.trim()) errors.push("Street address is required");
+      if (!formData.city?.trim()) errors.push("City is required");
+      if (!formData.postal_code?.trim()) errors.push("Postal code is required");
+      if (!formData.country) errors.push("Country is required");
+    }
+
+    return { isValid: errors.length === 0, errors };
+  };
+
   const handleNext = async () => {
+    // Validate current step before proceeding
+    const validation = validateCurrentStep();
+
+    if (!validation.isValid) {
+      toast.error("Please complete all required fields:", {
+        description: validation.errors.join(", "),
+      });
+      return;
+    }
+
     if (step < totalSteps) {
       setStep(step + 1);
       window.scrollTo(0, 0);
@@ -255,27 +442,110 @@ export default function SetupPage() {
   const handleComplete = async () => {
     setIsLoading(true);
     try {
-      // Validate required fields for the current step
-      if (
-        !formData.name ||
-        !formData.type ||
-        !formData.email ||
-        !formData.currency
-      ) {
-        toast.error("Please fill in all required fields");
-        setIsLoading(false);
-        return;
+      // Comprehensive validation for all steps
+      const validationErrors: string[] = [];
+
+      // Step 1 validation
+      if (!formData.name?.trim()) {
+        validationErrors.push("Restaurant name is required");
+      }
+      if (!formData.type) {
+        validationErrors.push("Restaurant type is required");
+      }
+      if (!formData.currency) {
+        validationErrors.push("Currency is required");
+      }
+      if (!formData.tax_rate || parseFloat(formData.tax_rate) < 0) {
+        validationErrors.push("Valid tax rate is required");
       }
 
-      // Validate file sizes
+      // Step 2 validation
+      if (!formData.email?.trim()) {
+        validationErrors.push("Business email is required");
+      } else {
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+          validationErrors.push("Please enter a valid business email address");
+        }
+      }
+
+      // Step 3 validation - Make location fields required for better business setup
+      if (!formData.address?.trim()) {
+        validationErrors.push("Street address is required");
+      }
+      if (!formData.city?.trim()) {
+        validationErrors.push("City is required");
+      }
+      if (!formData.postal_code?.trim()) {
+        validationErrors.push("Postal code is required");
+      }
+      if (!formData.country) {
+        validationErrors.push("Country is required");
+      }
+
+      // Phone number validation (optional but if provided, should be valid)
+      if (formData.phone?.trim()) {
+        const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+        const cleanPhone = formData.phone.replace(/[\s\-\(\)]/g, "");
+        if (!phoneRegex.test(cleanPhone)) {
+          validationErrors.push("Please enter a valid phone number");
+        }
+      }
+
+      // Website validation (optional but if provided, should be valid)
+      if (formData.website?.trim()) {
+        try {
+          new URL(
+            formData.website.startsWith("http")
+              ? formData.website
+              : `https://${formData.website}`
+          );
+        } catch {
+          validationErrors.push("Please enter a valid website URL");
+        }
+      }
+
+      // File validation
       if (formData.logo && formData.logo.size > 2 * 1024 * 1024) {
-        toast.error("Logo file size must be less than 2MB");
-        setIsLoading(false);
-        return;
+        validationErrors.push("Logo file size must be less than 2MB");
+      }
+      if (formData.coverPhoto && formData.coverPhoto.size > 5 * 1024 * 1024) {
+        validationErrors.push("Cover photo file size must be less than 5MB");
       }
 
-      if (formData.coverPhoto && formData.coverPhoto.size > 5 * 1024 * 1024) {
-        toast.error("Cover photo file size must be less than 5MB");
+      // File type validation
+      if (formData.logo) {
+        const allowedTypes = [
+          "image/jpeg",
+          "image/png",
+          "image/gif",
+          "image/webp",
+        ];
+        if (!allowedTypes.includes(formData.logo.type)) {
+          validationErrors.push(
+            "Logo must be a valid image file (JPEG, PNG, GIF, or WebP)"
+          );
+        }
+      }
+      if (formData.coverPhoto) {
+        const allowedTypes = [
+          "image/jpeg",
+          "image/png",
+          "image/gif",
+          "image/webp",
+        ];
+        if (!allowedTypes.includes(formData.coverPhoto.type)) {
+          validationErrors.push(
+            "Cover photo must be a valid image file (JPEG, PNG, GIF, or WebP)"
+          );
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        toast.error("Please fix the following errors:", {
+          description: validationErrors.join(", "),
+        });
         setIsLoading(false);
         return;
       }
@@ -320,16 +590,13 @@ export default function SetupPage() {
   };
 
   const handleSkip = () => {
-    // Only skip non-required fields
-    if (
-      step === 1 &&
-      (!formData.name || !formData.type || !formData.currency)
-    ) {
-      toast.error("Please fill in all required fields before continuing");
-      return;
-    }
-    if (step === 2 && !formData.email) {
-      toast.error("Business email is required");
+    // Use the same validation logic as handleNext
+    const validation = validateCurrentStep();
+
+    if (!validation.isValid) {
+      toast.error("Please complete all required fields:", {
+        description: validation.errors.join(", "),
+      });
       return;
     }
 
@@ -359,8 +626,32 @@ export default function SetupPage() {
       <div className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
           <Logo />
-          <div className="text-sm text-gray-500">
-            Step {step} of {totalSteps}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <span className="font-medium">
+                Step {step} of {totalSteps}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="border-b bg-white/60 backdrop-blur-sm">
+        <div className="container max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs text-gray-500">
+              <span className={step >= 1 ? "text-green-600 font-medium" : ""}>
+                Basic Information
+              </span>
+              <span className={step >= 2 ? "text-green-600 font-medium" : ""}>
+                Contact & Images
+              </span>
+              <span className={step >= 3 ? "text-green-600 font-medium" : ""}>
+                Location & Services
+              </span>
+            </div>
+            <Progress value={progress} className="h-2" />
           </div>
         </div>
       </div>
@@ -383,6 +674,36 @@ export default function SetupPage() {
                 </p>
               </div>
 
+              {/* Info box about auto-sync */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <div className="text-blue-600 mt-0.5">
+                    <svg
+                      className="h-5 w-5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-blue-900 text-sm">
+                      Country & Currency Auto-Sync
+                    </h3>
+                    <p className="text-blue-700 text-xs mt-1">
+                      When you select a country, the currency will automatically
+                      update to match. Similarly, changing the currency will
+                      update the country. You'll see a notification when this
+                      happens.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <Card>
                 <CardContent className="p-6">
                   <div className="space-y-4">
@@ -399,31 +720,91 @@ export default function SetupPage() {
                         className="h-11"
                         required
                       />
+                      {validationErrors.name && (
+                        <p className="text-red-500 text-xs mt-1">
+                          {validationErrors.name}
+                        </p>
+                      )}
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="type">
-                        Restaurant Type <span className="text-red-500">*</span>
-                      </Label>
-                      <Select
-                        name="type"
-                        value={formData.type}
-                        onValueChange={(value) =>
-                          handleSelectChange("type", value)
-                        }
-                        required
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select restaurant type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {RESTAURANT_TYPES.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="type">
+                          Restaurant Type{" "}
+                          <span className="text-red-500">*</span>
+                        </Label>
+                        <Select
+                          name="type"
+                          value={formData.type}
+                          onValueChange={(value) =>
+                            handleSelectChange("type", value)
+                          }
+                          required
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {RESTAURANT_TYPES.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {validationErrors.type && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {validationErrors.type}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="cuisine">Cuisine Type</Label>
+                        <Select
+                          name="cuisine"
+                          value={formData.cuisine}
+                          onValueChange={(value) =>
+                            handleSelectChange("cuisine", value)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select cuisine" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CUISINE_TYPES.map((cuisine) => (
+                              <SelectItem
+                                key={cuisine.value}
+                                value={cuisine.value}
+                              >
+                                {cuisine.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="price_range">Price Range</Label>
+                        <Select
+                          name="price_range"
+                          value={formData.price_range}
+                          onValueChange={(value) =>
+                            handleSelectChange("price_range", value)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select range" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PRICE_RANGES.map((range) => (
+                              <SelectItem key={range.value} value={range.value}>
+                                {range.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -436,40 +817,6 @@ export default function SetupPage() {
                         placeholder="Describe your restaurant"
                         className="min-h-[100px]"
                       />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="cuisine">Cuisine Type</Label>
-                      <Input
-                        id="cuisine"
-                        name="cuisine"
-                        value={formData.cuisine}
-                        onChange={handleChange}
-                        placeholder="e.g., Italian, Japanese, Mediterranean"
-                        className="h-11"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="price_range">Price Range</Label>
-                      <Select
-                        name="price_range"
-                        value={formData.price_range}
-                        onValueChange={(value) =>
-                          handleSelectChange("price_range", value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select price range" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PRICE_RANGES.map((range) => (
-                            <SelectItem key={range.value} value={range.value}>
-                              {range.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -499,6 +846,25 @@ export default function SetupPage() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {validationErrors.currency && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {validationErrors.currency}
+                          </p>
+                        )}
+                        {/* Show feedback when currency was auto-updated */}
+                        {previousValues.currency &&
+                          previousValues.currency !== formData.currency &&
+                          formData.country && (
+                            <p className="text-blue-600 text-xs mt-1 flex items-center gap-1">
+                              <span>✓</span>
+                              Auto-updated for{" "}
+                              {
+                                COUNTRY_OPTIONS.find(
+                                  (c) => c.value === formData.country
+                                )?.label.split(" ")[1]
+                              }
+                            </p>
+                          )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="tax_rate">
@@ -514,6 +880,11 @@ export default function SetupPage() {
                           className="h-11"
                           required
                         />
+                        {validationErrors.tax_rate && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {validationErrors.tax_rate}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -563,6 +934,11 @@ export default function SetupPage() {
                           required
                         />
                       </div>
+                      {validationErrors.email && (
+                        <p className="text-red-500 text-xs mt-1">
+                          {validationErrors.email}
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -579,6 +955,11 @@ export default function SetupPage() {
                           className="h-11 pl-10"
                         />
                       </div>
+                      {validationErrors.phone && (
+                        <p className="text-red-500 text-xs mt-1">
+                          {validationErrors.phone}
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -595,6 +976,11 @@ export default function SetupPage() {
                           className="h-11 pl-10"
                         />
                       </div>
+                      {validationErrors.website && (
+                        <p className="text-red-500 text-xs mt-1">
+                          {validationErrors.website}
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -729,7 +1115,9 @@ export default function SetupPage() {
                 <CardContent className="p-6">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="address">Street Address</Label>
+                      <Label htmlFor="address">
+                        Street Address <span className="text-red-500">*</span>
+                      </Label>
                       <div className="relative">
                         <Building2 className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                         <Input
@@ -739,13 +1127,21 @@ export default function SetupPage() {
                           onChange={handleChange}
                           placeholder="123 Restaurant Street"
                           className="h-11 pl-10"
+                          required
                         />
                       </div>
+                      {validationErrors.address && (
+                        <p className="text-red-500 text-xs mt-1">
+                          {validationErrors.address}
+                        </p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="city">City</Label>
+                        <Label htmlFor="city">
+                          City <span className="text-red-500">*</span>
+                        </Label>
                         <Input
                           id="city"
                           name="city"
@@ -753,10 +1149,13 @@ export default function SetupPage() {
                           onChange={handleChange}
                           placeholder="City"
                           className="h-11"
+                          required
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="postal_code">Postal Code</Label>
+                        <Label htmlFor="postal_code">
+                          Postal Code <span className="text-red-500">*</span>
+                        </Label>
                         <Input
                           id="postal_code"
                           name="postal_code"
@@ -764,19 +1163,29 @@ export default function SetupPage() {
                           onChange={handleChange}
                           placeholder="Postal Code"
                           className="h-11"
+                          required
                         />
                       </div>
                     </div>
+                    {validationErrors.postal_code && (
+                      <p className="text-red-500 text-xs mt-1">
+                        {validationErrors.postal_code}
+                      </p>
+                    )}
 
                     <div className="space-y-2">
-                      <Label htmlFor="country">Country</Label>
+                      <Label htmlFor="country">
+                        Country <span className="text-red-500">*</span>
+                      </Label>
                       <Select
+                        name="country"
                         value={formData.country}
                         onValueChange={(value) =>
                           handleSelectChange("country", value)
                         }
+                        required
                       >
-                        <SelectTrigger className="h-11">
+                        <SelectTrigger>
                           <SelectValue placeholder="Select your country" />
                         </SelectTrigger>
                         <SelectContent>
@@ -785,26 +1194,50 @@ export default function SetupPage() {
                               key={country.value}
                               value={country.value}
                             >
-                              {country.label}
+                              <div className="flex items-center justify-between w-full">
+                                <span>{country.label}</span>
+                                {!country.stripeConnect && (
+                                  <span className="text-xs text-amber-600 ml-2">
+                                    Limited payment options
+                                  </span>
+                                )}
+                              </div>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      {formData.country && (
-                        <p className="text-sm text-gray-500">
-                          💡 Currency will be automatically set to{" "}
-                          {
-                            COUNTRY_OPTIONS.find(
-                              (c) => c.value === formData.country
-                            )?.currency
-                          }{" "}
-                          for{" "}
-                          {
-                            COUNTRY_OPTIONS.find(
-                              (c) => c.value === formData.country
-                            )?.label
-                          }
+                      {validationErrors.country && (
+                        <p className="text-red-500 text-xs mt-1">
+                          {validationErrors.country}
                         </p>
+                      )}
+                      {/* Show feedback when country was auto-updated */}
+                      {previousValues.country &&
+                        previousValues.country !== formData.country &&
+                        formData.currency && (
+                          <p className="text-blue-600 text-xs mt-1 flex items-center gap-1">
+                            <span>✓</span>
+                            Auto-updated for {formData.currency} currency
+                          </p>
+                        )}
+                      {/* Show Stripe Connect availability */}
+                      {formData.country && (
+                        <div className="text-xs mt-1">
+                          {COUNTRY_OPTIONS.find(
+                            (c) => c.value === formData.country
+                          )?.stripeConnect ? (
+                            <p className="text-green-600 flex items-center gap-1">
+                              <span>✓</span>
+                              Full payment processing available
+                            </p>
+                          ) : (
+                            <p className="text-amber-600 flex items-center gap-1">
+                              <span>⚠</span>
+                              Cash payments only - contact support for payment
+                              processing
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -922,7 +1355,7 @@ export default function SetupPage() {
             )}
 
             <div className="flex gap-3">
-              {step < totalSteps && (
+              {step < totalSteps && validateCurrentStep().isValid && (
                 <Button variant="ghost" onClick={handleSkip}>
                   Skip for now
                 </Button>
@@ -930,7 +1363,11 @@ export default function SetupPage() {
               <Button
                 onClick={handleNext}
                 disabled={isLoading}
-                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                className={`${
+                  validateCurrentStep().isValid
+                    ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                    : "bg-gray-300 cursor-not-allowed"
+                }`}
               >
                 {isLoading ? (
                   <div className="flex items-center gap-2">

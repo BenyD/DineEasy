@@ -376,12 +376,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarHeader className="border-b">
             <div className="p-4">
               <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-xl bg-gray-100 flex items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                <div className="relative">
+                  <div className="h-14 w-14 rounded-xl bg-gray-100 flex items-center justify-center animate-pulse">
+                    <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                  </div>
                 </div>
                 <div className="flex-1">
                   <div className="h-4 bg-gray-100 rounded animate-pulse mb-2"></div>
                   <div className="h-3 bg-gray-100 rounded animate-pulse w-16"></div>
+                  <div className="h-3 bg-gray-100 rounded animate-pulse w-24 mt-2"></div>
                 </div>
               </div>
             </div>
@@ -433,31 +436,64 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <div className="p-4">
             <div className="flex items-center gap-3">
               <div className="relative">
-                <Avatar className="h-12 w-12 rounded-xl border-2 border-white shadow-md">
+                <Avatar
+                  className="h-14 w-14 rounded-xl border-2 border-white shadow-lg hover:shadow-xl transition-shadow duration-200 cursor-pointer"
+                  onClick={() => {
+                    // Navigate to restaurant settings when logo is clicked
+                    window.location.href = "/dashboard/settings";
+                  }}
+                  title="Click to edit restaurant settings"
+                >
                   <AvatarImage
                     src={restaurant.logo_url || "/placeholder.svg"}
                     alt={restaurant.name}
                     className="object-cover"
+                    onError={(e) => {
+                      // Fallback to placeholder if logo fails to load
+                      const target = e.target as HTMLImageElement;
+                      console.warn(
+                        `Logo failed to load for ${restaurant.name}, using placeholder`
+                      );
+                      target.src = "/placeholder.svg";
+                    }}
+                    onLoad={() => {
+                      console.log(
+                        `Logo loaded successfully for ${restaurant.name}`
+                      );
+                    }}
                   />
-                  <AvatarFallback className="rounded-xl bg-gradient-to-b from-green-50 to-emerald-100 text-emerald-700">
+                  <AvatarFallback className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 text-emerald-700 font-semibold text-lg">
                     {restaurant.name
                       .split(" ")
                       .map((n) => n[0])
-                      .join("")}
+                      .join("")
+                      .toUpperCase()
+                      .slice(0, 2)}
                   </AvatarFallback>
                 </Avatar>
-                <Badge
-                  variant="outline"
-                  className="absolute -bottom-1 -right-1 h-5 px-1.5 bg-white border-gray-200"
-                >
-                  {restaurant.subscription_plan
-                    ? restaurant.subscription_plan.charAt(0).toUpperCase() +
-                      restaurant.subscription_plan.slice(1).toLowerCase()
-                    : ""}
-                </Badge>
+                {/* Subscription Plan Badge */}
+                {restaurant.subscription_plan && (
+                  <Badge
+                    variant="outline"
+                    className="absolute -bottom-1 -right-1 h-5 px-1.5 bg-white border-gray-200 text-xs font-medium shadow-sm"
+                  >
+                    {restaurant.subscription_plan.charAt(0).toUpperCase() +
+                      restaurant.subscription_plan.slice(1).toLowerCase()}
+                  </Badge>
+                )}
+                {/* Status Indicator */}
+                <div
+                  className={cn(
+                    "absolute -top-1 -right-1 h-3 w-3 rounded-full border-2 border-white shadow-sm",
+                    restaurant.status === "open"
+                      ? "bg-green-500"
+                      : "bg-gray-400"
+                  )}
+                  title={`Restaurant is ${restaurant.status}`}
+                />
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-base font-semibold text-gray-900 truncate">
+                <h2 className="text-base font-semibold text-gray-900 truncate hover:text-gray-700 transition-colors">
                   {restaurant.name}
                 </h2>
                 <div className="flex items-center gap-2 mt-1">
@@ -479,6 +515,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   >
                     {restaurant.status}
                   </span>
+                </div>
+                {/* Restaurant Type Badge */}
+                <div className="mt-2">
+                  <Badge
+                    variant="secondary"
+                    className="text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                  >
+                    {restaurant.type
+                      ? restaurant.type.charAt(0).toUpperCase() +
+                        restaurant.type.slice(1)
+                      : "Restaurant"}
+                  </Badge>
                 </div>
               </div>
             </div>

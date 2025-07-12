@@ -175,6 +175,10 @@ export default function BillingPage() {
     try {
       const formData = new FormData();
       formData.append("restaurant_id", billingData.restaurantId || "");
+
+      // Debug: Log current plan before cancellation
+      console.log("Current plan before cancellation:", billingData.plan);
+
       const res = await cancelSubscription(formData);
       if (res.error) {
         toast.error(res.error);
@@ -183,8 +187,17 @@ export default function BillingPage() {
           ? "Subscription cancelled. You will retain access until the end of your trial period."
           : "Subscription cancelled. You will retain access until the end of your billing period.";
         toast.success(message);
+
+        // Debug: Log before refresh
+        console.log("Plan before refresh:", billingData.plan);
+
         // Refresh billing data to show updated status
         billingData.refresh();
+
+        // Debug: Log after refresh (with a small delay to allow refresh to complete)
+        setTimeout(() => {
+          console.log("Plan after refresh:", billingData.plan);
+        }, 1000);
       }
     } catch (err) {
       toast.error("Failed to cancel subscription.");

@@ -113,6 +113,8 @@ export async function POST(req: Request) {
         console.log("Processing account.updated event:", {
           accountId: account.id,
           chargesEnabled: account.charges_enabled,
+          payoutsEnabled: account.payouts_enabled,
+          detailsSubmitted: account.details_submitted,
           requirements: account.requirements,
         });
 
@@ -194,6 +196,7 @@ export async function POST(req: Request) {
               restaurantId: stripeRestaurant.id,
               accountId: account.id,
               chargesEnabled: account.charges_enabled,
+              payoutsEnabled: account.payouts_enabled,
             }
           );
 
@@ -226,7 +229,34 @@ export async function POST(req: Request) {
           restaurantId: stripeRestaurant.id,
           accountId: account.id,
           chargesEnabled: account.charges_enabled,
+          payoutsEnabled: account.payouts_enabled,
+          detailsSubmitted: account.details_submitted,
         });
+
+        break;
+      }
+
+      case "account.application.deauthorized": {
+        const application = event.data.object as Stripe.Application;
+
+        console.log("Processing account.application.deauthorized event:", {
+          applicationId: application.id,
+        });
+
+        // For deauthorization, we need to find restaurants by searching for the account ID
+        // The application object doesn't contain the account ID directly
+        // We'll need to handle this differently - either by storing the application ID
+        // or by handling this event differently
+
+        console.log(
+          "Account deauthorization detected. Manual intervention may be required."
+        );
+
+        // For now, we'll log this event but not take action
+        // In a production environment, you might want to:
+        // 1. Store application IDs in the database
+        // 2. Use a different webhook event
+        // 3. Handle this through Stripe dashboard notifications
 
         break;
       }
@@ -412,6 +442,7 @@ export async function POST(req: Request) {
           current_period_end: (subscription as any).current_period_end,
           trial_start: (subscription as any).trial_start,
           trial_end: (subscription as any).trial_end,
+          metadata: subscription.metadata,
         });
 
         // Log the raw subscription object to debug timestamp issues
@@ -425,17 +456,38 @@ export async function POST(req: Request) {
           canceled_at: (subscription as any).canceled_at,
         });
 
-        // Convert timestamps and log the results
-        const currentPeriodStart = toISOString(
+        // Convert timestamps and handle trial subscriptions
+        let currentPeriodStart = toISOString(
           (subscription as any).current_period_start
         );
-        const currentPeriodEnd = toISOString(
+        let currentPeriodEnd = toISOString(
           (subscription as any).current_period_end
         );
         const trialStart = toISOString((subscription as any).trial_start);
         const trialEnd = toISOString((subscription as any).trial_end);
         const cancelAt = toISOString((subscription as any).cancel_at);
         const canceledAt = toISOString((subscription as any).canceled_at);
+
+        // For trial subscriptions, use trial timestamps as fallbacks for current period
+        if (subscription.status === "trialing") {
+          if (!currentPeriodStart && trialStart) {
+            currentPeriodStart = trialStart;
+          }
+          if (!currentPeriodEnd && trialEnd) {
+            currentPeriodEnd = trialEnd;
+          }
+        }
+
+        // Ensure we have valid timestamps for the database constraint
+        if (!currentPeriodStart) {
+          currentPeriodStart = getCurrentTime();
+        }
+        if (!currentPeriodEnd) {
+          // Set to 30 days from now as a reasonable fallback
+          const fallbackEnd = new Date();
+          fallbackEnd.setDate(fallbackEnd.getDate() + 30);
+          currentPeriodEnd = fallbackEnd.toISOString();
+        }
 
         console.log("Converted timestamps:", {
           current_period_start: currentPeriodStart,
@@ -446,23 +498,60 @@ export async function POST(req: Request) {
           canceled_at: canceledAt,
         });
 
+        // Log the final subscription status being saved
+        console.log("Saving subscription with status:", {
+          stripe_subscription_id: subscription.id,
+          status: subscription.status,
+          is_trial: subscription.status === "trialing",
+          trial_start: trialStart,
+          trial_end: trialEnd,
+          plan: plan,
+          interval: interval,
+          is_upgrade: subscription.metadata.isUpgrade === "true",
+          is_trial_upgrade: subscription.metadata.isTrialUpgrade === "true",
+          trial_preserved: subscription.metadata.trial_preserved === "true",
+          original_trial_end: subscription.metadata.original_trial_end,
+        });
+
+        // Enhanced metadata for trial upgrades
+        let enhancedMetadata = subscription.metadata || {};
+
+        // If this is a trial upgrade, ensure we preserve the original trial end
+        if (
+          subscription.metadata.isTrialUpgrade === "true" &&
+          subscription.metadata.original_trial_end
+        ) {
+          enhancedMetadata = {
+            ...enhancedMetadata,
+            trial_preserved: "true",
+            original_trial_end: subscription.metadata.original_trial_end,
+          };
+
+          console.log("Enhanced metadata for trial upgrade:", {
+            original_trial_end: subscription.metadata.original_trial_end,
+            trial_preserved: "true",
+            enhanced_metadata: enhancedMetadata,
+          });
+        }
+
         // Use the new upsert function for better error handling
         const { error: upsertError } = await adminSupabase.rpc(
           "upsert_subscription",
           {
             p_stripe_subscription_id: subscription.id,
             p_restaurant_id: restaurantId,
-            p_stripe_customer_id: subscription.customer as string,
             p_plan: plan,
             p_interval: interval,
-            p_currency: currency || "USD",
             p_status: subscription.status,
+            p_stripe_customer_id: subscription.customer as string,
+            p_stripe_price_id: subscription.items.data[0]?.price?.id || null,
             p_current_period_start: currentPeriodStart,
             p_current_period_end: currentPeriodEnd,
             p_trial_start: trialStart,
             p_trial_end: trialEnd,
             p_cancel_at: cancelAt,
             p_canceled_at: canceledAt,
+            p_metadata: enhancedMetadata,
           }
         );
 
@@ -488,12 +577,43 @@ export async function POST(req: Request) {
           currency,
         });
 
+        // If this is an upgrade, mark the old subscription as an upgrade before it gets deleted
+        if (
+          subscription.metadata.isUpgrade === "true" &&
+          subscription.metadata.existingSubscriptionId
+        ) {
+          try {
+            console.log(
+              "Marking old subscription as upgrade:",
+              subscription.metadata.existingSubscriptionId
+            );
+
+            // Update the old subscription metadata to mark it as an upgrade
+            await stripe.subscriptions.update(
+              subscription.metadata.existingSubscriptionId,
+              {
+                metadata: {
+                  ...subscription.metadata,
+                  isUpgrade: "true",
+                  upgradedTo: subscription.id,
+                  upgradedAt: new Date().toISOString(),
+                },
+              }
+            );
+
+            console.log("Successfully marked old subscription as upgrade");
+          } catch (error) {
+            console.error("Error marking old subscription as upgrade:", error);
+            // Don't fail the webhook for this
+          }
+        }
+
         break;
       }
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
-        const { restaurantId } = subscription.metadata;
+        const { restaurantId, isUpgrade } = subscription.metadata;
 
         if (!restaurantId) {
           console.error(
@@ -504,16 +624,21 @@ export async function POST(req: Request) {
         }
 
         // Check if this is part of a plan upgrade (new subscription exists)
+        // Look for any active subscription for this restaurant that's different from the deleted one
         const { data: newSubscription } = await adminSupabase
           .from("subscriptions")
-          .select("id, status")
+          .select("id, stripe_subscription_id, status")
           .eq("restaurant_id", restaurantId)
-          .neq("id", subscription.id) // Different from the deleted one
+          .neq("stripe_subscription_id", subscription.id) // Different from the deleted one
           .in("status", ["active", "trialing", "past_due"])
           .single();
 
+        // Check if this is marked as an upgrade in metadata
+        const isMarkedAsUpgrade =
+          isUpgrade === "true" || subscription.metadata.isUpgrade === "true";
+
         // Only update restaurant status to cancelled if this is not part of an upgrade
-        if (!newSubscription) {
+        if (!newSubscription && !isMarkedAsUpgrade) {
           // Update restaurant subscription status
           const { error: updateError } = await adminSupabase.rpc(
             "update_restaurant_subscription_status",
@@ -531,7 +656,13 @@ export async function POST(req: Request) {
           }
         } else {
           console.log(
-            "Skipping restaurant status update - this appears to be a plan upgrade"
+            "Skipping restaurant status update - this appears to be a plan upgrade",
+            {
+              hasNewSubscription: !!newSubscription,
+              isMarkedAsUpgrade,
+              deletedSubscriptionId: subscription.id,
+              newSubscriptionId: newSubscription?.stripe_subscription_id,
+            }
           );
         }
 
@@ -548,7 +679,7 @@ export async function POST(req: Request) {
               : null,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", subscription.id); // Use the Stripe subscription ID
+          .eq("stripe_subscription_id", subscription.id); // Use the Stripe subscription ID
 
         if (upsertError) {
           console.error("Error updating subscription:", upsertError);
@@ -558,7 +689,7 @@ export async function POST(req: Request) {
         }
 
         // Send cancellation email notification only if this is not a plan upgrade
-        if (!newSubscription) {
+        if (!newSubscription && !isMarkedAsUpgrade) {
           try {
             // Get restaurant details for email
             const { data: restaurant, error: restaurantError } =
@@ -601,7 +732,12 @@ export async function POST(req: Request) {
           }
         } else {
           console.log(
-            "Skipping cancellation email - this appears to be a plan upgrade"
+            "Skipping cancellation email - this appears to be a plan upgrade",
+            {
+              hasNewSubscription: !!newSubscription,
+              isMarkedAsUpgrade,
+              deletedSubscriptionId: subscription.id,
+            }
           );
         }
 
@@ -947,11 +1083,12 @@ export async function POST(req: Request) {
                   {
                     p_stripe_subscription_id: subscription.id,
                     p_restaurant_id: subscription.metadata.restaurantId,
-                    p_stripe_customer_id: subscription.customer as string,
                     p_plan: subscription.metadata.plan,
                     p_interval: subscription.metadata.interval,
-                    p_currency: subscription.metadata.currency || "USD",
                     p_status: newStatus,
+                    p_stripe_customer_id: subscription.customer as string,
+                    p_stripe_price_id:
+                      subscription.items.data[0]?.price?.id || null,
                     p_current_period_start: new Date(
                       (subscription as any).current_period_start * 1000
                     ).toISOString(),
@@ -978,6 +1115,7 @@ export async function POST(req: Request) {
                           (subscription as any).canceled_at * 1000
                         ).toISOString()
                       : null,
+                    p_metadata: subscription.metadata || {},
                   }
                 );
 
@@ -1252,11 +1390,11 @@ export async function POST(req: Request) {
             {
               p_stripe_subscription_id: subscription.id,
               p_restaurant_id: subscription.metadata.restaurantId,
-              p_stripe_customer_id: subscription.customer as string,
               p_plan: subscription.metadata.plan,
               p_interval: subscription.metadata.interval,
-              p_currency: subscription.metadata.currency || "USD",
               p_status: subscription.status,
+              p_stripe_customer_id: subscription.customer as string,
+              p_stripe_price_id: subscription.items.data[0]?.price?.id || null,
               p_current_period_start: new Date(
                 (subscription as any).current_period_start * 1000
               ).toISOString(),
@@ -1279,6 +1417,7 @@ export async function POST(req: Request) {
                     (subscription as any).canceled_at * 1000
                   ).toISOString()
                 : null,
+              p_metadata: subscription.metadata || {},
             }
           );
 
@@ -1430,11 +1569,11 @@ export async function POST(req: Request) {
             {
               p_stripe_subscription_id: subscription.id,
               p_restaurant_id: subscription.metadata.restaurantId,
-              p_stripe_customer_id: subscription.customer as string,
               p_plan: subscription.metadata.plan,
               p_interval: subscription.metadata.interval,
-              p_currency: subscription.metadata.currency || "USD",
               p_status: subscription.status,
+              p_stripe_customer_id: subscription.customer as string,
+              p_stripe_price_id: subscription.items.data[0]?.price?.id || null,
               p_current_period_start: new Date(
                 (subscription as any).current_period_start * 1000
               ).toISOString(),
@@ -1457,6 +1596,7 @@ export async function POST(req: Request) {
                     (subscription as any).canceled_at * 1000
                   ).toISOString()
                 : null,
+              p_metadata: subscription.metadata || {},
             }
           );
 
@@ -1631,11 +1771,11 @@ export async function POST(req: Request) {
             {
               p_stripe_subscription_id: subscription.id,
               p_restaurant_id: subscription.metadata.restaurantId,
-              p_stripe_customer_id: subscription.customer as string,
               p_plan: subscription.metadata.plan,
               p_interval: subscription.metadata.interval,
-              p_currency: subscription.metadata.currency || "USD",
               p_status: subscription.status,
+              p_stripe_customer_id: subscription.customer as string,
+              p_stripe_price_id: subscription.items.data[0]?.price?.id || null,
               p_current_period_start: toISOString(
                 (subscription as any).current_period_start
               ),

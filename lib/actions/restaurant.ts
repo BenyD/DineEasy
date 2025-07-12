@@ -17,47 +17,113 @@ async function uploadRestaurantImage(
   type: "logo" | "cover",
   restaurantSlug: string
 ): Promise<string | null> {
-  // Validate file type
-  const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-  if (!allowedTypes.includes(file.type)) {
-    throw new Error(
-      `Invalid file type. Allowed types: ${allowedTypes.join(", ")}`
-    );
-  }
+  try {
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error(
+        `Invalid file type. Allowed types: ${allowedTypes.join(", ")}`
+      );
+    }
 
-  // Validate file size
-  const maxSize = type === "logo" ? 2 * 1024 * 1024 : 5 * 1024 * 1024; // 2MB for logo, 5MB for cover
-  if (file.size > maxSize) {
-    throw new Error(
-      `File size too large. Maximum size: ${maxSize / 1024 / 1024}MB`
-    );
-  }
+    // Validate file size
+    const maxSize = type === "logo" ? 2 * 1024 * 1024 : 5 * 1024 * 1024; // 2MB for logo, 5MB for cover
+    if (file.size > maxSize) {
+      throw new Error(
+        `File size too large. Maximum size: ${maxSize / 1024 / 1024}MB`
+      );
+    }
 
-  // Generate a clean filename
-  const timestamp = Date.now();
-  const cleanSlug = restaurantSlug.replace(/[^a-z0-9-]/g, "");
-  const filename = `${type}-${cleanSlug}-${timestamp}`;
-  const path = `${userId}/${filename}`;
+    // Generate a clean filename with proper extension
+    const timestamp = Date.now();
+    const cleanSlug = restaurantSlug.replace(/[^a-z0-9-]/g, "");
+    const fileExtension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const filename = `${type}-${cleanSlug}-${timestamp}.${fileExtension}`;
+    const path = `${userId}/${filename}`;
 
-  // Upload file
-  const { data, error } = await supabase.storage
-    .from("restaurant-images")
-    .upload(path, file, {
-      cacheControl: "3600",
-      upsert: false,
+    console.log(`Uploading ${type} image:`, {
+      filename,
+      path,
+      size: file.size,
+      type: file.type,
+      userId,
     });
 
-  if (error) {
-    console.error(`Error uploading ${type}:`, error);
+    // Upload file to Supabase storage
+    const { data, error } = await supabase.storage
+      .from("restaurant-images")
+      .upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type,
+      });
+
+    if (error) {
+      console.error(`Error uploading ${type}:`, error);
+
+      // Handle specific storage errors
+      if (error.message.includes("bucket")) {
+        throw new Error(
+          "Storage bucket not configured. Please contact support."
+        );
+      }
+      if (error.message.includes("permission")) {
+        throw new Error("Permission denied. Please try again.");
+      }
+      if (error.message.includes("duplicate")) {
+        throw new Error(
+          "File already exists. Please choose a different image."
+        );
+      }
+
+      throw new Error(`Failed to upload ${type}: ${error.message}`);
+    }
+
+    if (!data?.path) {
+      throw new Error(`No path returned for ${type} upload`);
+    }
+
+    // Get public URL
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("restaurant-images").getPublicUrl(data.path);
+
+    if (!publicUrl) {
+      throw new Error(`Failed to get public URL for ${type}`);
+    }
+
+    console.log(`Successfully uploaded ${type}:`, {
+      path: data.path,
+      publicUrl,
+    });
+
+    return publicUrl;
+  } catch (error) {
+    console.error(`Error in uploadRestaurantImage for ${type}:`, error);
     throw error;
   }
+}
 
-  // Get public URL
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("restaurant-images").getPublicUrl(path);
+// Helper function to validate image file
+function validateImageFile(file: File, type: "logo" | "cover"): string | null {
+  // Check file type
+  const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+  if (!allowedTypes.includes(file.type)) {
+    return `Invalid file type. Allowed types: ${allowedTypes.join(", ")}`;
+  }
 
-  return publicUrl;
+  // Check file size
+  const maxSize = type === "logo" ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+  if (file.size > maxSize) {
+    return `File size too large. Maximum size: ${maxSize / 1024 / 1024}MB`;
+  }
+
+  // Check if file is actually an image by reading first few bytes
+  if (file.size < 10) {
+    return "File appears to be corrupted or empty";
+  }
+
+  return null; // No error
 }
 
 export async function createRestaurant(formData: FormData) {
@@ -101,24 +167,61 @@ export async function createRestaurant(formData: FormData) {
       const logo = formData.get("logo") as File;
       const coverPhoto = formData.get("coverPhoto") as File;
 
+      // Validate images before upload
       if (logo?.size) {
-        logo_url = await uploadRestaurantImage(
-          supabase,
-          logo,
-          user.id,
-          "logo",
-          slug
-        );
+        const logoError = validateImageFile(logo, "logo");
+        if (logoError) {
+          return { error: logoError };
+        }
       }
 
       if (coverPhoto?.size) {
-        cover_url = await uploadRestaurantImage(
-          supabase,
-          coverPhoto,
-          user.id,
-          "cover",
-          slug
-        );
+        const coverError = validateImageFile(coverPhoto, "cover");
+        if (coverError) {
+          return { error: coverError };
+        }
+      }
+
+      // Upload images
+      if (logo?.size) {
+        try {
+          logo_url = await uploadRestaurantImage(
+            supabase,
+            logo,
+            user.id,
+            "logo",
+            slug
+          );
+        } catch (uploadError: any) {
+          return { error: `Logo upload failed: ${uploadError.message}` };
+        }
+      }
+
+      if (coverPhoto?.size) {
+        try {
+          cover_url = await uploadRestaurantImage(
+            supabase,
+            coverPhoto,
+            user.id,
+            "cover",
+            slug
+          );
+        } catch (uploadError: any) {
+          // Clean up logo if cover upload fails
+          if (logo_url) {
+            try {
+              await supabase.storage
+                .from("restaurant-images")
+                .remove([`${user.id}/logo-${slug}-${Date.now()}.jpg`]);
+            } catch (cleanupError) {
+              console.error(
+                "Failed to cleanup logo after cover upload failure:",
+                cleanupError
+              );
+            }
+          }
+          return { error: `Cover photo upload failed: ${uploadError.message}` };
+        }
       }
     } catch (uploadError: any) {
       return { error: uploadError.message || "Error uploading images" };

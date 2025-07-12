@@ -32,6 +32,8 @@ import { createClient } from "@/lib/supabase/client";
 import {
   createStripeAccount,
   createAccountUpdateLink,
+  createStripeDashboardLink,
+  getStripeAccountRequirements,
   refreshAccountStatus,
 } from "@/lib/actions/stripe-connect";
 import {
@@ -106,6 +108,7 @@ export default function PaymentsPage() {
   const [stripeAccount, setStripeAccount] = useState<StripeAccountInfo | null>(
     null
   );
+  const [stripeRequirements, setStripeRequirements] = useState<any>(null);
   const [paymentMethodSettings, setPaymentMethodSettings] = useState({
     cardEnabled: true,
     cashEnabled: true,
@@ -154,6 +157,7 @@ export default function PaymentsPage() {
         fetchTransactions(restaurant.id),
         fetchStripeAccountInfo(restaurant.id),
         fetchPaymentMethodSettings(restaurant.id),
+        fetchStripeRequirements(restaurant.id),
       ]);
 
       setIsLoading(false);
@@ -219,6 +223,17 @@ export default function PaymentsPage() {
     }
   };
 
+  const fetchStripeRequirements = async (id: string) => {
+    try {
+      const requirements = await getStripeAccountRequirements(id);
+      if (!requirements.error) {
+        setStripeRequirements(requirements);
+      }
+    } catch (error) {
+      console.error("Error fetching Stripe requirements:", error);
+    }
+  };
+
   const handleConnectStripe = async () => {
     if (!restaurantId) return;
 
@@ -248,12 +263,51 @@ export default function PaymentsPage() {
 
     setIsRefreshing(true);
     try {
-      await fetchStripeAccountInfo(restaurantId);
+      await Promise.all([
+        fetchStripeAccountInfo(restaurantId),
+        fetchStripeRequirements(restaurantId),
+      ]);
       toast.success("Account status refreshed");
     } catch (error) {
       toast.error("Failed to refresh account status");
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  const handleOpenStripeDashboard = async () => {
+    if (!restaurantId) return;
+
+    try {
+      const result = await createStripeDashboardLink(restaurantId);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.dashboardUrl) {
+        window.open(result.dashboardUrl, "_blank");
+      }
+    } catch (error) {
+      console.error("Error opening Stripe dashboard:", error);
+      toast.error("Failed to open Stripe dashboard");
+    }
+  };
+
+  const handleUpdateStripeAccount = async () => {
+    if (!restaurantId) return;
+
+    try {
+      const result = await createAccountUpdateLink(restaurantId);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.accountLink) {
+        window.location.href = result.accountLink;
+      }
+    } catch (error) {
+      console.error("Error updating Stripe account:", error);
+      toast.error("Failed to update Stripe account");
     }
   };
 
@@ -603,7 +657,7 @@ export default function PaymentsPage() {
         </motion.div>
 
         {/* Stripe Account Status */}
-        {stripeAccount?.charges_enabled && (
+        {stripeAccount && (
           <motion.div
             variants={cardVariants}
             whileHover="hover"
@@ -633,13 +687,81 @@ export default function PaymentsPage() {
                     <motion.div variants={cardVariants} className="space-y-2">
                       <Label>Account Status</Label>
                       <div className="flex items-center gap-2">
-                        <Badge className="bg-green-100 text-green-800">
-                          <Check className="w-3 h-3 mr-1" />
-                          {stripeAccount.charges_enabled ? "Active" : "Pending"}
-                        </Badge>
+                        {stripeAccount.charges_enabled ? (
+                          <Badge className="bg-green-100 text-green-800">
+                            <Check className="w-3 h-3 mr-1" />
+                            Active
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-amber-100 text-amber-800">
+                            <AlertCircle className="w-3 h-3 mr-1" />
+                            Pending
+                          </Badge>
+                        )}
                       </div>
                     </motion.div>
                   </div>
+
+                  {/* Account Requirements Status */}
+                  {stripeRequirements && !stripeAccount.charges_enabled && (
+                    <motion.div variants={cardVariants} className="space-y-3">
+                      <Label>Account Requirements</Label>
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium text-amber-800">
+                              Account verification required
+                            </p>
+                            {stripeRequirements.currentlyDue &&
+                              stripeRequirements.currentlyDue.length > 0 && (
+                                <div className="text-xs text-amber-700">
+                                  <p className="font-medium mb-1">
+                                    Currently required:
+                                  </p>
+                                  <ul className="list-disc list-inside space-y-1">
+                                    {Object.keys(
+                                      stripeRequirements.currentlyDue
+                                    ).map((field) => (
+                                      <li key={field} className="capitalize">
+                                        {field.replace(/_/g, " ")}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            <Button
+                              size="sm"
+                              onClick={handleUpdateStripeAccount}
+                              className="bg-amber-600 hover:bg-amber-700"
+                            >
+                              Complete Verification
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Payout Status */}
+                  {stripeRequirements && (
+                    <motion.div variants={cardVariants} className="space-y-2">
+                      <Label>Payout Status</Label>
+                      <div className="flex items-center gap-2">
+                        {stripeRequirements.payoutsEnabled ? (
+                          <Badge className="bg-green-100 text-green-800">
+                            <Check className="w-3 h-3 mr-1" />
+                            Payouts Enabled
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-gray-100 text-gray-800">
+                            <AlertCircle className="w-3 h-3 mr-1" />
+                            Payouts Pending
+                          </Badge>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
                 </motion.div>
 
                 <Separator />
@@ -724,13 +846,21 @@ export default function PaymentsPage() {
                   <Button
                     variant="outline"
                     className="flex-1"
-                    onClick={() =>
-                      (window.location.href = "https://dashboard.stripe.com")
-                    }
+                    onClick={handleOpenStripeDashboard}
                   >
                     <ExternalLink className="w-4 h-4 mr-2" />
                     Open Stripe Dashboard
                   </Button>
+                  {!stripeAccount.charges_enabled && (
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={handleUpdateStripeAccount}
+                    >
+                      <Settings className="w-4 h-4 mr-2" />
+                      Update Account
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     className="flex-1"
@@ -740,7 +870,7 @@ export default function PaymentsPage() {
                     <RefreshCw
                       className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
                     />
-                    Refresh Connection
+                    Refresh
                   </Button>
                 </div>
               </CardContent>

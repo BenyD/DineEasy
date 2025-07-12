@@ -84,7 +84,8 @@ export function useBillingData(): BillingData & { refresh: () => void } {
             trial_end,
             cancel_at,
             canceled_at,
-            metadata
+            metadata,
+            created_at
           )
         `
         )
@@ -139,8 +140,17 @@ export function useBillingData(): BillingData & { refresh: () => void } {
         console.warn("Failed to fetch staff count:", staffResult.reason);
       }
 
-      // Get current subscription
-      const currentSubscription = restaurant.subscriptions?.[0];
+      // Get current subscription - ensure we get the most recent one
+      const subscriptions = restaurant.subscriptions || [];
+      const currentSubscription =
+        subscriptions.length > 0
+          ? subscriptions.sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime()
+            )[0]
+          : null;
+
       const plan = currentSubscription?.plan || "starter";
       const interval = currentSubscription?.interval || "monthly";
       const currency = restaurant.currency || "CHF";
@@ -149,8 +159,25 @@ export function useBillingData(): BillingData & { refresh: () => void } {
       console.log("Billing data debug:", {
         restaurantId: restaurant.id,
         subscriptionStatus: restaurant.subscription_status,
-        currentSubscription,
-        subscriptionCount: restaurant.subscriptions?.length || 0,
+        allSubscriptions: subscriptions.map((s) => ({
+          id: s.id,
+          plan: s.plan,
+          status: s.status,
+          created_at: s.created_at,
+          cancel_at: s.cancel_at,
+          canceled_at: s.canceled_at,
+        })),
+        selectedSubscription: currentSubscription
+          ? {
+              id: currentSubscription.id,
+              plan: currentSubscription.plan,
+              status: currentSubscription.status,
+              created_at: currentSubscription.created_at,
+              cancel_at: currentSubscription.cancel_at,
+              canceled_at: currentSubscription.canceled_at,
+            }
+          : null,
+        subscriptionCount: subscriptions.length,
         currentPeriodEnd: currentSubscription?.current_period_end,
         trialEnd: currentSubscription?.trial_end,
         cancelAt: currentSubscription?.cancel_at,
@@ -159,6 +186,8 @@ export function useBillingData(): BillingData & { refresh: () => void } {
         isTrialUpgrade:
           currentSubscription?.metadata?.trial_preserved === "true",
         originalTrialEnd: currentSubscription?.metadata?.original_trial_end,
+        plan: plan, // Add plan to debug output
+        planUpperCase: plan.charAt(0).toUpperCase() + plan.slice(1), // Add formatted plan
       });
 
       // Check if there's an active subscription
