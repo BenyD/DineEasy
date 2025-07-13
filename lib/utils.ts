@@ -244,3 +244,69 @@ export function redirectToOnboardingStep(
       break;
   }
 }
+
+/**
+ * localStorage utility functions for onboarding flow persistence
+ */
+
+export function saveOnboardingProgress(formData: any, currentStep: number) {
+  if (typeof window !== "undefined") {
+    try {
+      const dataToSave = {
+        ...formData,
+        logo: null, // Don't save File objects
+        coverPhoto: null,
+      };
+      localStorage.setItem("setup-form-data", JSON.stringify(dataToSave));
+      localStorage.setItem("setup-current-step", currentStep.toString());
+    } catch (error) {
+      console.error("Error saving onboarding progress:", error);
+    }
+  }
+}
+
+export function loadOnboardingProgress() {
+  if (typeof window !== "undefined") {
+    try {
+      const savedData = localStorage.getItem("setup-form-data");
+      const savedStep = localStorage.getItem("setup-current-step");
+
+      if (savedData && savedStep) {
+        return {
+          formData: JSON.parse(savedData),
+          currentStep: parseInt(savedStep),
+          hasResumed: true,
+        };
+      }
+    } catch (error) {
+      console.error("Error loading onboarding progress:", error);
+    }
+  }
+
+  return {
+    formData: null,
+    currentStep: 1,
+    hasResumed: false,
+  };
+}
+
+export function clearOnboardingProgress() {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("setup-form-data");
+      localStorage.removeItem("setup-current-step");
+      localStorage.removeItem("additional-setup-form-data");
+    } catch (error) {
+      console.error("Error clearing onboarding progress:", error);
+    }
+  }
+}
+
+export function hasOnboardingProgress(): boolean {
+  if (typeof window !== "undefined") {
+    const savedData = localStorage.getItem("setup-form-data");
+    const savedStep = localStorage.getItem("setup-current-step");
+    return !!(savedData && savedStep && parseInt(savedStep) > 1);
+  }
+  return false;
+}

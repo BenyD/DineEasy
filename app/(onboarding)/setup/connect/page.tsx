@@ -40,7 +40,11 @@ import { createClient } from "@/lib/supabase/client";
 import { completeOnboarding } from "@/lib/actions/restaurant";
 import { toast } from "sonner";
 import { Logo } from "@/components/layout/Logo";
-import { getOnboardingStatus, redirectToOnboardingStep } from "@/lib/utils";
+import {
+  getOnboardingStatus,
+  redirectToOnboardingStep,
+  clearOnboardingProgress,
+} from "@/lib/utils";
 import { COUNTRY_OPTIONS } from "@/lib/constants";
 
 export default function ConnectPage() {
@@ -175,6 +179,9 @@ export default function ConnectPage() {
 
           console.log("Onboarding completed successfully:", result);
           toast.success("Onboarding completed successfully!");
+
+          // Clear onboarding progress from localStorage
+          clearOnboardingProgress();
         } catch (error) {
           console.error("Error completing onboarding:", error);
           toast.error("Failed to complete onboarding. Please try again.");
@@ -202,6 +209,9 @@ export default function ConnectPage() {
 
         console.log("Onboarding completed successfully:", result);
         toast.success("Onboarding completed successfully!");
+
+        // Clear onboarding progress from localStorage
+        clearOnboardingProgress();
       } catch (error) {
         console.error("Error completing onboarding:", error);
         toast.error("Failed to complete onboarding. Please try again.");
@@ -228,6 +238,9 @@ export default function ConnectPage() {
 
         console.log("Onboarding completed successfully:", result);
         toast.success("Onboarding completed successfully!");
+        
+        // Clear onboarding progress from localStorage
+        clearOnboardingProgress();
       } catch (error) {
         console.error("Error completing onboarding:", error);
         toast.error("Failed to complete onboarding. Please try again.");

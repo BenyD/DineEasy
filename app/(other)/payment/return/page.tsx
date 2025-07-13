@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { clearOnboardingProgress } from "@/lib/utils";
 
 interface PaymentStatus {
   status: "loading" | "success" | "failed" | "verifying";
@@ -270,6 +271,8 @@ export default function PaymentReturnPage() {
             toast.success(
               "🎉 Subscription created successfully! Welcome to DineEasy!"
             );
+            // Clear onboarding progress for new subscriptions
+            clearOnboardingProgress();
           }
         } else if (status.status === "failed") {
           toast.error(status.message);

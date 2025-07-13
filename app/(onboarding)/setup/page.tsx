@@ -129,33 +129,63 @@ interface FormData {
 
 export default function SetupPage() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
+
+  // Initialize form data with localStorage persistence
+  const [formData, setFormData] = useState<FormData>(() => {
+    // Load from localStorage on component mount
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("setup-form-data");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          // Convert File objects back to null since they can't be serialized
+          return {
+            ...parsed,
+            logo: null,
+            coverPhoto: null,
+          };
+        } catch (error) {
+          console.error("Error parsing saved form data:", error);
+        }
+      }
+    }
+    return {
+      name: "",
+      type: "",
+      description: "",
+      cuisine: "",
+      email: "",
+      phone: "",
+      website: "",
+      currency: "USD",
+      tax_rate: "7.7",
+      vat_number: "",
+      price_range: "",
+      logo: null,
+      coverPhoto: null,
+      address: "",
+      city: "",
+      postal_code: "",
+      country: "",
+      accepts_reservations: false,
+      delivery_available: false,
+      takeout_available: false,
+    };
+  });
+
+  // Initialize step with localStorage persistence
+  const [step, setStep] = useState(() => {
+    // Load current step from localStorage
+    if (typeof window !== "undefined") {
+      const savedStep = localStorage.getItem("setup-current-step");
+      return savedStep ? parseInt(savedStep) : 1;
+    }
+    return 1;
+  });
+
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [formData, setFormData] = useState<FormData>({
-    name: "",
-    type: "",
-    description: "",
-    cuisine: "",
-    email: "",
-    phone: "",
-    website: "",
-    currency: "USD",
-    tax_rate: "7.7",
-    vat_number: "",
-    price_range: "",
-    logo: null,
-    coverPhoto: null,
-    address: "",
-    city: "",
-    postal_code: "",
-    country: "",
-    accepts_reservations: false,
-    delivery_available: false,
-    takeout_available: false,
-  });
-
   const [userEmail, setUserEmail] = useState<string>("");
 
   // Add state to track previous values for change detection
@@ -169,7 +199,114 @@ export default function SetupPage() {
     Record<string, string>
   >({});
 
-  // Validation functions
+  // Add state to track if user has resumed from saved data
+  const [hasResumed, setHasResumed] = useState(false);
+
+  const totalSteps = 3;
+  const progress = (step / totalSteps) * 100;
+
+  // Save form data whenever it changes
+  useEffect(() => {
+    if (typeof window !== "undefined" && !isCheckingAuth) {
+      const dataToSave = {
+        ...formData,
+        logo: null, // Don't save File objects
+        coverPhoto: null,
+      };
+      localStorage.setItem("setup-form-data", JSON.stringify(dataToSave));
+    }
+  }, [formData, isCheckingAuth]);
+
+  // Save current step whenever it changes
+  useEffect(() => {
+    if (typeof window !== "undefined" && !isCheckingAuth) {
+      localStorage.setItem("setup-current-step", step.toString());
+    }
+  }, [step, isCheckingAuth]);
+
+  // Check for resumed data on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedData = localStorage.getItem("setup-form-data");
+      const savedStep = localStorage.getItem("setup-current-step");
+
+      if (savedData && savedStep && parseInt(savedStep) > 1) {
+        setHasResumed(true);
+        // Show resume notification after a short delay
+        setTimeout(() => {
+          toast.info(
+            "Welcome back! Your previous progress has been restored.",
+            {
+              duration: 4000,
+            }
+          );
+        }, 1000);
+      }
+    }
+  }, []);
+
+  // Handle page unload to ensure data is saved
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Save current progress before user leaves
+      if (typeof window !== "undefined" && !isCheckingAuth) {
+        const dataToSave = {
+          ...formData,
+          logo: null,
+          coverPhoto: null,
+        };
+        localStorage.setItem("setup-form-data", JSON.stringify(dataToSave));
+        localStorage.setItem("setup-current-step", step.toString());
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [formData, step, isCheckingAuth]);
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        toast.error("Please sign in to continue");
+        router.push("/login");
+        return;
+      }
+
+      // Set the user's email for the business email field
+      setUserEmail(user.email || "");
+      setFormData((prev) => ({
+        ...prev,
+        email: user.email || "",
+      }));
+
+      // Check if user should be on this page
+      const onboardingStatus = await getOnboardingStatus(supabase);
+
+      if (onboardingStatus.step !== "setup") {
+        // User has already completed this step or needs to go to a different step
+        redirectToOnboardingStep(
+          onboardingStatus.step,
+          router,
+          onboardingStatus.emailVerified
+        );
+        return;
+      }
+
+      setIsAuthenticated(true);
+      setIsCheckingAuth(false);
+    };
+
+    checkAuth();
+  }, [router]);
+
   const validateField = (name: string, value: any): string | null => {
     switch (name) {
       case "name":
@@ -325,50 +462,6 @@ export default function SetupPage() {
       });
     }
   };
-
-  const totalSteps = 3;
-  const progress = (step / totalSteps) * 100;
-
-  // Check authentication on component mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        toast.error("Please sign in to continue");
-        router.push("/login");
-        return;
-      }
-
-      // Set the user's email for the business email field
-      setUserEmail(user.email || "");
-      setFormData((prev) => ({
-        ...prev,
-        email: user.email || "",
-      }));
-
-      // Check if user should be on this page
-      const onboardingStatus = await getOnboardingStatus(supabase);
-
-      if (onboardingStatus.step !== "setup") {
-        // User has already completed this step or needs to go to a different step
-        redirectToOnboardingStep(
-          onboardingStatus.step,
-          router,
-          onboardingStatus.emailVerified
-        );
-        return;
-      }
-
-      setIsAuthenticated(true);
-      setIsCheckingAuth(false);
-    };
-
-    checkAuth();
-  }, [router]);
 
   const handleSwitchChange = (name: string, checked: boolean) => {
     setFormData({
@@ -588,6 +681,12 @@ export default function SetupPage() {
         return;
       }
 
+      // Clear localStorage when setup is completed successfully
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("setup-form-data");
+        localStorage.removeItem("setup-current-step");
+      }
+
       toast.success("Restaurant profile created successfully!");
       router.push("/select-plan");
     } catch (error) {
@@ -641,9 +740,39 @@ export default function SetupPage() {
                 Step {step} of {totalSteps}
               </span>
             </div>
+            <div className="flex items-center gap-2 text-xs text-green-600">
+              <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <span>Auto-saving</span>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Resume Notification */}
+      {hasResumed && (
+        <div className="bg-green-50 border-b border-green-200">
+          <div className="container max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="flex items-center gap-2 text-sm text-green-700">
+              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <span>
+                Welcome back! Your previous progress has been restored.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Progress Bar */}
       <div className="border-b bg-white/60 backdrop-blur-sm">

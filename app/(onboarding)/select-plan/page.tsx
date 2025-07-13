@@ -33,7 +33,11 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/layout/Logo";
-import { getOnboardingStatus, redirectToOnboardingStep } from "@/lib/utils";
+import {
+  getOnboardingStatus,
+  redirectToOnboardingStep,
+  clearOnboardingProgress,
+} from "@/lib/utils";
 
 export default function SelectPlanPage() {
   const router = useRouter();
