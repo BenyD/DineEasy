@@ -28,6 +28,14 @@ export async function createStripeAccount() {
   try {
     // If restaurant already has a Stripe account, return the account link
     if (restaurant.stripe_account_id) {
+      console.log(
+        "Restaurant already has Stripe account, creating onboarding link:",
+        {
+          restaurantId: restaurant.id,
+          accountId: restaurant.stripe_account_id,
+        }
+      );
+
       const accountLink = await stripe.accountLinks.create({
         account: restaurant.stripe_account_id,
         refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/setup/connect`,
@@ -53,6 +61,14 @@ export async function createStripeAccount() {
       );
       return {
         error: `Stripe Connect is not available for businesses in ${restaurantCountry}. Please contact support for alternative payment solutions.`,
+      };
+    }
+
+    // Validate required fields
+    if (!restaurant.name || !user.email) {
+      return {
+        error:
+          "Restaurant name and email are required to create a Stripe account.",
       };
     }
 
@@ -103,6 +119,18 @@ export async function createStripeAccount() {
         accountId: account.id,
         error: updateError,
       });
+
+      // Try to clean up the created account if database update fails
+      try {
+        await stripe.accounts.del(account.id);
+        console.log(
+          "Cleaned up Stripe account after database update failure:",
+          account.id
+        );
+      } catch (cleanupError) {
+        console.error("Failed to clean up Stripe account:", cleanupError);
+      }
+
       throw new Error("Failed to update restaurant with Stripe account ID");
     }
 
@@ -123,9 +151,42 @@ export async function createStripeAccount() {
     });
 
     return { accountLink: accountLink.url };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating Stripe account:", error);
-    return { error: "Failed to create Stripe account" };
+
+    // Handle specific Stripe errors
+    if (error.type === "StripeInvalidRequestError") {
+      if (error.code === "parameter_invalid_country") {
+        return {
+          error: "The selected country is not supported for Stripe Connect.",
+        };
+      }
+      if (error.code === "parameter_invalid_email") {
+        return { error: "Please provide a valid email address." };
+      }
+      if (error.message?.includes("capabilities")) {
+        return {
+          error:
+            "Stripe Connect capabilities are not properly configured. Please contact support.",
+        };
+      }
+    }
+
+    if (error.type === "StripePermissionError") {
+      return {
+        error:
+          "You don't have permission to create Stripe Connect accounts. Please contact support.",
+      };
+    }
+
+    if (error.type === "StripeRateLimitError") {
+      return { error: "Too many requests. Please try again in a few minutes." };
+    }
+
+    return {
+      error:
+        "Failed to create Stripe account. Please try again or contact support.",
+    };
   }
 }
 
@@ -152,12 +213,20 @@ export async function getStripeAccountStatus(restaurantId: string) {
     );
 
     // Update restaurant with current account status using the dedicated function
-    await supabase.rpc("update_stripe_connect_status", {
-      p_restaurant_id: restaurantId,
-      p_stripe_account_id: restaurant.stripe_account_id,
-      p_charges_enabled: account.charges_enabled,
-      p_requirements: account.requirements,
-    });
+    const { error: updateError } = await supabase.rpc(
+      "update_stripe_connect_status",
+      {
+        p_restaurant_id: restaurantId,
+        p_stripe_account_id: restaurant.stripe_account_id,
+        p_charges_enabled: account.charges_enabled,
+        p_requirements: account.requirements,
+      }
+    );
+
+    if (updateError) {
+      console.error("Error updating restaurant Stripe status:", updateError);
+      // Don't fail the function, just log the error
+    }
 
     // Check if account is fully verified and ready
     const isFullyVerified =
@@ -172,8 +241,30 @@ export async function getStripeAccountStatus(restaurantId: string) {
       chargesEnabled: account.charges_enabled,
       detailsSubmitted: account.details_submitted,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error retrieving Stripe account:", error);
+
+    // Handle specific Stripe errors
+    if (error.type === "StripeInvalidRequestError") {
+      if (error.code === "resource_missing") {
+        // Account doesn't exist, clean up the database
+        try {
+          await supabase.rpc("update_stripe_connect_status", {
+            p_restaurant_id: restaurantId,
+            p_stripe_account_id: null,
+            p_charges_enabled: false,
+            p_requirements: null,
+          });
+          return { status: "not_connected", error: "Stripe account not found" };
+        } catch (cleanupError) {
+          console.error(
+            "Error cleaning up invalid Stripe account:",
+            cleanupError
+          );
+        }
+      }
+    }
+
     return { error: "Failed to get Stripe account status" };
   }
 }

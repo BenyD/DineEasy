@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -48,7 +49,8 @@ import {
 } from "@/lib/actions/payments";
 import PaymentStatsComponent from "@/components/dashboard/payments/PaymentStats";
 import PaymentTransactions from "@/components/dashboard/payments/PaymentTransactions";
-import { formatCurrency } from "@/lib/utils/currency";
+import { formatCurrency, getCurrencySymbol } from "@/lib/utils/currency";
+import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 
 type PaymentMethod = {
   id: string;
@@ -96,6 +98,7 @@ const cardVariants = {
 };
 
 export default function PaymentsPage() {
+  const { currency } = useRestaurantSettings();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -172,6 +175,7 @@ export default function PaymentsPage() {
       setPaymentStats(stats);
     } catch (error) {
       console.error("Error fetching payment stats:", error);
+      toast.error("Failed to load payment statistics");
     }
   };
 
@@ -191,6 +195,9 @@ export default function PaymentsPage() {
       setTransactionOffset(offset + newTransactions.length);
     } catch (error) {
       console.error("Error fetching transactions:", error);
+      if (!append) {
+        toast.error("Failed to load payment transactions");
+      }
     }
   };
 
@@ -200,6 +207,7 @@ export default function PaymentsPage() {
       setStripeAccount(accountInfo);
     } catch (error) {
       console.error("Error fetching Stripe account info:", error);
+      // Don't show error toast for this as it's expected for restaurants without Stripe Connect
     }
   };
 
@@ -207,30 +215,37 @@ export default function PaymentsPage() {
     try {
       const settings = await getPaymentMethodSettings(id);
       setPaymentMethodSettings(settings);
-
-      // Update UI methods based on settings
-      const updatedMethods = paymentMethods.map((method) => ({
-        ...method,
-        enabled:
-          method.id === "creditCard"
-            ? settings.cardEnabled
-            : settings.cashEnabled,
-      }));
-      setMethods(updatedMethods);
-      setOriginalMethods(updatedMethods);
+      setMethods(
+        methods.map((method) => ({
+          ...method,
+          enabled:
+            method.id === "creditCard"
+              ? settings.cardEnabled
+              : settings.cashEnabled,
+        }))
+      );
+      setOriginalMethods(
+        methods.map((method) => ({
+          ...method,
+          enabled:
+            method.id === "creditCard"
+              ? settings.cardEnabled
+              : settings.cashEnabled,
+        }))
+      );
     } catch (error) {
       console.error("Error fetching payment method settings:", error);
+      toast.error("Failed to load payment method settings");
     }
   };
 
   const fetchStripeRequirements = async (id: string) => {
     try {
       const requirements = await getStripeAccountRequirements(id);
-      if (!requirements.error) {
-        setStripeRequirements(requirements);
-      }
+      setStripeRequirements(requirements);
     } catch (error) {
       console.error("Error fetching Stripe requirements:", error);
+      // Don't show error toast for this as it's expected for restaurants without Stripe Connect
     }
   };
 
@@ -369,13 +384,155 @@ export default function PaymentsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6 max-w-7xl mx-auto">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="flex items-center space-x-2">
-            <Loader2 className="h-6 w-6 animate-spin" />
-            <span>Loading payment data...</span>
+      <div className="p-6 space-y-8 max-w-6xl mx-auto">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-6 w-96" />
           </div>
+          <Skeleton className="h-9 w-24" />
         </div>
+
+        {/* Payment Stats Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-48" />
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Stripe Connection Status Skeleton */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-12 w-12 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-4 w-48" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Payment Methods Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+              {[1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between p-4 rounded-lg border"
+                >
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-5 w-5" />
+                    <div className="space-y-1">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-48" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-6 w-11" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Stripe Account Status Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-48" />
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-6 w-16" />
+              </div>
+            </div>
+            <Separator />
+            <div className="space-y-4">
+              <Skeleton className="h-5 w-32" />
+              <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <Skeleton className="h-3 w-32" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <div className="flex justify-between">
+                      <Skeleton className="h-3 w-28" />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                    <div className="flex justify-between">
+                      <Skeleton className="h-3 w-36" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Skeleton className="h-10 flex-1" />
+              <Skeleton className="h-10 flex-1" />
+              <Skeleton className="h-10 flex-1" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Payment Transactions Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-48" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between p-4 border rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="space-y-1">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                  </div>
+                  <div className="text-right space-y-1">
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6">
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -776,7 +933,9 @@ export default function PaymentsPage() {
                       </p>
                       <div className="flex justify-between text-sm">
                         <span>Stripe Processing Fee:</span>
-                        <span className="font-medium">2.9% + CHF 0.30</span>
+                        <span className="font-medium">
+                          2.9% + {getCurrencySymbol(currency)} 0.30
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span>DineEasy Commission:</span>
@@ -784,7 +943,7 @@ export default function PaymentsPage() {
                       </div>
                       <div className="flex justify-between text-sm font-medium text-gray-900 pt-2 border-t">
                         <span>Total Fee per Card Transaction:</span>
-                        <span>4.9% + CHF 0.30</span>
+                        <span>4.9% + {getCurrencySymbol(currency)} 0.30</span>
                       </div>
                     </div>
 
@@ -808,19 +967,22 @@ export default function PaymentsPage() {
                       <div className="space-y-1 text-blue-800">
                         <div className="flex justify-between">
                           <span>Order Amount:</span>
-                          <span>CHF 100.00</span>
+                          <span>{formatCurrency(100, currency)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span>Stripe Fee (2.9% + CHF 0.30):</span>
-                          <span>- CHF 3.20</span>
+                          <span>
+                            Stripe Fee (2.9% + {getCurrencySymbol(currency)}{" "}
+                            0.30):
+                          </span>
+                          <span>- {formatCurrency(3.2, currency)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>DineEasy Commission (2%):</span>
-                          <span>- CHF 2.00</span>
+                          <span>- {formatCurrency(2.0, currency)}</span>
                         </div>
                         <div className="flex justify-between font-medium border-t border-blue-200 pt-1 mt-1">
                           <span>You Receive:</span>
-                          <span>CHF 94.80</span>
+                          <span>{formatCurrency(94.8, currency)}</span>
                         </div>
                       </div>
                     </div>

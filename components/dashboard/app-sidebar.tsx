@@ -516,18 +516,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     {restaurant.status}
                   </span>
                 </div>
-                {/* Restaurant Type Badge */}
-                <div className="mt-2">
-                  <Badge
-                    variant="secondary"
-                    className="text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-                  >
-                    {restaurant.type
-                      ? restaurant.type.charAt(0).toUpperCase() +
-                        restaurant.type.slice(1)
-                      : "Restaurant"}
-                  </Badge>
-                </div>
               </div>
             </div>
           </div>

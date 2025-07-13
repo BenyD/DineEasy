@@ -156,6 +156,8 @@ export default function SetupPage() {
     takeout_available: false,
   });
 
+  const [userEmail, setUserEmail] = useState<string>("");
+
   // Add state to track previous values for change detection
   const [previousValues, setPreviousValues] = useState({
     country: "",
@@ -340,6 +342,13 @@ export default function SetupPage() {
         router.push("/login");
         return;
       }
+
+      // Set the user's email for the business email field
+      setUserEmail(user.email || "");
+      setFormData((prev) => ({
+        ...prev,
+        email: user.email || "",
+      }));
 
       // Check if user should be on this page
       const onboardingStatus = await getOnboardingStatus(supabase);
@@ -727,38 +736,35 @@ export default function SetupPage() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="type">
-                          Restaurant Type{" "}
-                          <span className="text-red-500">*</span>
-                        </Label>
-                        <Select
-                          name="type"
-                          value={formData.type}
-                          onValueChange={(value) =>
-                            handleSelectChange("type", value)
-                          }
-                          required
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {RESTAURANT_TYPES.map((type) => (
-                              <SelectItem key={type.value} value={type.value}>
-                                {type.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {validationErrors.type && (
-                          <p className="text-red-500 text-xs mt-1">
-                            {validationErrors.type}
-                          </p>
-                        )}
-                      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="type">
+                        Restaurant Type <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        value={formData.type}
+                        onValueChange={(value) =>
+                          handleSelectChange("type", value)
+                        }
+                      >
+                        <SelectTrigger className="h-11">
+                          <SelectValue placeholder="Select restaurant type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RESTAURANT_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {validationErrors.type && (
+                        <p className="text-red-500 text-xs mt-1">
+                          {validationErrors.type}
+                        </p>
+                      )}
+                    </div>
 
+                    <div className="grid grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="cuisine">Cuisine Type</Label>
                         <Select
@@ -928,12 +934,16 @@ export default function SetupPage() {
                           name="email"
                           type="email"
                           value={formData.email}
-                          onChange={handleChange}
-                          placeholder="Enter your business email"
-                          className="h-11 pl-10"
+                          disabled
+                          className="h-11 pl-10 bg-gray-50 cursor-not-allowed"
                           required
                         />
                       </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        This is your signup email address. It will be used for
+                        all business communications, receipts, and
+                        notifications.
+                      </p>
                       {validationErrors.email && (
                         <p className="text-red-500 text-xs mt-1">
                           {validationErrors.email}

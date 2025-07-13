@@ -564,3 +564,398 @@ export const sendRefundNotificationEmail = async (
     throw error;
   }
 };
+
+export const sendPaymentFailedEmail = async (
+  email: string,
+  paymentData: {
+    invoiceId: string;
+    amount: number;
+    currency: string;
+    subscriptionPlan: string;
+    interval: string;
+    dueDate: string;
+    customerName?: string;
+    restaurantName?: string;
+    retryDate?: string;
+  }
+) => {
+  try {
+    const formattedAmount = (paymentData.amount / 100).toFixed(2);
+    const currencySymbol =
+      paymentData.currency === "USD"
+        ? "$"
+        : paymentData.currency === "EUR"
+          ? "€"
+          : paymentData.currency === "CHF"
+            ? "CHF"
+            : paymentData.currency;
+
+    // Helper function to title case plan names
+    const titleCasePlan = (plan: string) => {
+      return plan.charAt(0).toUpperCase() + plan.slice(1).toLowerCase();
+    };
+
+    const formattedPlan = titleCasePlan(paymentData.subscriptionPlan);
+
+    const { data, error } = await resend.emails.send({
+      from: "DineEasy <noreply@dineeasy.ch>",
+      to: email,
+      subject: "Payment Failed - Action Required",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #22c55e; margin: 0;">DineEasy</h1>
+            <p style="color: #666; margin: 5px 0;">Payment Notification</p>
+          </div>
+          
+          <div style="background-color: #f8d7da; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #dc3545;">
+            <h2 style="color: #721c24; margin: 0 0 15px 0;">Payment Failed</h2>
+            <p style="margin: 5px 0; color: #721c24;">We were unable to process your subscription payment.</p>
+          </div>
+          
+          <div style="background-color: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #333; margin: 0 0 15px 0;">Payment Details</h3>
+            
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Invoice ID:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right; font-weight: bold;">${paymentData.invoiceId}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Amount Due:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right; font-weight: bold; color: #dc3545;">${currencySymbol}${formattedAmount}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Plan:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${formattedPlan} Plan - ${paymentData.interval}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Due Date:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${paymentData.dueDate}</td>
+              </tr>
+              ${
+                paymentData.retryDate
+                  ? `
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Next Retry:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${paymentData.retryDate}</td>
+              </tr>
+              `
+                  : ""
+              }
+              ${
+                paymentData.customerName
+                  ? `
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Customer:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${paymentData.customerName}</td>
+              </tr>
+              `
+                  : ""
+              }
+              ${
+                paymentData.restaurantName
+                  ? `
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Restaurant:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${paymentData.restaurantName}</td>
+              </tr>
+              `
+                  : ""
+              }
+            </table>
+          </div>
+          
+          <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+            <h4 style="color: #856404; margin: 0 0 10px 0;">What you need to do:</h4>
+            <ul style="margin: 5px 0; color: #856404; font-size: 14px; padding-left: 20px;">
+              <li>Update your payment method in your billing settings</li>
+              <li>Ensure your card has sufficient funds</li>
+              <li>Check that your card hasn't expired</li>
+              <li>Contact your bank if there are any restrictions</li>
+            </ul>
+          </div>
+          
+          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h4 style="color: #333; margin: 0 0 10px 0;">What happens if payment continues to fail?</h4>
+            <ul style="margin: 5px 0; color: #666; font-size: 14px; padding-left: 20px;">
+              <li>Your subscription will be suspended after multiple failed attempts</li>
+              <li>You'll lose access to premium features</li>
+              <li>Your restaurant data will be preserved</li>
+              <li>You can reactivate anytime by updating your payment method</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+            <p style="color: #666; margin: 5px 0; font-size: 14px;">Need help? Contact our support team!</p>
+            <p style="color: #666; margin: 5px 0; font-size: 12px;">
+              We're here to help you resolve any payment issues quickly.
+            </p>
+          </div>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error("Resend API error:", error);
+      throw error;
+    }
+
+    console.log("Payment failed email sent successfully:", data);
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending payment failed email:", error);
+    throw error;
+  }
+};
+
+export const sendSubscriptionWelcomeEmail = async (
+  email: string,
+  subscriptionData: {
+    subscriptionId: string;
+    plan: string;
+    interval: string;
+    trialEndDate: string;
+    customerName?: string;
+    restaurantName?: string;
+    features: string[];
+  }
+) => {
+  try {
+    // Helper function to title case plan names
+    const titleCasePlan = (plan: string) => {
+      return plan.charAt(0).toUpperCase() + plan.slice(1).toLowerCase();
+    };
+
+    const formattedPlan = titleCasePlan(subscriptionData.plan);
+
+    const { data, error } = await resend.emails.send({
+      from: "DineEasy <noreply@dineeasy.ch>",
+      to: email,
+      subject: `Welcome to DineEasy ${formattedPlan} Plan!`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #22c55e; margin: 0;">DineEasy</h1>
+            <p style="color: #666; margin: 5px 0;">Welcome to Your New Subscription!</p>
+          </div>
+          
+          <div style="background-color: #d4edda; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #28a745;">
+            <h2 style="color: #155724; margin: 0 0 15px 0;">Welcome to DineEasy!</h2>
+            <p style="margin: 5px 0; color: #155724;">Your ${formattedPlan} Plan subscription is now active.</p>
+          </div>
+          
+          <div style="background-color: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #333; margin: 0 0 15px 0;">Subscription Details</h3>
+            
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Subscription ID:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right; font-weight: bold;">${subscriptionData.subscriptionId}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Plan:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${formattedPlan} Plan - ${subscriptionData.interval}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Trial Ends:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${subscriptionData.trialEndDate}</td>
+              </tr>
+              ${
+                subscriptionData.customerName
+                  ? `
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Customer:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${subscriptionData.customerName}</td>
+              </tr>
+              `
+                  : ""
+              }
+              ${
+                subscriptionData.restaurantName
+                  ? `
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Restaurant:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${subscriptionData.restaurantName}</td>
+              </tr>
+              `
+                  : ""
+              }
+            </table>
+          </div>
+          
+          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h4 style="color: #333; margin: 0 0 10px 0;">Your ${formattedPlan} Plan Features:</h4>
+            <ul style="margin: 5px 0; color: #666; font-size: 14px; padding-left: 20px;">
+              ${subscriptionData.features.map((feature) => `<li>${feature}</li>`).join("")}
+            </ul>
+          </div>
+          
+          <div style="background-color: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #007bff;">
+            <h4 style="color: #004085; margin: 0 0 10px 0;">Getting Started</h4>
+            <ul style="margin: 5px 0; color: #004085; font-size: 14px; padding-left: 20px;">
+              <li>Complete your restaurant setup in the dashboard</li>
+              <li>Set up your menu and pricing</li>
+              <li>Configure your payment settings</li>
+              <li>Start accepting orders from customers</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+            <p style="color: #666; margin: 5px 0; font-size: 14px;">Ready to get started?</p>
+            <p style="color: #666; margin: 5px 0; font-size: 12px;">
+              Log in to your dashboard to begin setting up your restaurant.
+            </p>
+          </div>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error("Resend API error:", error);
+      throw error;
+    }
+
+    console.log("Subscription welcome email sent successfully:", data);
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending subscription welcome email:", error);
+    throw error;
+  }
+};
+
+export const sendPaymentDisputeEmail = async (
+  email: string,
+  disputeData: {
+    disputeId: string;
+    amount: number;
+    currency: string;
+    reason: string;
+    date: string;
+    customerName?: string;
+    restaurantName?: string;
+    orderId?: string;
+  }
+) => {
+  try {
+    const formattedAmount = (disputeData.amount / 100).toFixed(2);
+    const currencySymbol =
+      disputeData.currency === "USD"
+        ? "$"
+        : disputeData.currency === "EUR"
+          ? "€"
+          : disputeData.currency === "CHF"
+            ? "CHF"
+            : disputeData.currency;
+
+    const { data, error } = await resend.emails.send({
+      from: "DineEasy <noreply@dineeasy.ch>",
+      to: email,
+      subject: "Payment Dispute Received",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #22c55e; margin: 0;">DineEasy</h1>
+            <p style="color: #666; margin: 5px 0;">Payment Dispute Notification</p>
+          </div>
+          
+          <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+            <h2 style="color: #856404; margin: 0 0 15px 0;">Payment Dispute Received</h2>
+            <p style="margin: 5px 0; color: #856404;">A customer has disputed a payment for your restaurant.</p>
+          </div>
+          
+          <div style="background-color: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #333; margin: 0 0 15px 0;">Dispute Details</h3>
+            
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Dispute ID:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right; font-weight: bold;">${disputeData.disputeId}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Amount Disputed:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right; font-weight: bold; color: #ffc107;">${currencySymbol}${formattedAmount}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Reason:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${disputeData.reason}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Date:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${disputeData.date}</td>
+              </tr>
+              ${
+                disputeData.orderId
+                  ? `
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Order ID:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${disputeData.orderId}</td>
+              </tr>
+              `
+                  : ""
+              }
+              ${
+                disputeData.customerName
+                  ? `
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Customer:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${disputeData.customerName}</td>
+              </tr>
+              `
+                  : ""
+              }
+              ${
+                disputeData.restaurantName
+                  ? `
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; color: #666;">Restaurant:</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: right;">${disputeData.restaurantName}</td>
+              </tr>
+              `
+                  : ""
+              }
+            </table>
+          </div>
+          
+          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h4 style="color: #333; margin: 0 0 10px 0;">What happens next?</h4>
+            <ul style="margin: 5px 0; color: #666; font-size: 14px; padding-left: 20px;">
+              <li>We'll review the dispute and gather evidence</li>
+              <li>You may be asked to provide additional documentation</li>
+              <li>The dispute will be resolved within 30-60 days</li>
+              <li>You'll be notified of the final decision</li>
+            </ul>
+          </div>
+          
+          <div style="background-color: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #007bff;">
+            <h4 style="color: #004085; margin: 0 0 10px 0;">How to respond:</h4>
+            <ul style="margin: 5px 0; color: #004085; font-size: 14px; padding-left: 20px;">
+              <li>Review the order details and customer communication</li>
+              <li>Gather any relevant documentation (receipts, delivery confirmations)</li>
+              <li>Contact our support team if you need assistance</li>
+              <li>Respond promptly to any requests for information</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+            <p style="color: #666; margin: 5px 0; font-size: 14px;">Need help with this dispute?</p>
+            <p style="color: #666; margin: 5px 0; font-size: 12px;">
+              Contact our support team for assistance with dispute resolution.
+            </p>
+          </div>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error("Resend API error:", error);
+      throw error;
+    }
+
+    console.log("Payment dispute email sent successfully:", data);
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending payment dispute email:", error);
+    throw error;
+  }
+};

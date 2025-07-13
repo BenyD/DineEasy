@@ -6,6 +6,9 @@ import {
   sendInvoiceReceipt,
   sendSubscriptionCancellationEmail,
   sendRefundNotificationEmail,
+  sendPaymentFailedEmail,
+  sendSubscriptionWelcomeEmail,
+  sendPaymentDisputeEmail,
 } from "@/lib/email";
 import type { Stripe } from "stripe";
 
@@ -257,6 +260,74 @@ export async function POST(req: Request) {
         // 1. Store application IDs in the database
         // 2. Use a different webhook event
         // 3. Handle this through Stripe dashboard notifications
+
+        break;
+      }
+
+      case "account.application.authorized": {
+        const application = event.data.object as any; // Use any for now since Stripe types might be incomplete
+
+        console.log("Processing account.application.authorized event:", {
+          applicationId: application.id,
+          accountId: application.account,
+        });
+
+        // When an account is authorized, we should update the restaurant status
+        if (application.account) {
+          try {
+            // Get the account details from Stripe
+            const account = await stripe.accounts.retrieve(
+              application.account as string
+            );
+
+            // Find restaurant by Stripe account ID
+            const { data: restaurant, error: fetchError } = await adminSupabase
+              .rpc("get_restaurant_by_stripe_account", {
+                p_stripe_account_id: application.account as string,
+              })
+              .single();
+
+            if (fetchError || !restaurant) {
+              console.error(
+                "No restaurant found for authorized account:",
+                application.account
+              );
+              break;
+            }
+
+            const stripeRestaurant = restaurant as StripeAccountRestaurant;
+
+            // Update restaurant with current account status
+            const { error: updateError } = await adminSupabase.rpc(
+              "update_stripe_connect_status",
+              {
+                p_restaurant_id: stripeRestaurant.id,
+                p_stripe_account_id: application.account as string,
+                p_charges_enabled: account.charges_enabled,
+                p_requirements: account.requirements,
+              }
+            );
+
+            if (updateError) {
+              console.error("Error updating restaurant after authorization:", {
+                restaurantId: stripeRestaurant.id,
+                accountId: application.account,
+                error: updateError,
+              });
+            } else {
+              console.log(
+                "Successfully updated restaurant after account authorization:",
+                {
+                  restaurantId: stripeRestaurant.id,
+                  accountId: application.account,
+                  chargesEnabled: account.charges_enabled,
+                }
+              );
+            }
+          } catch (error) {
+            console.error("Error processing account authorization:", error);
+          }
+        }
 
         break;
       }
@@ -577,6 +648,88 @@ export async function POST(req: Request) {
           currency,
         });
 
+        // Send welcome email for new trial subscriptions
+        if (
+          event.type === "customer.subscription.created" &&
+          subscription.status === "trialing"
+        ) {
+          try {
+            // Get Stripe customer email
+            const customer = (await stripe.customers.retrieve(
+              subscription.customer as string
+            )) as Stripe.Customer;
+
+            if (customer.email && customer.email.length > 0) {
+              // Get restaurant details for name
+              const { data: restaurant } = await adminSupabase
+                .from("restaurants")
+                .select("name")
+                .eq("id", restaurantId)
+                .single();
+
+              // Get plan features based on plan type
+              const getPlanFeatures = (planType: string) => {
+                switch (planType.toLowerCase()) {
+                  case "starter":
+                    return [
+                      "Up to 100 orders per month",
+                      "Basic menu management",
+                      "QR code ordering",
+                      "Email support",
+                    ];
+                  case "pro":
+                    return [
+                      "Up to 500 orders per month",
+                      "Advanced menu management",
+                      "QR code ordering",
+                      "Kitchen display system",
+                      "Analytics dashboard",
+                      "Priority support",
+                    ];
+                  case "elite":
+                    return [
+                      "Unlimited orders",
+                      "Advanced menu management",
+                      "QR code ordering",
+                      "Kitchen display system",
+                      "Advanced analytics",
+                      "Staff management",
+                      "Multi-location support",
+                      "Dedicated support",
+                    ];
+                  default:
+                    return ["Basic features included"];
+                }
+              };
+
+              const trialEndDate = (subscription as any).trial_end
+                ? new Date(
+                    (subscription as any).trial_end * 1000
+                  ).toLocaleDateString()
+                : "14 days from now";
+
+              await sendSubscriptionWelcomeEmail(customer.email, {
+                subscriptionId: subscription.id,
+                plan: plan,
+                interval: interval,
+                trialEndDate: trialEndDate,
+                customerName: customer.name || restaurant?.name,
+                restaurantName: restaurant?.name,
+                features: getPlanFeatures(plan),
+              });
+
+              console.log("Welcome email sent for new subscription:", {
+                subscriptionId: subscription.id,
+                customerEmail: customer.email,
+                plan: plan,
+              });
+            }
+          } catch (emailError) {
+            console.error("Error sending welcome email:", emailError);
+            // Don't fail the webhook if email fails
+          }
+        }
+
         // If this is an upgrade, mark the old subscription as an upgrade before it gets deleted
         if (
           subscription.metadata.isUpgrade === "true" &&
@@ -691,40 +844,50 @@ export async function POST(req: Request) {
         // Send cancellation email notification only if this is not a plan upgrade
         if (!newSubscription && !isMarkedAsUpgrade) {
           try {
-            // Get restaurant details for email
-            const { data: restaurant, error: restaurantError } =
-              await adminSupabase
-                .from("restaurants")
-                .select("name, email")
-                .eq("id", restaurantId)
-                .single();
+            // Get Stripe customer email
+            const customer = (await stripe.customers.retrieve(
+              subscription.customer as string
+            )) as Stripe.Customer;
 
-            if (!restaurantError && restaurant) {
-              const plan = subscription.metadata.plan || "Unknown Plan";
-              const interval = subscription.metadata.interval || "monthly";
-              const cancelDate = subscription.canceled_at
-                ? new Date(subscription.canceled_at * 1000).toLocaleDateString()
-                : new Date().toLocaleDateString();
-              const endDate = (subscription as any).current_period_end
-                ? new Date(
-                    (subscription as any).current_period_end * 1000
-                  ).toLocaleDateString()
-                : "Immediately";
+            if (customer.email && customer.email.length > 0) {
+              // Get restaurant details for name
+              const { data: restaurant, error: restaurantError } =
+                await adminSupabase
+                  .from("restaurants")
+                  .select("name")
+                  .eq("id", restaurantId)
+                  .single();
 
-              await sendSubscriptionCancellationEmail(restaurant.email, {
-                subscriptionId: subscription.id,
-                plan: plan,
-                interval: interval,
-                cancelDate: cancelDate,
-                endDate: endDate,
-                restaurantName: restaurant.name,
-                reason: subscription.cancellation_details?.reason || undefined,
-              });
+              if (!restaurantError && restaurant) {
+                const plan = subscription.metadata.plan || "Unknown Plan";
+                const interval = subscription.metadata.interval || "monthly";
+                const cancelDate = subscription.canceled_at
+                  ? new Date(
+                      subscription.canceled_at * 1000
+                    ).toLocaleDateString()
+                  : new Date().toLocaleDateString();
+                const endDate = (subscription as any).current_period_end
+                  ? new Date(
+                      (subscription as any).current_period_end * 1000
+                    ).toLocaleDateString()
+                  : "Immediately";
 
-              console.log(
-                "Subscription cancellation email sent to:",
-                restaurant.email
-              );
+                await sendSubscriptionCancellationEmail(customer.email, {
+                  subscriptionId: subscription.id,
+                  plan: plan,
+                  interval: interval,
+                  cancelDate: cancelDate,
+                  endDate: endDate,
+                  restaurantName: restaurant.name,
+                  reason:
+                    subscription.cancellation_details?.reason || undefined,
+                });
+
+                console.log(
+                  "Subscription cancellation email sent to:",
+                  customer.email
+                );
+              }
             }
           } catch (emailError) {
             console.error("Error sending cancellation email:", emailError);
@@ -1151,35 +1314,43 @@ export async function POST(req: Request) {
 
                 if (!isPlanUpgrade) {
                   try {
-                    // Get restaurant details for email
-                    const { data: restaurant, error: restaurantError } =
-                      await adminSupabase
-                        .from("restaurants")
-                        .select("name, email")
-                        .eq("id", subscription.metadata.restaurantId)
-                        .single();
+                    // Get Stripe customer email
+                    const customer = (await stripe.customers.retrieve(
+                      subscription.customer as string
+                    )) as Stripe.Customer;
 
-                    if (!restaurantError && restaurant) {
-                      const refundReason =
-                        charge.metadata.refundReason || "Customer request";
-                      const refundDate = new Date().toLocaleDateString();
-                      const plan = subscription.metadata.plan || "Unknown Plan";
+                    if (customer.email && customer.email.length > 0) {
+                      // Get restaurant details for name
+                      const { data: restaurant, error: restaurantError } =
+                        await adminSupabase
+                          .from("restaurants")
+                          .select("name")
+                          .eq("id", subscription.metadata.restaurantId)
+                          .single();
 
-                      await sendRefundNotificationEmail(restaurant.email, {
-                        refundId: charge.refunds?.data?.[0]?.id || "unknown",
-                        amount: charge.amount_refunded,
-                        currency: charge.currency,
-                        reason: refundReason,
-                        date: refundDate,
-                        restaurantName: restaurant.name,
-                        subscriptionPlan: plan,
-                        isFullRefund: isFullRefund,
-                      });
+                      if (!restaurantError && restaurant) {
+                        const refundReason =
+                          charge.metadata.refundReason || "Customer request";
+                        const refundDate = new Date().toLocaleDateString();
+                        const plan =
+                          subscription.metadata.plan || "Unknown Plan";
 
-                      console.log(
-                        "Subscription refund email sent to:",
-                        restaurant.email
-                      );
+                        await sendRefundNotificationEmail(customer.email, {
+                          refundId: charge.refunds?.data?.[0]?.id || "unknown",
+                          amount: charge.amount_refunded,
+                          currency: charge.currency,
+                          reason: refundReason,
+                          date: refundDate,
+                          restaurantName: restaurant.name,
+                          subscriptionPlan: plan,
+                          isFullRefund: isFullRefund,
+                        });
+
+                        console.log(
+                          "Subscription refund email sent to:",
+                          customer.email
+                        );
+                      }
                     }
                   } catch (emailError) {
                     console.error("Error sending refund email:", emailError);
@@ -1227,34 +1398,41 @@ export async function POST(req: Request) {
 
           // Send refund notification email for customer payments
           try {
-            // Get restaurant details for email
-            const { data: restaurant, error: restaurantError } =
-              await adminSupabase
-                .from("restaurants")
-                .select("name, email")
-                .eq("id", restaurantId)
-                .single();
+            // Get Stripe customer email from the charge
+            const customer = (await stripe.customers.retrieve(
+              charge.customer as string
+            )) as Stripe.Customer;
 
-            if (!restaurantError && restaurant) {
-              const refundReason =
-                charge.metadata.refundReason || "Customer request";
-              const refundDate = new Date().toLocaleDateString();
-              const isFullRefund = charge.amount_refunded === charge.amount;
+            if (customer.email && customer.email.length > 0) {
+              // Get restaurant details for name
+              const { data: restaurant, error: restaurantError } =
+                await adminSupabase
+                  .from("restaurants")
+                  .select("name")
+                  .eq("id", restaurantId)
+                  .single();
 
-              await sendRefundNotificationEmail(restaurant.email, {
-                refundId: charge.refunds?.data?.[0]?.id || "unknown",
-                amount: charge.amount_refunded,
-                currency: charge.currency,
-                reason: refundReason,
-                date: refundDate,
-                restaurantName: restaurant.name,
-                isFullRefund: isFullRefund,
-              });
+              if (!restaurantError && restaurant) {
+                const refundReason =
+                  charge.metadata.refundReason || "Customer request";
+                const refundDate = new Date().toLocaleDateString();
+                const isFullRefund = charge.amount_refunded === charge.amount;
 
-              console.log(
-                "Customer payment refund email sent to:",
-                restaurant.email
-              );
+                await sendRefundNotificationEmail(customer.email, {
+                  refundId: charge.refunds?.data?.[0]?.id || "unknown",
+                  amount: charge.amount_refunded,
+                  currency: charge.currency,
+                  reason: refundReason,
+                  date: refundDate,
+                  restaurantName: restaurant.name,
+                  isFullRefund: isFullRefund,
+                });
+
+                console.log(
+                  "Customer payment refund email sent to:",
+                  customer.email
+                );
+              }
             }
           } catch (emailError) {
             console.error("Error sending refund email:", emailError);
@@ -1311,6 +1489,46 @@ export async function POST(req: Request) {
         }
 
         console.log("Successfully updated payment to disputed:", charge.id);
+
+        // Send payment dispute email notification
+        try {
+          // Get Stripe customer email from the charge
+          const customer = (await stripe.customers.retrieve(
+            charge.customer as string
+          )) as Stripe.Customer;
+
+          if (customer.email && customer.email.length > 0) {
+            // Get restaurant details for name
+            const { data: restaurant, error: restaurantError } =
+              await adminSupabase
+                .from("restaurants")
+                .select("name")
+                .eq("id", restaurantId)
+                .single();
+
+            if (!restaurantError && restaurant) {
+              await sendPaymentDisputeEmail(customer.email, {
+                disputeId: dispute.id,
+                amount: dispute.amount,
+                currency: dispute.currency,
+                reason: dispute.reason || "Customer dispute",
+                date: new Date().toLocaleDateString(),
+                restaurantName: restaurant.name,
+                orderId: charge.metadata.orderId,
+              });
+
+              console.log("Payment dispute email sent to customer:", {
+                disputeId: dispute.id,
+                customerEmail: customer.email,
+                chargeId: charge.id,
+              });
+            }
+          }
+        } catch (emailError) {
+          console.error("Error sending payment dispute email:", emailError);
+          // Don't fail the webhook if email fails
+        }
+
         break;
       }
 
@@ -1447,15 +1665,13 @@ export async function POST(req: Request) {
 
           // Send invoice receipt email
           try {
-            // Get customer email from Stripe
+            // Get Stripe customer email
             const customer = (await stripe.customers.retrieve(
               subscription.customer as string
             )) as Stripe.Customer;
 
             if (customer.email && customer.email.length > 0) {
-              const customerEmail = customer.email;
-
-              // Get restaurant details
+              // Get restaurant details for name
               const { data: restaurant } = await adminSupabase
                 .from("restaurants")
                 .select("name")
@@ -1478,13 +1694,13 @@ export async function POST(req: Request) {
                   ).toLocaleDateString()
                 : undefined;
 
-              await sendInvoiceReceipt(customerEmail, {
+              await sendInvoiceReceipt(customer.email, {
                 invoiceId: invoice.id || "unknown",
                 amount: invoice.amount_paid,
                 currency: invoice.currency,
                 description: `DineEasy ${subscription.metadata.plan} Plan - ${subscription.metadata.interval}`,
                 date: new Date().toLocaleDateString(),
-                customerName: customer.name || undefined,
+                customerName: customer.name || restaurant?.name,
                 restaurantName: restaurant?.name,
                 subscriptionPlan: subscription.metadata.plan,
                 billingPeriod: `${billingPeriodStart.toLocaleDateString()} - ${billingPeriodEnd.toLocaleDateString()}`,
@@ -1618,6 +1834,48 @@ export async function POST(req: Request) {
               newStatus: subscription.status,
             }
           );
+
+          // Send payment failed email notification
+          try {
+            // Get Stripe customer email
+            const customer = (await stripe.customers.retrieve(
+              subscription.customer as string
+            )) as Stripe.Customer;
+
+            if (customer.email && customer.email.length > 0) {
+              // Get restaurant details for name
+              const { data: restaurant } = await adminSupabase
+                .from("restaurants")
+                .select("name")
+                .eq("id", subscription.metadata.restaurantId)
+                .single();
+
+              // Calculate retry date (usually 3 days later)
+              const retryDate = new Date();
+              retryDate.setDate(retryDate.getDate() + 3);
+
+              await sendPaymentFailedEmail(customer.email, {
+                invoiceId: invoice.id || "unknown",
+                amount: invoice.amount_due,
+                currency: invoice.currency,
+                subscriptionPlan: subscription.metadata.plan,
+                interval: subscription.metadata.interval,
+                dueDate: new Date().toLocaleDateString(),
+                customerName: customer.name || restaurant?.name,
+                restaurantName: restaurant?.name,
+                retryDate: retryDate.toLocaleDateString(),
+              });
+
+              console.log("Payment failed email sent:", {
+                subscriptionId: subscription.id,
+                customerEmail: customer.email,
+                invoiceId: invoice.id,
+              });
+            }
+          } catch (emailError) {
+            console.error("Error sending payment failed email:", emailError);
+            // Don't fail the webhook if email fails
+          }
         }
 
         break;
@@ -1811,13 +2069,13 @@ export async function POST(req: Request) {
 
           // Send invoice receipt email for plan changes and new subscriptions
           try {
-            // Get customer email from Stripe
+            // Get Stripe customer email
             const customer = (await stripe.customers.retrieve(
               subscription.customer as string
             )) as Stripe.Customer;
 
             if (customer.email && customer.email.length > 0) {
-              // Get restaurant details
+              // Get restaurant details for name
               const { data: restaurant } = await adminSupabase
                 .from("restaurants")
                 .select("name")
@@ -1861,7 +2119,7 @@ export async function POST(req: Request) {
                 currency: subscription.metadata.currency || "USD",
                 description: description,
                 date: new Date().toLocaleDateString(),
-                customerName: customer.name || undefined,
+                customerName: customer.name || restaurant?.name,
                 restaurantName: restaurant?.name,
                 subscriptionPlan: subscription.metadata.plan,
                 billingPeriod: `${billingPeriodStart.toLocaleDateString()} - ${billingPeriodEnd.toLocaleDateString()}`,

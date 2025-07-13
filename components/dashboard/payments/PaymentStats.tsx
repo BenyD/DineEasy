@@ -13,190 +13,239 @@ import {
 } from "lucide-react";
 import type { PaymentStats } from "@/lib/actions/payments";
 import { formatCurrency, formatCurrencyCompact } from "@/lib/utils/currency";
+import { useMemo } from "react";
+import { memo } from "react";
 
 interface PaymentStatsProps {
   stats: PaymentStats;
   isLoading?: boolean;
   onRefresh?: () => void;
+  currency?: string; // Add currency prop
 }
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.2,
-    },
-  },
-};
+const PaymentStats = memo(
+  ({
+    stats,
+    isLoading = false,
+    onRefresh,
+    currency = "USD", // Default to USD
+  }: PaymentStatsProps) => {
+    // Validate and provide fallbacks for stats data
+    const safeStats = useMemo(
+      () => ({
+        totalRevenue: stats?.totalRevenue ?? 0,
+        totalTransactions: stats?.totalTransactions ?? 0,
+        averageOrderValue: stats?.averageOrderValue ?? 0,
+        thisMonthRevenue: stats?.thisMonthRevenue ?? 0,
+        thisMonthTransactions: stats?.thisMonthTransactions ?? 0,
+        lastMonthRevenue: stats?.lastMonthRevenue ?? 0,
+        lastMonthTransactions: stats?.lastMonthTransactions ?? 0,
+        revenueGrowth: stats?.revenueGrowth ?? 0,
+        transactionGrowth: stats?.transactionGrowth ?? 0,
+        refundedAmount: stats?.refundedAmount ?? 0,
+        refundedTransactions: stats?.refundedTransactions ?? 0,
+      }),
+      [stats]
+    );
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0 },
-  hover: { y: -5, transition: { duration: 0.2 } },
-};
+    // Calculate refund percentage safely
+    const refundPercentage = useMemo(
+      () =>
+        safeStats.totalRevenue > 0
+          ? ((safeStats.refundedAmount / safeStats.totalRevenue) * 100).toFixed(
+              1
+            )
+          : "0.0",
+      [safeStats.totalRevenue, safeStats.refundedAmount]
+    );
 
-export default function PaymentStats({
-  stats,
-  isLoading = false,
-  onRefresh,
-}: PaymentStatsProps) {
-  const statCards = [
-    {
-      title: "Total Revenue",
-      value: formatCurrency(stats.totalRevenue, "USD"),
-      subtitle: "All time",
-      icon: DollarSign,
-      color: "text-green-600",
-      bgColor: "bg-green-100",
-    },
-    {
-      title: "Total Transactions",
-      value: stats.totalTransactions.toString(),
-      subtitle: "Completed payments",
-      icon: TrendingUp,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100",
-    },
-    {
-      title: "Average Order",
-      value: formatCurrency(stats.averageOrderValue, "USD"),
-      subtitle: "Per transaction",
-      icon: Banknote,
-      color: "text-purple-600",
-      bgColor: "bg-purple-100",
-    },
-    {
-      title: "This Month",
-      value: formatCurrency(stats.thisMonthRevenue, "USD"),
-      subtitle: "Current month",
-      icon: CreditCard,
-      color: "text-orange-600",
-      bgColor: "bg-orange-100",
-    },
-  ];
+    const statCards = useMemo(
+      () => [
+        {
+          title: "Total Revenue",
+          value: formatCurrency(safeStats.totalRevenue, currency),
+          subtitle: "All time",
+          icon: DollarSign,
+          color: "text-green-600",
+          bgColor: "bg-green-100",
+        },
+        {
+          title: "Total Transactions",
+          value: safeStats.totalTransactions.toString(),
+          subtitle: "Completed payments",
+          icon: TrendingUp,
+          color: "text-blue-600",
+          bgColor: "bg-blue-100",
+        },
+        {
+          title: "Average Order",
+          value: formatCurrency(safeStats.averageOrderValue, currency),
+          subtitle: "Per transaction",
+          icon: Banknote,
+          color: "text-purple-600",
+          bgColor: "bg-purple-100",
+        },
+        {
+          title: "This Month",
+          value: formatCurrency(safeStats.thisMonthRevenue, currency),
+          subtitle: "Current month",
+          icon: CreditCard,
+          color: "text-orange-600",
+          bgColor: "bg-orange-100",
+        },
+      ],
+      [safeStats, currency]
+    );
 
-  return (
-    <div className="space-y-6">
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-        className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
-      >
-        {statCards.map((card, index) => (
-          <motion.div
-            key={card.title}
-            variants={cardVariants}
-            whileHover="hover"
-            className="transform transition-all duration-200"
-          >
-            <Card className="h-full">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
+    const containerVariants = {
+      hidden: { opacity: 0 },
+      show: {
+        opacity: 1,
+        transition: {
+          staggerChildren: 0.1,
+          delayChildren: 0.2,
+        },
+      },
+    };
+
+    const cardVariants = {
+      hidden: { opacity: 0, y: 20 },
+      show: { opacity: 1, y: 0 },
+      hover: { y: -5, transition: { duration: 0.2 } },
+    };
+
+    return (
+      <div className="space-y-6">
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
+        >
+          {statCards.map((card, index) => (
+            <motion.div
+              key={card.title}
+              variants={cardVariants}
+              whileHover="hover"
+              className="transform transition-all duration-200"
+            >
+              <Card className="h-full">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        {card.title}
+                      </p>
+                      <p
+                        className="text-2xl font-bold text-gray-900 mt-1"
+                        aria-label={`${card.title}: ${card.value}`}
+                      >
+                        {isLoading ? null : card.value}
+                      </p>
+                      {isLoading ? (
+                        <div
+                          className="h-8 w-20 bg-gray-200 rounded animate-pulse mt-1"
+                          aria-label="Loading"
+                        />
+                      ) : null}
+                      <p className="text-xs text-gray-500 mt-1">
+                        {card.subtitle}
+                      </p>
+                    </div>
+                    <div
+                      className={`p-3 rounded-lg ${card.bgColor}`}
+                      aria-hidden="true"
+                    >
+                      <card.icon className={`h-6 w-6 ${card.color}`} />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </motion.div>
+
+        {/* Additional Stats */}
+        <motion.div
+          variants={cardVariants}
+          initial="hidden"
+          animate="show"
+          className="grid gap-6 md:grid-cols-2"
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Monthly Comparison</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <TrendingUp className="h-5 w-5 text-green-600" />
+                  </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      {card.title}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">
-                      {isLoading ? null : card.value}
-                    </p>
-                    {isLoading ? (
-                      <div className="h-8 w-20 bg-gray-200 rounded animate-pulse mt-1" />
-                    ) : null}
-                    <p className="text-xs text-gray-500 mt-1">
-                      {card.subtitle}
+                    <p className="font-medium">This Month</p>
+                    <p className="text-sm text-gray-500">
+                      {formatCurrency(safeStats.thisMonthRevenue, currency)}{" "}
+                      revenue
                     </p>
                   </div>
-                  <div className={`p-3 rounded-lg ${card.bgColor}`}>
-                    <card.icon className={`h-6 w-6 ${card.color}`} />
+                </div>
+                <Badge variant="secondary">
+                  {safeStats.thisMonthTransactions} transactions
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Banknote className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Last Month</p>
+                    <p className="text-sm text-gray-500">
+                      {formatCurrency(safeStats.lastMonthRevenue, currency)}{" "}
+                      revenue
+                    </p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </motion.div>
+                <Badge variant="secondary">
+                  {safeStats.lastMonthTransactions} transactions
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Additional Stats */}
-      <motion.div
-        variants={cardVariants}
-        initial="hidden"
-        animate="show"
-        className="grid gap-6 md:grid-cols-2"
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Monthly Comparison</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Refunds & Returns</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <AlertCircle className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Refunded Amount</p>
+                    <p className="text-sm text-gray-500">
+                      Total refunds processed
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium">This Month</p>
-                  <p className="text-sm text-gray-500">
-                    {formatCurrency(stats.thisMonthRevenue, "USD")} revenue
+                <div className="text-right">
+                  <p className="font-medium text-red-600">
+                    {formatCurrency(safeStats.refundedAmount, currency)}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {refundPercentage}% of revenue
                   </p>
                 </div>
               </div>
-              <Badge variant="secondary">
-                {stats.thisMonthTransactions} transactions
-              </Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Banknote className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="font-medium">Last Month</p>
-                  <p className="text-sm text-gray-500">
-                    {formatCurrency(stats.lastMonthRevenue, "USD")} revenue
-                  </p>
-                </div>
-              </div>
-              <Badge variant="secondary">
-                {stats.lastMonthTransactions} transactions
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
+);
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Refunds & Returns</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                </div>
-                <div>
-                  <p className="font-medium">Refunded Amount</p>
-                  <p className="text-sm text-gray-500">
-                    Total refunds processed
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="font-medium text-red-600">
-                  {formatCurrency(stats.refundedAmount, "USD")}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {stats.totalTransactions > 0
-                    ? `${((stats.refundedAmount / stats.totalRevenue) * 100).toFixed(1)}% of revenue`
-                    : "0% of revenue"}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-    </div>
-  );
-}
+export default PaymentStats;

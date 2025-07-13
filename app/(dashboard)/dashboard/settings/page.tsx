@@ -43,6 +43,7 @@ import {
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 import { CURRENCIES, COUNTRY_OPTIONS, type Currency } from "@/lib/constants";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const DAYS_OF_WEEK = [
   "monday",
@@ -195,10 +196,9 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Update restaurant data
+      // Update restaurant data (email is locked and cannot be changed)
       await updateRestaurant({
         name: formData.name,
-        email: formData.email,
         phone: formData.phone,
         address: formData.address,
         city: formData.city,
@@ -254,10 +254,128 @@ export default function SettingsPage() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[400px]">
-        <div className="flex items-center space-x-2">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Loading restaurant settings...</span>
+      <div className="p-6 space-y-6 max-w-5xl mx-auto">
+        {/* Header Skeleton */}
+        <div className="space-y-1">
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-6 w-80" />
+        </div>
+
+        {/* Tabs Skeleton */}
+        <div className="space-y-8">
+          <div className="flex space-x-2 max-w-[400px]">
+            <Skeleton className="h-10 w-24" />
+            <Skeleton className="h-10 w-32" />
+          </div>
+
+          {/* Restaurant Info Tab Content Skeleton */}
+          <div className="space-y-6">
+            {/* Basic Information Card */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-48" />
+                  <Skeleton className="h-4 w-64" />
+                </div>
+                <Skeleton className="h-10 w-24" />
+              </CardHeader>
+              <CardContent className="space-y-8">
+                {/* Media Section */}
+                <div className="space-y-6">
+                  <Skeleton className="h-6 w-20" />
+
+                  {/* Cover Photo Skeleton */}
+                  <div className="space-y-3">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-60 w-full rounded-lg" />
+                    <Skeleton className="h-4 w-64" />
+                  </div>
+
+                  {/* Logo Skeleton */}
+                  <div className="space-y-3">
+                    <Skeleton className="h-4 w-28" />
+                    <div className="flex items-center gap-4">
+                      <Skeleton className="h-32 w-32 rounded-lg" />
+                      <Skeleton className="h-10 w-24" />
+                    </div>
+                    <Skeleton className="h-4 w-56" />
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Basic Details */}
+                <div className="space-y-6">
+                  <Skeleton className="h-6 w-32" />
+
+                  {/* Form Fields Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <div key={i} className="space-y-2">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Textarea */}
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-24 w-full" />
+                  </div>
+
+                  {/* Select Fields */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="space-y-2">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Business Details */}
+                <div className="space-y-6">
+                  <Skeleton className="h-6 w-36" />
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="space-y-2">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Opening Hours */}
+                <div className="space-y-6">
+                  <Skeleton className="h-6 w-32" />
+
+                  <div className="space-y-4">
+                    {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between p-4 border rounded-lg"
+                      >
+                        <Skeleton className="h-4 w-20" />
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-10 w-20" />
+                          <span className="text-gray-400">to</span>
+                          <Skeleton className="h-10 w-20" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     );
@@ -544,8 +662,14 @@ export default function SettingsPage() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="currency" className="text-base">
+                          <Label
+                            htmlFor="currency"
+                            className="text-base flex items-center gap-2"
+                          >
                             Currency
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                              Locked
+                            </span>
                           </Label>
                           <Select
                             value={formData.currency}
@@ -555,9 +679,9 @@ export default function SettingsPage() {
                                 currency: value as Currency,
                               })
                             }
-                            disabled={!isEditing}
+                            disabled={true}
                           >
-                            <SelectTrigger className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                            <SelectTrigger className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500 bg-gray-50 cursor-not-allowed">
                               <SelectValue placeholder="Select currency" />
                             </SelectTrigger>
                             <SelectContent>
@@ -568,12 +692,10 @@ export default function SettingsPage() {
                               ))}
                             </SelectContent>
                           </Select>
-                          {formData.country && (
-                            <p className="text-sm text-gray-500">
-                              💡 Currency automatically set based on your
-                              country selection
-                            </p>
-                          )}
+                          <p className="text-sm text-gray-500">
+                            🔒 Currency is locked and cannot be changed after
+                            setup
+                          </p>
                         </div>
 
                         <div className="md:col-span-2">
@@ -605,8 +727,14 @@ export default function SettingsPage() {
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <Label htmlFor="email" className="text-base">
+                          <Label
+                            htmlFor="email"
+                            className="text-base flex items-center gap-2"
+                          >
                             Email Address
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                              Locked
+                            </span>
                           </Label>
                           <Input
                             id="email"
@@ -618,9 +746,14 @@ export default function SettingsPage() {
                                 email: e.target.value,
                               })
                             }
-                            className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                            disabled={!isEditing}
+                            className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500 bg-gray-50 cursor-not-allowed"
+                            disabled={true}
                           />
+                          <p className="text-sm text-gray-500">
+                            🔒 Email address is locked and cannot be changed.
+                            This is your signup email used for all business
+                            communications.
+                          </p>
                         </div>
 
                         <div className="space-y-2">
@@ -791,8 +924,14 @@ export default function SettingsPage() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="country" className="text-base">
+                          <Label
+                            htmlFor="country"
+                            className="text-base flex items-center gap-2"
+                          >
                             Country
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                              Locked
+                            </span>
                           </Label>
                           <Select
                             value={formData.country}
@@ -812,9 +951,9 @@ export default function SettingsPage() {
 
                               setFormData(newFormData);
                             }}
-                            disabled={!isEditing}
+                            disabled={true}
                           >
-                            <SelectTrigger className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                            <SelectTrigger className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500 bg-gray-50 cursor-not-allowed">
                               <SelectValue placeholder="Select your country" />
                             </SelectTrigger>
                             <SelectContent>
@@ -828,6 +967,10 @@ export default function SettingsPage() {
                               ))}
                             </SelectContent>
                           </Select>
+                          <p className="text-sm text-gray-500">
+                            🔒 Country is locked and cannot be changed after
+                            setup
+                          </p>
                         </div>
                       </div>
                     </motion.div>

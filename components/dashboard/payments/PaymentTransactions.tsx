@@ -49,8 +49,42 @@ export default function PaymentTransactions({
     null
   );
 
+  // Validate and filter transactions
+  const validTransactions = transactions.filter((transaction) => {
+    return (
+      transaction?.id &&
+      typeof transaction.amount === "number" &&
+      transaction.currency &&
+      transaction.status &&
+      transaction.method &&
+      transaction.created_at
+    );
+  });
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return "Invalid date";
+      }
+
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (error) {
+      console.error("Error formatting date:", dateString, error);
+      return "Invalid date";
+    }
+  };
+
   const getStatusColor = (status: string) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case "completed":
         return "bg-green-100 text-green-800";
       case "pending":
@@ -65,7 +99,7 @@ export default function PaymentTransactions({
   };
 
   const getMethodIcon = (method: string) => {
-    switch (method) {
+    switch (method?.toLowerCase()) {
       case "card":
         return <CreditCard className="h-4 w-4" />;
       case "cash":
@@ -73,17 +107,6 @@ export default function PaymentTransactions({
       default:
         return <DollarSign className="h-4 w-4" />;
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   };
 
   const toggleExpanded = (transactionId: string) => {
@@ -134,7 +157,7 @@ export default function PaymentTransactions({
             animate="show"
             className="space-y-4"
           >
-            {transactions.map((transaction) => (
+            {validTransactions.map((transaction) => (
               <motion.div
                 key={transaction.id}
                 variants={itemVariants}

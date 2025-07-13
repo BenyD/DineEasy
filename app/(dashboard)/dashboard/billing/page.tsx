@@ -459,7 +459,7 @@ export default function BillingPage() {
                       </h3>
                       <p className="text-sm text-amber-700 mt-1">
                         Your subscription has been cancelled, but you still have
-                        access to all pro features.
+                        access to all {billingData.plan.toLowerCase()} features.
                       </p>
                     </div>
                     <Badge
@@ -475,7 +475,7 @@ export default function BillingPage() {
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
                         <p className="text-sm font-medium text-gray-700">
-                          Pro features available until
+                          {billingData.plan} features available until
                         </p>
                         <p className="text-lg font-bold text-amber-800">
                           {formatDate(
@@ -535,7 +535,7 @@ export default function BillingPage() {
                         <p className="mt-1">
                           After your access ends, you'll be downgraded to the
                           free plan. You can reactivate anytime to restore all
-                          pro features.
+                          {billingData.plan.toLowerCase()} features.
                         </p>
                       </div>
                     </div>
@@ -710,7 +710,7 @@ export default function BillingPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">
                     {isSubscriptionCancelled
-                      ? "Pro features valid until"
+                      ? `${billingData.plan} features valid until`
                       : isTrialActive
                         ? "Trial ends"
                         : "Next billing date"}
