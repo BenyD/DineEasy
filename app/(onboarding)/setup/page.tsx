@@ -202,6 +202,10 @@ export default function SetupPage() {
   // Add state to track if user has resumed from saved data
   const [hasResumed, setHasResumed] = useState(false);
 
+  // Add state for image previews
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+
   const totalSteps = 3;
   const progress = (step / totalSteps) * 100;
 
@@ -474,11 +478,120 @@ export default function SetupPage() {
     e: React.ChangeEvent<HTMLInputElement>,
     field: string
   ) => {
-    if (e.target.files && e.target.files[0]) {
-      setFormData({
-        ...formData,
-        [field]: e.target.files[0],
-      });
+    const file = e.target.files?.[0];
+    if (file) {
+      // Check if file exists
+      if (!file) {
+        toast.error("No file selected");
+        return;
+      }
+
+      // Check if file is empty
+      if (file.size === 0) {
+        toast.error("File is empty");
+        return;
+      }
+
+      // Check if file is too small (corrupted)
+      if (file.size < 10) {
+        toast.error("File appears to be corrupted or empty");
+        return;
+      }
+
+      // Validate file type
+      const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error(
+          `${field === "logo" ? "Logo" : "Cover photo"} must be a JPEG, PNG, or WebP image`
+        );
+        return;
+      }
+
+      // Validate file extension
+      const fileExtension = file.name.split(".").pop()?.toLowerCase();
+      if (
+        !fileExtension ||
+        !["jpg", "jpeg", "png", "webp"].includes(fileExtension)
+      ) {
+        toast.error(`Invalid file extension. Allowed: jpg, jpeg, png, webp`);
+        return;
+      }
+
+      // Validate file size based on field type
+      const maxSize = field === "logo" ? 5 * 1024 * 1024 : 5 * 1024 * 1024; // 5MB for both
+      if (file.size > maxSize) {
+        toast.error(
+          `${field === "logo" ? "Logo" : "Cover photo"} file size must be less than 5MB`
+        );
+        return;
+      }
+
+      // Create preview with error handling
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setFormData({
+          ...formData,
+          [field]: file,
+        });
+        // Set preview state
+        if (field === "logo") {
+          setLogoPreview(e.target?.result as string);
+        } else if (field === "coverPhoto") {
+          setCoverPreview(e.target?.result as string);
+        }
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read file. Please try a different image.");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = (field: string) => {
+    setFormData({
+      ...formData,
+      [field]: null,
+    });
+    // Clear preview state
+    if (field === "logo") {
+      setLogoPreview(null);
+    } else if (field === "coverPhoto") {
+      setCoverPreview(null);
+    }
+    toast.success(`${field === "logo" ? "Logo" : "Cover photo"} removed`);
+  };
+
+  const handleChangeImage = (field: string) => {
+    // Trigger file input click
+    const inputId = field === "logo" ? "logo-upload" : "cover-upload";
+    document.getElementById(inputId)?.click();
+  };
+
+  const handleDragOver = (e: React.DragEvent, field: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.add("border-green-500", "bg-green-50");
+  };
+
+  const handleDragLeave = (e: React.DragEvent, field: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.remove("border-green-500", "bg-green-50");
+  };
+
+  const handleDrop = (e: React.DragEvent, field: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.remove("border-green-500", "bg-green-50");
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      // Create a synthetic event to reuse handleFileChange
+      const syntheticEvent = {
+        target: { files: [file] },
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      handleFileChange(syntheticEvent, field);
     }
   };
 
@@ -608,39 +721,80 @@ export default function SetupPage() {
         }
       }
 
-      // File validation
-      if (formData.logo && formData.logo.size > 2 * 1024 * 1024) {
-        validationErrors.push("Logo file size must be less than 2MB");
-      }
-      if (formData.coverPhoto && formData.coverPhoto.size > 5 * 1024 * 1024) {
-        validationErrors.push("Cover photo file size must be less than 5MB");
-      }
-
-      // File type validation
+      // File validation with comprehensive edge case handling
       if (formData.logo) {
-        const allowedTypes = [
-          "image/jpeg",
-          "image/png",
-          "image/gif",
-          "image/webp",
-        ];
-        if (!allowedTypes.includes(formData.logo.type)) {
-          validationErrors.push(
-            "Logo must be a valid image file (JPEG, PNG, GIF, or WebP)"
-          );
+        // Check if file is empty
+        if (formData.logo.size === 0) {
+          validationErrors.push("Logo file is empty");
+        }
+        // Check if file is corrupted
+        else if (formData.logo.size < 10) {
+          validationErrors.push("Logo file appears to be corrupted");
+        }
+        // Check file size
+        else if (formData.logo.size > 5 * 1024 * 1024) {
+          validationErrors.push("Logo file size must be less than 5MB");
+        }
+        // Check file type
+        else {
+          const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+          if (!allowedTypes.includes(formData.logo.type)) {
+            validationErrors.push("Logo must be a JPEG, PNG, or WebP image");
+          }
+          // Check file extension
+          else {
+            const fileExtension = formData.logo.name
+              .split(".")
+              .pop()
+              ?.toLowerCase();
+            if (
+              !fileExtension ||
+              !["jpg", "jpeg", "png", "webp"].includes(fileExtension)
+            ) {
+              validationErrors.push(
+                "Logo has invalid file extension. Allowed: jpg, jpeg, png, webp"
+              );
+            }
+          }
         }
       }
+
       if (formData.coverPhoto) {
-        const allowedTypes = [
-          "image/jpeg",
-          "image/png",
-          "image/gif",
-          "image/webp",
-        ];
-        if (!allowedTypes.includes(formData.coverPhoto.type)) {
-          validationErrors.push(
-            "Cover photo must be a valid image file (JPEG, PNG, GIF, or WebP)"
-          );
+        // Check if file is empty
+        if (formData.coverPhoto.size === 0) {
+          validationErrors.push("Cover photo file is empty");
+        }
+        // Check if file is corrupted
+        else if (formData.coverPhoto.size < 10) {
+          validationErrors.push("Cover photo file appears to be corrupted");
+        }
+        // Check file size
+        else if (formData.coverPhoto.size > 5 * 1024 * 1024) {
+          validationErrors.push("Cover photo file size must be less than 5MB");
+        }
+        // Check file type
+        else {
+          const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+          if (!allowedTypes.includes(formData.coverPhoto.type)) {
+            validationErrors.push(
+              "Cover photo must be a JPEG, PNG, or WebP image"
+            );
+          }
+          // Check file extension
+          else {
+            const fileExtension = formData.coverPhoto.name
+              .split(".")
+              .pop()
+              ?.toLowerCase();
+            if (
+              !fileExtension ||
+              !["jpg", "jpeg", "png", "webp"].includes(fileExtension)
+            ) {
+              validationErrors.push(
+                "Cover photo has invalid file extension. Allowed: jpg, jpeg, png, webp"
+              );
+            }
+          }
         }
       }
 
@@ -1124,14 +1278,22 @@ export default function SetupPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="logo">Restaurant Logo</Label>
-                      <div className="flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50">
+                      <div
+                        className="flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50"
+                        onDragOver={(e) => handleDragOver(e, "logo")}
+                        onDragLeave={(e) => handleDragLeave(e, "logo")}
+                        onDrop={(e) => handleDrop(e, "logo")}
+                      >
                         {formData.logo ? (
                           <div className="text-center">
                             <div className="w-32 h-32 mx-auto bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
                               <img
-                                src={URL.createObjectURL(
-                                  formData.logo as unknown as Blob
-                                )}
+                                src={
+                                  logoPreview ||
+                                  URL.createObjectURL(
+                                    formData.logo as unknown as Blob
+                                  )
+                                }
                                 alt="Logo preview"
                                 className="max-w-full max-h-full object-contain"
                               />
@@ -1139,55 +1301,71 @@ export default function SetupPage() {
                             <p className="text-sm text-gray-500 mt-2">
                               {(formData.logo as unknown as File).name}
                             </p>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="mt-2"
-                              onClick={() =>
-                                setFormData({ ...formData, logo: null })
-                              }
-                            >
-                              Remove
-                            </Button>
+                            <div className="flex gap-2 mt-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleChangeImage("logo")}
+                              >
+                                Change
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveImage("logo")}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                Remove
+                              </Button>
+                            </div>
                           </div>
                         ) : (
                           <div className="text-center">
                             <Upload className="h-12 w-12 text-gray-400 mx-auto" />
                             <p className="mt-2 text-sm text-gray-500">
-                              Drag and drop your logo or{" "}
-                              <label
-                                htmlFor="logo-upload"
+                              Drag and drop your logo here or{" "}
+                              <button
+                                onClick={() => handleChangeImage("logo")}
                                 className="text-green-600 hover:text-green-700 cursor-pointer font-medium"
                               >
                                 browse
-                                <input
-                                  id="logo-upload"
-                                  name="logo"
-                                  type="file"
-                                  className="sr-only"
-                                  accept="image/*"
-                                  onChange={(e) => handleFileChange(e, "logo")}
-                                />
-                              </label>
+                              </button>
                             </p>
                             <p className="text-xs text-gray-400">
-                              PNG, JPG, GIF up to 2MB
+                              PNG, JPG, WebP up to 5MB
                             </p>
                           </div>
                         )}
+                        {/* Hidden file input */}
+                        <input
+                          id="logo-upload"
+                          name="logo"
+                          type="file"
+                          className="sr-only"
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, "logo")}
+                        />
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="coverPhoto">Cover Photo</Label>
-                      <div className="flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50">
+                      <div
+                        className="flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50"
+                        onDragOver={(e) => handleDragOver(e, "coverPhoto")}
+                        onDragLeave={(e) => handleDragLeave(e, "coverPhoto")}
+                        onDrop={(e) => handleDrop(e, "coverPhoto")}
+                      >
                         {formData.coverPhoto ? (
                           <div className="text-center w-full">
                             <div className="w-full h-48 mx-auto bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
                               <img
-                                src={URL.createObjectURL(
-                                  formData.coverPhoto as unknown as Blob
-                                )}
+                                src={
+                                  coverPreview ||
+                                  URL.createObjectURL(
+                                    formData.coverPhoto as unknown as Blob
+                                  )
+                                }
                                 alt="Cover photo preview"
                                 className="w-full h-full object-cover"
                               />
@@ -1195,44 +1373,50 @@ export default function SetupPage() {
                             <p className="text-sm text-gray-500 mt-2">
                               {(formData.coverPhoto as unknown as File).name}
                             </p>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="mt-2"
-                              onClick={() =>
-                                setFormData({ ...formData, coverPhoto: null })
-                              }
-                            >
-                              Remove
-                            </Button>
+                            <div className="flex gap-2 mt-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleChangeImage("coverPhoto")}
+                              >
+                                Change
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveImage("coverPhoto")}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                Remove
+                              </Button>
+                            </div>
                           </div>
                         ) : (
                           <div className="text-center">
                             <Upload className="h-12 w-12 text-gray-400 mx-auto" />
                             <p className="mt-2 text-sm text-gray-500">
-                              Drag and drop your cover photo or{" "}
-                              <label
-                                htmlFor="cover-upload"
+                              Drag and drop your cover photo here or{" "}
+                              <button
+                                onClick={() => handleChangeImage("coverPhoto")}
                                 className="text-green-600 hover:text-green-700 cursor-pointer font-medium"
                               >
                                 browse
-                                <input
-                                  id="cover-upload"
-                                  name="coverPhoto"
-                                  type="file"
-                                  className="sr-only"
-                                  accept="image/*"
-                                  onChange={(e) =>
-                                    handleFileChange(e, "coverPhoto")
-                                  }
-                                />
-                              </label>
+                              </button>
                             </p>
                             <p className="text-xs text-gray-400">
-                              PNG, JPG, GIF up to 5MB
+                              PNG, JPG, WebP up to 5MB
                             </p>
                           </div>
                         )}
+                        {/* Hidden file input */}
+                        <input
+                          id="cover-upload"
+                          name="coverPhoto"
+                          type="file"
+                          className="sr-only"
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, "coverPhoto")}
+                        />
                       </div>
                     </div>
                   </div>

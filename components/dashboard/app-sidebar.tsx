@@ -558,6 +558,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             >
               <div className="grid gap-1">
                 <Link
+                  href="/dashboard/settings?tab=profile"
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-gray-100"
+                >
+                  <User2 className="h-4 w-4" />
+                  Profile
+                </Link>
+                <Link
                   href="/dashboard/settings"
                   className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-gray-100"
                 >

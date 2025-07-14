@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useSearchParams } from "next/navigation";
 import {
   Upload,
   Bell,
@@ -44,6 +45,13 @@ import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 import { CURRENCIES, COUNTRY_OPTIONS, type Currency } from "@/lib/constants";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { updateProfile, deleteAvatar } from "@/lib/actions/profile";
+import { createClient } from "@/lib/supabase/client";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  updateRestaurantImages,
+  removeRestaurantImage,
+} from "@/lib/actions/restaurant";
 
 const DAYS_OF_WEEK = [
   "monday",
@@ -93,6 +101,8 @@ const itemVariants = {
 };
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState("restaurant");
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const {
@@ -111,6 +121,37 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchRestaurant();
   }, [fetchRestaurant]);
+
+  // Fetch profile data on component mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          const { data: profile, error } = await supabase
+            .from("profiles")
+            .select("full_name, avatar_url")
+            .eq("id", user.id)
+            .single();
+
+          if (!error && profile) {
+            setProfileData({
+              fullName: profile.full_name || "",
+              avatarUrl: profile.avatar_url || "",
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+      }
+    };
+
+    fetchProfile();
+  }, []);
 
   // Initialize form data from restaurant
   const [formData, setFormData] = useState({
@@ -151,6 +192,31 @@ export default function SettingsPage() {
     kitchenUpdates: false,
     playSound: true,
   });
+
+  // Profile state
+  const [isProfileEditing, setIsProfileEditing] = useState(false);
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [profileData, setProfileData] = useState({
+    fullName: "",
+    avatarUrl: "",
+  });
+  const [selectedAvatar, setSelectedAvatar] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  // Restaurant image upload state
+  const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
+  const [selectedCover, setSelectedCover] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+
+  // Handle tab switching from URL parameters
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && ["restaurant", "profile", "notifications"].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Update form data when restaurant data is loaded
   useEffect(() => {
@@ -196,6 +262,32 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      // Handle image uploads first if any
+      if (selectedLogo || selectedCover) {
+        const formData = new FormData();
+
+        if (selectedLogo) {
+          formData.append("logo", selectedLogo);
+        }
+
+        if (selectedCover) {
+          formData.append("cover", selectedCover);
+        }
+
+        const imageResult = await updateRestaurantImages(formData);
+
+        if (imageResult.error) {
+          toast.error(imageResult.error);
+          return;
+        }
+
+        // Clear the image form
+        setSelectedLogo(null);
+        setSelectedCover(null);
+        setLogoPreview(null);
+        setCoverPreview(null);
+      }
+
       // Update restaurant data (email is locked and cannot be changed)
       await updateRestaurant({
         name: formData.name,
@@ -249,6 +341,216 @@ export default function SettingsPage() {
         },
       },
     });
+  };
+
+  // Profile handling functions
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Check if file exists
+      if (!file) {
+        toast.error("No file selected");
+        return;
+      }
+
+      // Check if file is empty
+      if (file.size === 0) {
+        toast.error("File is empty");
+        return;
+      }
+
+      // Check if file is too small (corrupted)
+      if (file.size < 10) {
+        toast.error("File appears to be corrupted or empty");
+        return;
+      }
+
+      // Validate file size (2MB limit)
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error("Avatar file size must be less than 2MB");
+        return;
+      }
+
+      // Validate file type
+      const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error("Avatar must be a JPEG, PNG, or WebP image");
+        return;
+      }
+
+      // Validate file extension
+      const fileExtension = file.name.split(".").pop()?.toLowerCase();
+      if (!fileExtension || !["jpg", "jpeg", "png", "webp"].includes(fileExtension)) {
+        toast.error("Invalid file extension. Allowed: jpg, jpeg, png, webp");
+        return;
+      }
+
+      setSelectedAvatar(file);
+
+      // Create preview with error handling
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setAvatarPreview(e.target?.result as string);
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read file. Please try a different image.");
+        setSelectedAvatar(null);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProfileSave = async () => {
+    setIsProfileSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append("full_name", profileData.fullName);
+
+      if (selectedAvatar) {
+        formData.append("avatar", selectedAvatar);
+      }
+
+      const result = await updateProfile(formData);
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      // Update local state
+      if (selectedAvatar && avatarPreview) {
+        setProfileData((prev) => ({
+          ...prev,
+          avatarUrl: avatarPreview,
+        }));
+      }
+
+      setSelectedAvatar(null);
+      setAvatarPreview(null);
+      setIsProfileEditing(false);
+      toast.success("Profile updated successfully");
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      toast.error("Failed to update profile");
+    } finally {
+      setIsProfileSaving(false);
+    }
+  };
+
+  const handleDeleteAvatar = async () => {
+    try {
+      const result = await deleteAvatar();
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      setProfileData((prev) => ({
+        ...prev,
+        avatarUrl: "",
+      }));
+      setSelectedAvatar(null);
+      setAvatarPreview(null);
+      toast.success("Avatar removed successfully");
+    } catch (error) {
+      console.error("Error deleting avatar:", error);
+      toast.error("Failed to delete avatar");
+    }
+  };
+
+  // Restaurant image handling functions
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Logo file size must be less than 5MB");
+        return;
+      }
+
+      // Validate file type
+      const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error("Logo must be a JPEG, PNG, or WebP image");
+        return;
+      }
+
+      setSelectedLogo(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setLogoPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please select a valid image file");
+        return;
+      }
+
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Image size must be less than 5MB");
+        return;
+      }
+
+      setSelectedCover(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setCoverPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    try {
+      const result = await removeRestaurantImage("logo");
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      setSelectedLogo(null);
+      setLogoPreview(null);
+      toast.success("Logo removed successfully");
+
+      // Refresh restaurant data
+      fetchRestaurant();
+    } catch (error) {
+      console.error("Error removing logo:", error);
+      toast.error("Failed to remove logo");
+    }
+  };
+
+  const handleRemoveCover = async () => {
+    try {
+      const result = await removeRestaurantImage("cover");
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      setSelectedCover(null);
+      setCoverPreview(null);
+      toast.success("Cover photo removed successfully");
+
+      // Refresh restaurant data
+      fetchRestaurant();
+    } catch (error) {
+      console.error("Error removing cover photo:", error);
+      toast.error("Failed to remove cover photo");
+    }
   };
 
   // Show loading state
@@ -435,9 +737,14 @@ export default function SettingsPage() {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.2 }}
       >
-        <Tabs defaultValue="restaurant" className="space-y-8">
-          <TabsList className="grid w-full max-w-[400px] grid-cols-2">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="space-y-8"
+        >
+          <TabsList className="grid w-full max-w-[600px] grid-cols-3">
             <TabsTrigger value="restaurant">Restaurant</TabsTrigger>
+            <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
 
@@ -465,10 +772,14 @@ export default function SettingsPage() {
                     >
                       <Button
                         variant={isEditing ? "outline" : "default"}
-                        onClick={() =>
-                          isEditing ? handleSave() : setIsEditing(true)
-                        }
-                        disabled={isSaving}
+                        onClick={() => {
+                          if (isEditing) {
+                            handleSave();
+                          } else {
+                            setIsEditing(true);
+                          }
+                        }}
+                        disabled={isSaving || isUploadingImages}
                         className={
                           isEditing
                             ? "border-green-600 text-green-600 hover:bg-green-50"
@@ -503,59 +814,112 @@ export default function SettingsPage() {
                         <Label className="text-base">
                           Restaurant Cover Photo
                         </Label>
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                           <div className="relative w-full h-[240px] bg-gray-100 rounded-lg overflow-hidden">
                             <img
                               src={
+                                coverPreview ||
                                 restaurant.cover_url ||
                                 "/placeholder.svg?height=240&width=800"
                               }
                               alt="Restaurant cover"
                               className="w-full h-full object-cover"
                             />
-                            {isEditing && (
-                              <Button className="absolute top-4 right-4 bg-white text-black hover:bg-white/90 transition-all duration-300 shadow-lg">
-                                <Camera className="w-4 h-4 mr-2" />
-                                Change Cover Photo
-                              </Button>
-                            )}
                           </div>
-                          <p className="text-sm text-gray-500">
-                            Recommended size: 1920x640 pixels. Max file size:
-                            5MB.
-                          </p>
+                          {isEditing && (
+                            <>
+                              <div>
+                                <Label
+                                  htmlFor="cover-upload"
+                                  className="text-base"
+                                >
+                                  Upload New Cover Photo
+                                </Label>
+                                <Input
+                                  id="cover-upload"
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleCoverChange}
+                                  className="mt-2"
+                                  disabled={isSaving}
+                                />
+                                <p className="text-sm text-gray-500 mt-1">
+                                  Recommended size: 1920x640 pixels. Max file
+                                  size: 5MB. Supported: JPEG, PNG, WebP.
+                                </p>
+                              </div>
+                              {(coverPreview || restaurant.cover_url) && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={handleRemoveCover}
+                                  disabled={isSaving}
+                                  className="text-red-600 border-red-200 hover:bg-red-50"
+                                >
+                                  Remove Current Cover Photo
+                                </Button>
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
 
                       {/* Logo Upload */}
                       <div className="space-y-3">
                         <Label className="text-base">Restaurant Logo</Label>
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-4">
-                            <div className="relative w-32 h-32 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                              <img
-                                src={
-                                  restaurant.logo_url ||
-                                  "/placeholder.svg?height=128&width=128"
-                                }
-                                alt="Restaurant logo"
-                                className="w-full h-full object-cover"
-                              />
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-6">
+                            <div className="relative">
+                              <div className="w-32 h-32 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                                <img
+                                  src={
+                                    logoPreview ||
+                                    restaurant.logo_url ||
+                                    "/placeholder.svg?height=128&width=128"
+                                  }
+                                  alt="Restaurant logo"
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
                             </div>
-                            {isEditing && (
-                              <Button
-                                size="sm"
-                                className="bg-white text-black hover:bg-white/90 transition-all duration-300 shadow-lg border border-gray-200 h-10"
-                              >
-                                <Camera className="w-4 h-4 mr-2" />
-                                Change Logo
-                              </Button>
-                            )}
+                            <div className="space-y-3">
+                              {isEditing && (
+                                <>
+                                  <div>
+                                    <Label
+                                      htmlFor="logo-upload"
+                                      className="text-base"
+                                    >
+                                      Upload New Logo
+                                    </Label>
+                                    <Input
+                                      id="logo-upload"
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={handleLogoChange}
+                                      className="mt-2"
+                                      disabled={isSaving}
+                                    />
+                                    <p className="text-sm text-gray-500 mt-1">
+                                      Recommended size: 400x400 pixels. Max file
+                                      size: 5MB. Supported: JPEG, PNG, WebP.
+                                    </p>
+                                  </div>
+                                  {(logoPreview || restaurant.logo_url) && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={handleRemoveLogo}
+                                      disabled={isSaving}
+                                      className="text-red-600 border-red-200 hover:bg-red-50"
+                                    >
+                                      Remove Current Logo
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </div>
-                          <p className="text-sm text-gray-500">
-                            Recommended size: 400x400 pixels. Max file size:
-                            2MB.
-                          </p>
                         </div>
                       </div>
                     </motion.div>
@@ -1126,6 +1490,162 @@ export default function SettingsPage() {
                           <Label htmlFor="takeoutAvailable">
                             Takeout Available
                           </Label>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </motion.div>
+          </TabsContent>
+
+          {/* Profile */}
+          <TabsContent value="profile">
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="show"
+              className="space-y-6"
+            >
+              <motion.div variants={cardVariants} whileHover="hover">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div>
+                      <CardTitle>Profile Information</CardTitle>
+                      <CardDescription>
+                        Update your personal profile and avatar
+                      </CardDescription>
+                    </div>
+                    <motion.div
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <Button
+                        variant={isProfileEditing ? "outline" : "default"}
+                        onClick={() =>
+                          isProfileEditing
+                            ? handleProfileSave()
+                            : setIsProfileEditing(true)
+                        }
+                        disabled={isProfileSaving}
+                        className={
+                          isProfileEditing
+                            ? "border-green-600 text-green-600 hover:bg-green-50"
+                            : "bg-green-600 hover:bg-green-700 text-white"
+                        }
+                      >
+                        {isProfileSaving ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : isProfileEditing ? (
+                          "Save Changes"
+                        ) : (
+                          <>
+                            <Edit2 className="w-4 h-4 mr-2" />
+                            Edit
+                          </>
+                        )}
+                      </Button>
+                    </motion.div>
+                  </CardHeader>
+                  <CardContent className="space-y-8">
+                    {/* Avatar Section */}
+                    <motion.div variants={itemVariants} className="space-y-6">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Profile Picture
+                      </h3>
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-6">
+                          <div className="relative">
+                            <Avatar className="h-24 w-24 rounded-xl border-2 border-white shadow-lg">
+                              <AvatarImage
+                                src={
+                                  avatarPreview ||
+                                  profileData.avatarUrl ||
+                                  "/placeholder.svg?height=96&width=96"
+                                }
+                                alt="Profile picture"
+                                className="object-cover"
+                              />
+                              <AvatarFallback className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 text-emerald-700 font-semibold text-2xl">
+                                {profileData.fullName
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")
+                                  .toUpperCase()
+                                  .slice(0, 2)}
+                              </AvatarFallback>
+                            </Avatar>
+                          </div>
+                          <div className="space-y-3">
+                            {isProfileEditing && (
+                              <>
+                                <div>
+                                  <Label htmlFor="avatar" className="text-base">
+                                    Upload New Picture
+                                  </Label>
+                                  <Input
+                                    id="avatar"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleAvatarChange}
+                                    className="mt-2"
+                                    disabled={isProfileSaving}
+                                  />
+                                  <p className="text-sm text-gray-500 mt-1">
+                                    Recommended size: 400x400 pixels. Max file
+                                    size: 2MB. Supported: JPEG, PNG, WebP.
+                                  </p>
+                                </div>
+                                {profileData.avatarUrl && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleDeleteAvatar}
+                                    disabled={isProfileSaving}
+                                    className="text-red-600 border-red-200 hover:bg-red-50"
+                                  >
+                                    Remove Current Picture
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+
+                    <Separator />
+
+                    {/* Basic Information */}
+                    <motion.div variants={itemVariants} className="space-y-6">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Basic Information
+                      </h3>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="fullName" className="text-base">
+                            Full Name <span className="text-red-500">*</span>
+                          </Label>
+                          <Input
+                            id="fullName"
+                            value={profileData.fullName}
+                            onChange={(e) =>
+                              setProfileData({
+                                ...profileData,
+                                fullName: e.target.value,
+                              })
+                            }
+                            className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                            disabled={!isProfileEditing}
+                            placeholder="Enter your full name"
+                          />
+                          <p className="text-sm text-gray-500">
+                            This name will be displayed in the sidebar and used
+                            for communications.
+                          </p>
                         </div>
                       </div>
                     </motion.div>
