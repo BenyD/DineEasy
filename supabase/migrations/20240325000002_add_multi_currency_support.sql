@@ -2,7 +2,7 @@
 -- Drop the existing currency enum and recreate it with new currencies
 drop type if exists currency cascade;
 
-create type currency as enum ('USD', 'CHF', 'EUR', 'GBP', 'INR', 'AUD');
+create type currency as enum ('USD', 'CHF', 'EUR', 'GBP', 'INR', 'AUD', 'AED', 'SEK', 'CAD', 'NZD', 'LKR', 'SGD', 'MYR', 'THB', 'JPY', 'HKD', 'KRW');
 
 -- Update the restaurants table to use the new currency enum
 -- First check if the column exists, if not add it

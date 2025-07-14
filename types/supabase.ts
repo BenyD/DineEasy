@@ -565,7 +565,24 @@ export interface Database {
         | "table"
         | "payment"
         | "settings";
-      currency: "USD" | "CHF" | "EUR";
+      currency:
+        | "USD"
+        | "CHF"
+        | "EUR"
+        | "GBP"
+        | "INR"
+        | "AUD"
+        | "AED"
+        | "SEK"
+        | "CAD"
+        | "NZD"
+        | "LKR"
+        | "SGD"
+        | "MYR"
+        | "THB"
+        | "JPY"
+        | "HKD"
+        | "KRW";
       payment_method: "cash" | "card" | "other";
       payment_status: "pending" | "completed" | "failed" | "refunded";
       price_range: "$" | "$$" | "$$$" | "$$$$";

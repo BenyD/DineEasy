@@ -34,6 +34,17 @@ function getLocaleForCurrency(currency: string): string {
     GBP: "en-GB",
     INR: "en-IN",
     AUD: "en-AU",
+    AED: "ar-AE",
+    SEK: "sv-SE",
+    CAD: "en-CA",
+    NZD: "en-NZ",
+    LKR: "si-LK",
+    SGD: "en-SG",
+    MYR: "ms-MY",
+    THB: "th-TH",
+    JPY: "ja-JP",
+    HKD: "zh-HK",
+    KRW: "ko-KR",
   };
 
   return currencyLocales[currency] || "en-US";
@@ -47,6 +58,17 @@ export function getCurrencySymbol(currency: string): string {
     GBP: "£",
     INR: "₹",
     AUD: "A$",
+    AED: "AED",
+    SEK: "kr",
+    CAD: "C$",
+    NZD: "NZ$",
+    LKR: "Rs",
+    SGD: "S$",
+    MYR: "RM",
+    THB: "฿",
+    JPY: "¥",
+    HKD: "HK$",
+    KRW: "₩",
   };
 
   return symbols[currency] || currency;

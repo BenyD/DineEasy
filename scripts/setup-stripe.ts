@@ -1,168 +1,142 @@
 #!/usr/bin/env tsx
 
-import "./load-env";
 import Stripe from "stripe";
-import { PRICING, DEFAULT_CURRENCY } from "../lib/constants";
+import dotenv from "dotenv";
 
-const CURRENCIES = ["USD", "CHF", "EUR", "GBP", "INR", "AUD"] as const;
+// Load environment variables
+dotenv.config({ path: ".env.local" });
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY is not set");
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-06-30.basil",
 });
 
-const PLANS = ["starter", "pro", "elite"] as const;
-const INTERVALS = ["monthly", "yearly"] as const;
+// Pricing configuration based on new CHF prices
+const PRICING = {
+  starter: {
+    USD: { monthly: 39, yearly: 374 },
+    CHF: { monthly: 34.9, yearly: 334 },
+    EUR: { monthly: 36, yearly: 345 },
+    GBP: { monthly: 31, yearly: 297 },
+    INR: { monthly: 3250, yearly: 31200 },
+    AUD: { monthly: 59, yearly: 566 },
+    AED: { monthly: 143, yearly: 1373 },
+    SEK: { monthly: 408, yearly: 3917 },
+    CAD: { monthly: 53, yearly: 509 },
+    NZD: { monthly: 64, yearly: 614 },
+    LKR: { monthly: 12400, yearly: 119040 },
+    SGD: { monthly: 53, yearly: 509 },
+    MYR: { monthly: 184, yearly: 1766 },
+    THB: { monthly: 1400, yearly: 13440 },
+    JPY: { monthly: 5900, yearly: 56640 },
+    HKD: { monthly: 305, yearly: 2928 },
+    KRW: { monthly: 52000, yearly: 499200 },
+  },
+  pro: {
+    USD: { monthly: 105, yearly: 1008 },
+    CHF: { monthly: 94.9, yearly: 911 },
+    EUR: { monthly: 97, yearly: 931 },
+    GBP: { monthly: 83, yearly: 797 },
+    INR: { monthly: 8750, yearly: 84000 },
+    AUD: { monthly: 159, yearly: 1526 },
+    AED: { monthly: 385, yearly: 3696 },
+    SEK: { monthly: 1100, yearly: 10560 },
+    CAD: { monthly: 143, yearly: 1373 },
+    NZD: { monthly: 172, yearly: 1651 },
+    LKR: { monthly: 33400, yearly: 320640 },
+    SGD: { monthly: 143, yearly: 1373 },
+    MYR: { monthly: 495, yearly: 4752 },
+    THB: { monthly: 3760, yearly: 36096 },
+    JPY: { monthly: 15800, yearly: 151680 },
+    HKD: { monthly: 820, yearly: 7872 },
+    KRW: { monthly: 140000, yearly: 999999 },
+  },
+  elite: {
+    USD: { monthly: 265, yearly: 2544 },
+    CHF: { monthly: 239, yearly: 2294 },
+    EUR: { monthly: 245, yearly: 2352 },
+    GBP: { monthly: 210, yearly: 2016 },
+    INR: { monthly: 22000, yearly: 211200 },
+    AUD: { monthly: 399, yearly: 3830 },
+    AED: { monthly: 973, yearly: 9341 },
+    SEK: { monthly: 2770, yearly: 26592 },
+    CAD: { monthly: 360, yearly: 3456 },
+    NZD: { monthly: 433, yearly: 4157 },
+    LKR: { monthly: 84000, yearly: 806400 },
+    SGD: { monthly: 360, yearly: 3456 },
+    MYR: { monthly: 1245, yearly: 11952 },
+    THB: { monthly: 9470, yearly: 90912 },
+    JPY: { monthly: 39800, yearly: 382080 },
+    HKD: { monthly: 2065, yearly: 19824 },
+    KRW: { monthly: 352000, yearly: 999999 },
+  },
+};
 
-async function createOrGetProduct(name: string, description: string) {
-  // Check if product already exists
-  const products = await stripe.products.list({ limit: 100 });
-  const existingProduct = products.data.find((p) => p.name === name);
+async function createPrices() {
+  console.log("🚀 Starting Stripe price creation...\n");
 
-  if (existingProduct) {
-    console.log(`✅ Found existing product: ${name}`);
-    return existingProduct;
-  }
+  const createdPrices: Record<string, any> = {};
 
-  const product = await stripe.products.create({
-    name,
-    description,
-  });
-  console.log(`✅ Created new product: ${name}`);
-  return product;
-}
+  for (const [plan, currencies] of Object.entries(PRICING)) {
+    console.log(`📦 Creating prices for ${plan.toUpperCase()} plan:`);
 
-async function createOrGetPrice(
-  productId: string,
-  amount: number,
-  currency: string,
-  interval: "month" | "year",
-  metadata: Record<string, string>
-) {
-  // Check if price already exists
-  const prices = await stripe.prices.list({
-    product: productId,
-    limit: 100,
-  });
+    for (const [currency, intervals] of Object.entries(currencies)) {
+      console.log(`  💰 ${currency}:`);
 
-  const existingPrice = prices.data.find(
-    (p) =>
-      p.currency === currency &&
-      p.recurring?.interval === interval &&
-      p.unit_amount === (currency === "inr" ? amount : amount * 100)
-  );
+      for (const [interval, amount] of Object.entries(intervals)) {
+        try {
+          // Convert interval to Stripe format
+          const stripeInterval = interval === "monthly" ? "month" : "year";
 
-  if (existingPrice) {
-    console.log(`  ✅ Found existing price: ${currency} ${interval}`);
-    return existingPrice;
-  }
-
-  const price = await stripe.prices.create({
-    product: productId,
-    unit_amount: amount * 100, // Convert all currencies to smallest unit (cents/paise)
-    currency,
-    recurring: {
-      interval,
-    },
-    metadata,
-  });
-  console.log(`  ✅ Created new price: ${currency} ${interval}`);
-  return price;
-}
-
-async function main() {
-  try {
-    console.log(
-      "🚀 Setting up Stripe products and prices for multi-currency support...\n"
-    );
-
-    const createdPrices: Record<string, string> = {};
-
-    // Create base products (one per plan, not per currency)
-    const products = {
-      starter: await createOrGetProduct(
-        "Starter Plan",
-        "Perfect for small restaurants just getting started with digital ordering"
-      ),
-      pro: await createOrGetProduct(
-        "Pro Plan",
-        "For growing restaurants that need more features and higher limits"
-      ),
-      elite: await createOrGetProduct(
-        "Elite Plan",
-        "For established restaurants that need the highest limits and premium features"
-      ),
-    };
-
-    console.log("\n📦 Creating prices for all currencies...\n");
-
-    // Create prices for all currencies
-    for (const plan of PLANS) {
-      console.log(`📦 Creating prices for ${plan.toUpperCase()} plan:`);
-
-      for (const currency of CURRENCIES) {
-        for (const interval of INTERVALS) {
-          const price =
-            PRICING[plan].price[
-              currency as keyof (typeof PRICING)[typeof plan]["price"]
-            ][interval];
-          const priceId = `${plan}_${interval}_${currency.toLowerCase()}`;
-
-          try {
-            const stripePrice = await createOrGetPrice(
-              products[plan].id,
-              price,
-              currency.toLowerCase(),
-              interval === "monthly" ? "month" : "year",
-              {
+          const price = await stripe.prices.create({
+            unit_amount: amount * 100, // Convert to cents
+            currency: currency.toLowerCase(),
+            recurring: {
+              interval: stripeInterval as "month" | "year",
+            },
+            product_data: {
+              name: `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan - ${interval.charAt(0).toUpperCase() + interval.slice(1)}ly`,
+              metadata: {
                 plan,
                 interval,
                 currency,
-              }
-            );
+              },
+            },
+          });
 
-            createdPrices[priceId] = stripePrice.id;
-            console.log(
-              `    ${currency} ${interval}: ${price} ${currency} (ID: ${stripePrice.id})`
-            );
-          } catch (error) {
-            console.error(
-              `    ❌ Failed to create ${currency} ${interval} price:`,
-              error
-            );
-          }
-        }
-      }
-      console.log("");
-    }
+          const envKey = `STRIPE_${plan.toUpperCase()}_${interval.toUpperCase()}_${currency.toUpperCase()}_PRICE_ID`;
+          createdPrices[envKey] = price.id;
 
-    console.log("📝 Environment variables to add to your .env file:");
-    console.log("");
-
-    for (const plan of PLANS) {
-      for (const currency of CURRENCIES) {
-        for (const interval of INTERVALS) {
-          const priceId = `${plan}_${interval}_${currency.toLowerCase()}`;
-          const envVar = `STRIPE_${plan.toUpperCase()}_${interval.toUpperCase()}_${currency}_PRICE_ID`;
           console.log(
-            `${envVar}=${createdPrices[priceId] || "REPLACE_WITH_ACTUAL_ID"}`
+            `    ✅ ${interval}: ${price.id} (${amount} ${currency})`
+          );
+        } catch (error) {
+          console.error(
+            `    ❌ Error creating ${interval} price for ${currency}:`,
+            error
           );
         }
       }
     }
-
-    console.log("\n🎉 Setup complete!");
-    console.log(`💡 Default currency is set to: ${DEFAULT_CURRENCY}`);
-    console.log(
-      "⚠️  Make sure to add the environment variables to your .env file"
-    );
-  } catch (error) {
-    console.error("❌ Error:", error);
-    process.exit(1);
+    console.log("");
   }
+
+  // Generate .env file content
+  console.log("📝 Generated .env variables:");
+  console.log("=".repeat(50));
+
+  for (const [key, value] of Object.entries(createdPrices)) {
+    console.log(`${key}=${value}`);
+  }
+
+  console.log("\n" + "=".repeat(50));
+  console.log("✅ Price creation completed!");
+  console.log("\n📋 Next steps:");
+  console.log(
+    "1. Copy the above environment variables to your .env.local file"
+  );
+  console.log("2. Update your pricing.ts file with the new price IDs");
+  console.log("3. Test the subscription flow with the new prices");
 }
 
-main();
+// Run the script
+createPrices().catch(console.error);

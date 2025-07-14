@@ -34,7 +34,7 @@ This document provides a comprehensive analysis of the DineEasy plan upgrade flo
 #### Plan Validation
 
 - **Duplicate Prevention**: Prevents upgrading to the same plan/interval
-- **Currency Support**: Supports multiple currencies (USD, CHF, EUR, GBP, INR, AUD)
+- **Currency Support**: Supports multiple currencies (USD, CHF, EUR, GBP, INR, AUD, AED, SEK, CAD, NZD, LKR, SGD, MYR, THB, JPY, HKD, KRW)
 - **Price Validation**: Validates Stripe price IDs exist for selected plan/currency
 
 ### Code Flow

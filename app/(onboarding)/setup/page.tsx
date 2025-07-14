@@ -87,15 +87,11 @@ const CUISINE_TYPES = [
   { value: "other", label: "Other" },
 ] as const;
 
-// Currency options for the setup form
-const CURRENCY_OPTIONS = [
-  { value: "USD", label: "US Dollar ($)" },
-  { value: "CHF", label: "Swiss Franc (CHF)" },
-  { value: "EUR", label: "Euro (€)" },
-  { value: "GBP", label: "British Pound (£)" },
-  { value: "INR", label: "Indian Rupee (₹)" },
-  { value: "AUD", label: "Australian Dollar (A$)" },
-] as const;
+// Currency options for the setup form - using constants from lib
+const CURRENCY_OPTIONS = Object.entries(CURRENCIES).map(([code, currency]) => ({
+  value: code,
+  label: `${CURRENCY_NAMES[code as Currency]} (${CURRENCY_SYMBOLS[code as Currency]})`,
+}));
 
 const PRICE_RANGES = [
   { value: "$", label: "$ - Budget friendly" },

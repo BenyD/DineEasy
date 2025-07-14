@@ -5,7 +5,7 @@ create extension if not exists "uuid-ossp";
 create type restaurant_type as enum ('restaurant', 'cafe', 'bar', 'food-truck');
 create type subscription_plan as enum ('starter', 'pro', 'elite');
 create type subscription_interval as enum ('monthly', 'yearly');
-create type currency as enum ('USD', 'CHF', 'EUR');
+create type currency as enum ('USD', 'CHF', 'EUR', 'GBP', 'INR', 'AUD', 'AED', 'SEK', 'CAD', 'NZD', 'LKR', 'SGD', 'MYR', 'THB', 'JPY', 'HKD', 'KRW');
 create type price_range as enum ('$', '$$', '$$$', '$$$$');
 create type order_status as enum ('pending', 'preparing', 'ready', 'served', 'completed', 'cancelled');
 create type payment_status as enum ('pending', 'completed', 'failed', 'refunded');

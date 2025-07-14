@@ -2,6 +2,7 @@
 
 import { Resend } from "resend";
 import { getBaseUrl } from "./env";
+import { getCurrencySymbol } from "./utils/currency";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -117,14 +118,7 @@ export const sendInvoiceReceipt = async (
 ) => {
   try {
     const formattedAmount = (invoiceData.amount / 100).toFixed(2);
-    const currencySymbol =
-      invoiceData.currency === "USD"
-        ? "$"
-        : invoiceData.currency === "EUR"
-          ? "€"
-          : invoiceData.currency === "CHF"
-            ? "CHF"
-            : invoiceData.currency;
+    const currencySymbol = getCurrencySymbol(invoiceData.currency);
 
     // Helper function to title case plan names
     const titleCasePlan = (plan: string) => {
@@ -438,14 +432,7 @@ export const sendRefundNotificationEmail = async (
 ) => {
   try {
     const formattedAmount = (refundData.amount / 100).toFixed(2);
-    const currencySymbol =
-      refundData.currency === "USD"
-        ? "$"
-        : refundData.currency === "EUR"
-          ? "€"
-          : refundData.currency === "CHF"
-            ? "CHF"
-            : refundData.currency;
+    const currencySymbol = getCurrencySymbol(refundData.currency);
 
     // Helper function to title case plan names
     const titleCasePlan = (plan: string) => {
@@ -581,14 +568,7 @@ export const sendPaymentFailedEmail = async (
 ) => {
   try {
     const formattedAmount = (paymentData.amount / 100).toFixed(2);
-    const currencySymbol =
-      paymentData.currency === "USD"
-        ? "$"
-        : paymentData.currency === "EUR"
-          ? "€"
-          : paymentData.currency === "CHF"
-            ? "CHF"
-            : paymentData.currency;
+    const currencySymbol = getCurrencySymbol(paymentData.currency);
 
     // Helper function to title case plan names
     const titleCasePlan = (plan: string) => {
@@ -839,14 +819,7 @@ export const sendPaymentDisputeEmail = async (
 ) => {
   try {
     const formattedAmount = (disputeData.amount / 100).toFixed(2);
-    const currencySymbol =
-      disputeData.currency === "USD"
-        ? "$"
-        : disputeData.currency === "EUR"
-          ? "€"
-          : disputeData.currency === "CHF"
-            ? "CHF"
-            : disputeData.currency;
+    const currencySymbol = getCurrencySymbol(disputeData.currency);
 
     const { data, error } = await resend.emails.send({
       from: "DineEasy <noreply@dineeasy.ch>",

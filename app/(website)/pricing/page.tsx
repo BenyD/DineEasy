@@ -215,7 +215,7 @@ export default function PricingPage() {
     {
       question: "Do you offer annual discounts?",
       answer:
-        "Yes — save 20% when paying yearly. (Starter: CHF 144/yr, Pro: CHF 374/yr, Elite: CHF 758/yr)",
+        `Yes — save 20% when paying yearly. (Starter: ${formatPrice(getPrice("starter", selectedCurrency, "yearly"), selectedCurrency)}/yr, Pro: ${formatPrice(getPrice("pro", selectedCurrency, "yearly"), selectedCurrency)}/yr, Elite: ${formatPrice(getPrice("elite", selectedCurrency, "yearly"), selectedCurrency)}/yr)`,
     },
     {
       question: "Is support included for all plans?",
