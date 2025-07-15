@@ -4,10 +4,12 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence, useScroll } from "framer-motion";
-import { Menu, X, ChevronDown, ExternalLink } from "lucide-react";
+import { Menu, X, ChevronDown, ExternalLink, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "./Logo";
 import { SearchCommand } from "./SearchCommand";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 interface SubNavItem {
   href: string;
@@ -30,8 +32,55 @@ type NavItem = NavItemWithDropdown | NavItemWithLink;
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(true);
   const { scrollYProgress } = useScroll();
   const pathname = usePathname();
+
+  // Check authentication status
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const supabase = createClient();
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (session && !error) {
+          setIsAuthenticated(true);
+          setUserEmail(session.user.email || "");
+        } else {
+          setIsAuthenticated(false);
+          setUserEmail("");
+        }
+      } catch (error) {
+        console.error("Error checking auth:", error);
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
+
+    // Listen for auth state changes
+    const supabase = createClient();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        setIsAuthenticated(true);
+        setUserEmail(session.user.email || "");
+      } else {
+        setIsAuthenticated(false);
+        setUserEmail("");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Handle scroll effect
   useEffect(() => {
@@ -46,6 +95,16 @@ export function Navbar() {
   useEffect(() => {
     setIsOpen(false);
   }, [pathname]);
+
+  const handleSignOut = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      toast.success("Signed out successfully");
+    } catch (error) {
+      toast.error("Error signing out");
+    }
+  };
 
   const navItems: NavItem[] = [
     {
@@ -183,28 +242,75 @@ export function Navbar() {
           <div className="hidden items-center gap-6 md:flex">
             <SearchCommand />
             <div className="flex items-center gap-3">
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.5 }}
-              >
-                <Button variant="ghost" asChild size="sm">
-                  <Link href="/login">Sign In</Link>
-                </Button>
-              </motion.div>
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.6 }}
-              >
-                <Button
-                  asChild
-                  size="sm"
-                  className="bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-600"
-                >
-                  <Link href="/signup">Start Free Trial</Link>
-                </Button>
-              </motion.div>
+              {!isLoading && (
+                <>
+                  {isAuthenticated ? (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.5 }}
+                        className="flex items-center gap-2 text-sm text-gray-600"
+                      >
+                        <User className="h-4 w-4" />
+                        <span className="hidden lg:inline">{userEmail}</span>
+                      </motion.div>
+                      <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.6 }}
+                      >
+                        <Button
+                          asChild
+                          size="sm"
+                          className="bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-600"
+                        >
+                          <Link href="/dashboard">Go to Dashboard</Link>
+                        </Button>
+                      </motion.div>
+                      <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.7 }}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleSignOut}
+                          className="text-gray-500 hover:text-red-600"
+                        >
+                          <LogOut className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    </>
+                  ) : (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.5 }}
+                      >
+                        <Button variant="ghost" asChild size="sm">
+                          <Link href="/login">Sign In</Link>
+                        </Button>
+                      </motion.div>
+                      <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.6 }}
+                      >
+                        <Button
+                          asChild
+                          size="sm"
+                          className="bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-600"
+                        >
+                          <Link href="/signup">Start Free Trial</Link>
+                        </Button>
+                      </motion.div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
@@ -294,16 +400,47 @@ export function Navbar() {
 
               {/* Mobile Actions */}
               <div className="flex flex-col gap-2 py-4">
-                <Button variant="ghost" asChild size="sm">
-                  <Link href="/login">Sign In</Link>
-                </Button>
-                <Button
-                  asChild
-                  size="sm"
-                  className="bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-600"
-                >
-                  <Link href="/signup">Start Free Trial</Link>
-                </Button>
+                {!isLoading && (
+                  <>
+                    {isAuthenticated ? (
+                      <>
+                        <div className="flex items-center gap-2 px-2 py-2 text-sm text-gray-600">
+                          <User className="h-4 w-4" />
+                          <span>{userEmail}</span>
+                        </div>
+                        <Button
+                          asChild
+                          size="sm"
+                          className="bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-600"
+                        >
+                          <Link href="/dashboard">Go to Dashboard</Link>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleSignOut}
+                          className="text-gray-500 hover:text-red-600"
+                        >
+                          <LogOut className="h-4 w-4 mr-2" />
+                          Sign Out
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button variant="ghost" asChild size="sm">
+                          <Link href="/login">Sign In</Link>
+                        </Button>
+                        <Button
+                          asChild
+                          size="sm"
+                          className="bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-600"
+                        >
+                          <Link href="/signup">Start Free Trial</Link>
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </motion.div>

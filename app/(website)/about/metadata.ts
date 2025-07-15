@@ -13,7 +13,7 @@ export const metadata: Metadata = {
       "Learn about DineEasy's mission to revolutionize restaurant management. Meet our team and discover how we're helping restaurants thrive in the digital age.",
     images: [
       {
-        url: "/images/about-og.jpg",
+        url: `/api/og?title=${encodeURIComponent("Our Mission and Team")}&description=${encodeURIComponent("Revolutionizing restaurant management in the digital age")}&type=default`,
         width: 1200,
         height: 630,
         alt: "DineEasy Team and Mission",
@@ -24,6 +24,8 @@ export const metadata: Metadata = {
     title: "About DineEasy - Our Mission and Team",
     description:
       "Learn about DineEasy's mission to revolutionize restaurant management. Meet our team and discover how we're helping restaurants thrive in the digital age.",
-    images: ["/images/about-og.jpg"],
+    images: [
+      `/api/og?title=${encodeURIComponent("Our Mission and Team")}&description=${encodeURIComponent("Revolutionizing restaurant management in the digital age")}&type=default`,
+    ],
   },
 };

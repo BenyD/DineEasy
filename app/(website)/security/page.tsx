@@ -10,6 +10,12 @@ import {
   FileCheck,
   AlertTriangle,
   Eye,
+  Database,
+  Globe,
+  Zap,
+  CheckCircle,
+  Cloud,
+  Cpu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageWrapper } from "@/components/layout/PageWrapper";
@@ -20,40 +26,40 @@ import { CTASection } from "@/components/elements/CTASection";
 
 const securityFeatures = [
   {
-    icon: <Shield className="h-8 w-8" />,
-    title: "Data Encryption",
+    icon: <Database className="h-8 w-8" />,
+    title: "Supabase Database Security",
     description:
-      "All data is encrypted at rest and in transit using industry-standard AES-256 encryption and TLS 1.3 protocols.",
+      "Enterprise-grade PostgreSQL database with Row Level Security (RLS), automatic backups, and real-time data protection.",
   },
   {
     icon: <Lock className="h-8 w-8" />,
-    title: "Secure Payments",
+    title: "Stripe Payment Security",
     description:
-      "PCI DSS Level 1 compliant payment processing through Stripe, ensuring your customers' payment data is always protected.",
+      "PCI DSS Level 1 compliant payment processing through Stripe Express, with secure webhook verification and fraud protection.",
   },
   {
-    icon: <Server className="h-8 w-8" />,
-    title: "Swiss Data Centers",
+    icon: <Cloud className="h-8 w-8" />,
+    title: "Vercel Edge Security",
     description:
-      "All data is stored in Swiss data centers, complying with strict Swiss data protection laws and GDPR requirements.",
+      "Global CDN with automatic DDoS protection, SSL/TLS encryption, and edge computing for optimal performance and security.",
   },
   {
     icon: <Key className="h-8 w-8" />,
-    title: "Access Control",
+    title: "Row Level Security (RLS)",
     description:
-      "Role-based access control (RBAC) with granular permissions and two-factor authentication support.",
+      "Database-level security policies ensuring users can only access their own restaurant data with granular permissions.",
   },
   {
     icon: <UserCheck className="h-8 w-8" />,
-    title: "User Authentication",
+    title: "Supabase Auth",
     description:
-      "Secure authentication with password policies, session management, and automatic account lockout protection.",
+      "Secure authentication with email verification, password policies, session management, and JWT token security.",
   },
   {
     icon: <FileCheck className="h-8 w-8" />,
-    title: "Audit Logging",
+    title: "Secure File Storage",
     description:
-      "Comprehensive audit trails for all system access and changes, helping you maintain compliance and security.",
+      "Supabase Storage with RLS policies, automatic virus scanning, and secure file uploads for restaurant images.",
   },
 ];
 
@@ -61,7 +67,7 @@ const complianceCertifications = [
   {
     title: "PCI DSS",
     description:
-      "Payment Card Industry Data Security Standard compliant payment processing",
+      "Payment Card Industry Data Security Standard compliant through Stripe",
   },
   {
     title: "GDPR",
@@ -69,12 +75,57 @@ const complianceCertifications = [
       "Full compliance with EU General Data Protection Regulation requirements",
   },
   {
-    title: "Swiss DPA",
-    description: "Adherence to Swiss Federal Data Protection Act regulations",
+    title: "SOC 2",
+    description:
+      "Supabase maintains SOC 2 Type II compliance for data security",
   },
   {
     title: "ISO 27001",
-    description: "Information security management system certified",
+    description:
+      "Vercel maintains ISO 27001 certification for information security",
+  },
+];
+
+const securityInfrastructure = [
+  {
+    icon: <Server className="h-6 w-6" />,
+    title: "Database Security",
+    features: [
+      "Row Level Security (RLS) policies on all tables",
+      "Automatic data encryption at rest",
+      "Secure connection pooling",
+      "Real-time data validation",
+    ],
+  },
+  {
+    icon: <Globe className="h-6 w-6" />,
+    title: "Network Security",
+    features: [
+      "Global CDN with DDoS protection",
+      "Automatic SSL/TLS encryption",
+      "Edge computing security",
+      "Geographic data distribution",
+    ],
+  },
+  {
+    icon: <Zap className="h-6 w-6" />,
+    title: "Application Security",
+    features: [
+      "Middleware-based route protection",
+      "CSRF protection and validation",
+      "Secure cookie handling",
+      "Input sanitization and validation",
+    ],
+  },
+  {
+    icon: <Cpu className="h-6 w-6" />,
+    title: "Infrastructure Security",
+    features: [
+      "Vercel Edge Runtime security",
+      "Supabase service role isolation",
+      "Environment variable protection",
+      "Secure webhook handling",
+    ],
   },
 ];
 
@@ -87,7 +138,7 @@ export default function SecurityPage() {
             Enterprise-Grade Security
           </span>
         }
-        subtitle="Your data security and privacy is our top priority. DineEasy implements industry-leading security measures to protect your business."
+        subtitle="Your data security and privacy is our top priority. DineEasy leverages industry-leading security infrastructure to protect your business."
       />
 
       <AnimatedSection className="relative py-16 sm:py-24">
@@ -106,35 +157,45 @@ export default function SecurityPage() {
               transition={{ duration: 0.5 }}
             >
               <h2 className="text-3xl font-bold mb-6">
-                Swiss Quality Security Standards
+                Built on Enterprise Security Infrastructure
               </h2>
               <p className="text-gray-600 mb-8">
-                As a Swiss company, we understand the importance of data
-                protection and privacy. Our platform is built with security at
-                its core, ensuring your business and customer data remains safe
-                and compliant with all relevant regulations.
+                DineEasy is built on Supabase and Vercel, two of the most secure
+                and reliable platforms in the industry. Our multi-layered
+                security approach ensures your restaurant data is protected at
+                every level.
               </p>
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 bg-green-600 rounded-full" />
+                  <CheckCircle className="h-4 w-4 text-green-600" />
                   <span className="text-gray-700">
-                    Swiss data center hosting
+                    Supabase Row Level Security (RLS)
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 bg-green-600 rounded-full" />
-                  <span className="text-gray-700">End-to-end encryption</span>
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="text-gray-700">
+                    Stripe PCI DSS Level 1 compliance
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 bg-green-600 rounded-full" />
-                  <span className="text-gray-700">Regular security audits</span>
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="text-gray-700">
+                    Vercel Edge Runtime security
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="text-gray-700">
+                    Automatic SSL/TLS encryption
+                  </span>
                 </div>
               </div>
               <Button
                 className="mt-8 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
                 size="lg"
               >
-                Download Security Whitepaper
+                View Security Documentation
               </Button>
             </motion.div>
             <motion.div
@@ -188,62 +249,104 @@ export default function SecurityPage() {
             ))}
           </div>
 
+          {/* Security Infrastructure Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="mb-20"
+          >
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold mb-4">
+                Multi-Layer Security Architecture
+              </h2>
+              <p className="text-lg text-gray-600">
+                Our security is built on multiple layers of protection
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              {securityInfrastructure.map((layer, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  className="bg-white rounded-xl p-6 shadow-sm"
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-10 w-10 bg-green-50 rounded-lg flex items-center justify-center text-green-600">
+                      {layer.icon}
+                    </div>
+                    <h3 className="text-xl font-semibold">{layer.title}</h3>
+                  </div>
+                  <ul className="space-y-2">
+                    {layer.features.map((feature, featureIndex) => (
+                      <li key={featureIndex} className="flex items-start gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <span className="text-gray-600 text-sm">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
           {/* Security Process Section */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="bg-white rounded-xl p-8 shadow-sm"
+            className="bg-white rounded-xl p-8 shadow-sm mb-20"
           >
-            <h2 className="text-2xl font-bold mb-6">Our Security Process</h2>
+            <h2 className="text-2xl font-bold mb-6">Security Best Practices</h2>
             <div className="grid md:grid-cols-2 gap-8">
               <div>
-                <h3 className="text-lg font-semibold mb-4">
-                  Proactive Monitoring
-                </h3>
+                <h3 className="text-lg font-semibold mb-4">Data Protection</h3>
                 <ul className="space-y-3">
                   <li className="flex items-start gap-3">
-                    <AlertTriangle className="h-5 w-5 text-green-600 mt-1" />
+                    <Shield className="h-5 w-5 text-green-600 mt-1" />
                     <span className="text-gray-600">
-                      24/7 system monitoring and threat detection
+                      All data encrypted in transit and at rest
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
                     <Eye className="h-5 w-5 text-green-600 mt-1" />
                     <span className="text-gray-600">
-                      Regular vulnerability assessments and penetration testing
+                      Row Level Security prevents unauthorized access
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <Shield className="h-5 w-5 text-green-600 mt-1" />
+                    <Lock className="h-5 w-5 text-green-600 mt-1" />
                     <span className="text-gray-600">
-                      Automated security updates and patch management
+                      Secure session management with JWT tokens
                     </span>
                   </li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-lg font-semibold mb-4">
-                  Incident Response
-                </h3>
+                <h3 className="text-lg font-semibold mb-4">Payment Security</h3>
                 <ul className="space-y-3">
                   <li className="flex items-start gap-3">
                     <AlertTriangle className="h-5 w-5 text-green-600 mt-1" />
                     <span className="text-gray-600">
-                      Dedicated security team with 24/7 availability
+                      Stripe webhook signature verification
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
                     <Eye className="h-5 w-5 text-green-600 mt-1" />
                     <span className="text-gray-600">
-                      Documented incident response procedures
+                      PCI DSS Level 1 compliant processing
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
                     <Shield className="h-5 w-5 text-green-600 mt-1" />
                     <span className="text-gray-600">
-                      Regular disaster recovery and backup testing
+                      Fraud detection and prevention systems
                     </span>
                   </li>
                 </ul>
@@ -255,13 +358,13 @@ export default function SecurityPage() {
           <CTASection
             title="Ready to Secure Your Restaurant Operations?"
             subtitle="Join hundreds of restaurants who trust DineEasy with their business operations"
-            buttonText="Get Started"
+            buttonText="Start Free Trial"
             buttonHref="/signup"
             features={[
               "Enterprise-grade security",
-              "Swiss data centers",
+              "Supabase & Vercel infrastructure",
+              "PCI DSS compliant payments",
               "24/7 monitoring",
-              "PCI DSS compliant",
             ]}
           />
         </div>

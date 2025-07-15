@@ -51,6 +51,7 @@ import PaymentStatsComponent from "@/components/dashboard/payments/PaymentStats"
 import PaymentTransactions from "@/components/dashboard/payments/PaymentTransactions";
 import { formatCurrency, getCurrencySymbol } from "@/lib/utils/currency";
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
+import { COUNTRY_OPTIONS } from "@/lib/constants";
 
 type PaymentMethod = {
   id: string;
@@ -104,6 +105,14 @@ export default function PaymentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
+  const [restaurantCountry, setRestaurantCountry] = useState<string | null>(
+    null
+  );
+
+  // Check if the restaurant's country supports Stripe Connect
+  const countrySupportsStripeConnect = restaurantCountry
+    ? COUNTRY_OPTIONS.find((c) => c.value === restaurantCountry)?.stripeConnect
+    : true;
 
   // Data states
   const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null);
@@ -143,7 +152,7 @@ export default function PaymentsPage() {
       // Get user's restaurant
       const { data: restaurant, error } = await supabase
         .from("restaurants")
-        .select("id")
+        .select("id, country")
         .eq("owner_id", user.id)
         .single();
 
@@ -153,6 +162,7 @@ export default function PaymentsPage() {
       }
 
       setRestaurantId(restaurant.id);
+      setRestaurantCountry(restaurant.country);
 
       // Fetch all data in parallel
       await Promise.all([
@@ -583,6 +593,57 @@ export default function PaymentsPage() {
           />
         )}
 
+        {/* Country Support Check */}
+        {(() => {
+          const countrySupportsStripeConnect = restaurantCountry
+            ? COUNTRY_OPTIONS.find((c) => c.value === restaurantCountry)
+                ?.stripeConnect
+            : true;
+
+          if (!countrySupportsStripeConnect) {
+            return (
+              <motion.div
+                variants={cardVariants}
+                whileHover="hover"
+                className="transform transition-all duration-200"
+              >
+                <Card className="border-amber-200">
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
+                        <AlertCircle className="h-6 w-6 text-amber-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h2 className="text-xl font-semibold text-gray-900">
+                          Payment Processing Limited
+                        </h2>
+                        <p className="text-gray-500 mb-3">
+                          Stripe Connect is not available for businesses in{" "}
+                          {restaurantCountry}. You can still use DineEasy for
+                          menu management and order tracking.
+                        </p>
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                          <h5 className="font-medium text-amber-800 mb-2">
+                            Available Features:
+                          </h5>
+                          <ul className="text-sm text-amber-700 space-y-1">
+                            <li>• Digital menu and QR code ordering</li>
+                            <li>• Table management and reservations</li>
+                            <li>• Order tracking and kitchen display</li>
+                            <li>• Staff management and analytics</li>
+                            <li>• Cash payment tracking</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          }
+          return null;
+        })()}
+
         {/* Stripe Connection Status */}
         {stripeAccount?.charges_enabled && (
           <motion.div
@@ -611,7 +672,7 @@ export default function PaymentsPage() {
         )}
 
         {/* Connect Stripe Account Section */}
-        {!stripeAccount?.charges_enabled && (
+        {!stripeAccount?.charges_enabled && countrySupportsStripeConnect && (
           <motion.div
             variants={cardVariants}
             whileHover="hover"
@@ -679,14 +740,23 @@ export default function PaymentsPage() {
                   <div className="pt-4">
                     <Button
                       onClick={handleConnectStripe}
-                      disabled={isConnecting}
-                      className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg"
+                      disabled={isConnecting || !countrySupportsStripeConnect}
+                      className={`w-full text-white h-12 text-lg ${
+                        countrySupportsStripeConnect
+                          ? "bg-green-600 hover:bg-green-700"
+                          : "bg-gray-400 cursor-not-allowed"
+                      }`}
                     >
                       {isConnecting ? (
                         <div className="flex items-center gap-2">
                           <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                           Connecting to Stripe...
                         </div>
+                      ) : !countrySupportsStripeConnect ? (
+                        <>
+                          <AlertCircle className="h-5 w-5 mr-2" />
+                          Stripe Connect Not Available
+                        </>
                       ) : (
                         <>
                           <CreditCard className="h-5 w-5 mr-2" />

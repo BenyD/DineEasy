@@ -380,7 +380,10 @@ export default function SettingsPage() {
 
       // Validate file extension
       const fileExtension = file.name.split(".").pop()?.toLowerCase();
-      if (!fileExtension || !["jpg", "jpeg", "png", "webp"].includes(fileExtension)) {
+      if (
+        !fileExtension ||
+        !["jpg", "jpeg", "png", "webp"].includes(fileExtension)
+      ) {
         toast.error("Invalid file extension. Allowed: jpg, jpeg, png, webp");
         return;
       }
@@ -1326,7 +1329,14 @@ export default function SettingsPage() {
                                   key={country.value}
                                   value={country.value}
                                 >
-                                  {country.label}
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>{country.label}</span>
+                                    {!country.stripeConnect && (
+                                      <span className="text-xs text-amber-600 ml-2">
+                                        Limited payment options
+                                      </span>
+                                    )}
+                                  </div>
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -1335,6 +1345,25 @@ export default function SettingsPage() {
                             🔒 Country is locked and cannot be changed after
                             setup
                           </p>
+                          {/* Show Stripe Connect availability */}
+                          {restaurant.country && (
+                            <div className="text-xs mt-1">
+                              {COUNTRY_OPTIONS.find(
+                                (c) => c.value === restaurant.country
+                              )?.stripeConnect ? (
+                                <p className="text-green-600 flex items-center gap-1">
+                                  <span>✓</span>
+                                  Full payment processing available
+                                </p>
+                              ) : (
+                                <p className="text-amber-600 flex items-center gap-1">
+                                  <span>⚠</span>
+                                  Cash payments only - contact support for
+                                  payment processing
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </motion.div>

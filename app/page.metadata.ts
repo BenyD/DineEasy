@@ -13,7 +13,7 @@ export const metadata: Metadata = {
       "Transform your restaurant operations with DineEasy. QR-based ordering, real-time analytics, and seamless payments. Start your free trial today.",
     images: [
       {
-        url: "/images/home-og.jpg",
+        url: `/api/og?title=${encodeURIComponent("Modern Restaurant Management Made Simple")}&description=${encodeURIComponent("Transform your restaurant operations with DineEasy. QR-based ordering, real-time analytics, and seamless payments.")}&type=default`,
         width: 1200,
         height: 630,
         alt: "DineEasy Restaurant Management Platform",
@@ -24,6 +24,8 @@ export const metadata: Metadata = {
     title: "DineEasy - Modern Restaurant Management Made Simple",
     description:
       "Transform your restaurant operations with DineEasy. QR-based ordering, real-time analytics, and seamless payments. Start your free trial today.",
-    images: ["/images/home-og.jpg"],
+    images: [
+      `/api/og?title=${encodeURIComponent("Modern Restaurant Management Made Simple")}&description=${encodeURIComponent("Transform your restaurant operations with DineEasy. QR-based ordering, real-time analytics, and seamless payments.")}&type=default`,
+    ],
   },
 };

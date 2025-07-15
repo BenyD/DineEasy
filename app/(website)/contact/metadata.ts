@@ -13,7 +13,7 @@ export const metadata: Metadata = {
       "Get in touch with DineEasy's Zürich-based support team. We provide Swiss quality support to help transform your restaurant operations. Available in German, French, Italian, and English.",
     images: [
       {
-        url: "/images/contact-og.jpg",
+        url: `/api/og?title=${encodeURIComponent("Swiss Restaurant Technology Support")}&description=${encodeURIComponent("Zürich-based support team available in German, French, Italian, and English")}&type=default`,
         width: 1200,
         height: 630,
         alt: "Contact DineEasy Swiss Support Team",
@@ -24,7 +24,9 @@ export const metadata: Metadata = {
     title: "Contact DineEasy | Swiss Restaurant Technology Support",
     description:
       "Get in touch with DineEasy's Zürich-based support team. We provide Swiss quality support to help transform your restaurant operations. Available in German, French, Italian, and English.",
-    images: ["/images/contact-og.jpg"],
+    images: [
+      `/api/og?title=${encodeURIComponent("Swiss Restaurant Technology Support")}&description=${encodeURIComponent("Zürich-based support team available in German, French, Italian, and English")}&type=default`,
+    ],
   },
   keywords: [
     "restaurant technology support",

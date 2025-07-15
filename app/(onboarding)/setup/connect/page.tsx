@@ -56,6 +56,9 @@ export default function ConnectPage() {
     "not_connected" | "pending" | "active" | null
   >(null);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
+  const [restaurantCountry, setRestaurantCountry] = useState<string | null>(
+    null
+  );
   const [showWarningDialog, setShowWarningDialog] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
 
@@ -89,7 +92,7 @@ export default function ConnectPage() {
       // Get user's restaurant for Stripe Connect setup
       const { data: restaurant, error } = await supabase
         .from("restaurants")
-        .select("id, stripe_account_id")
+        .select("id, stripe_account_id, country")
         .eq("owner_id", user.id)
         .single();
 
@@ -100,13 +103,22 @@ export default function ConnectPage() {
       }
 
       setRestaurantId(restaurant.id);
+      setRestaurantCountry(restaurant.country);
 
       // Check if user is returning from Stripe Connect
       const success = searchParams.get("success");
       const accountId = searchParams.get("account_id");
+      const refresh = searchParams.get("refresh");
 
       if (success === "true") {
         setShowSuccessDialog(true);
+      }
+
+      if (refresh === "true") {
+        // Handle refresh URL - regenerate account link
+        console.log("Handling refresh URL - regenerating account link");
+        await handleRefreshAccountLink(restaurant.id);
+        return;
       }
 
       if (accountId) {
@@ -157,6 +169,28 @@ export default function ConnectPage() {
     } catch (error) {
       console.error("Error connecting Stripe:", error);
       toast.error("Failed to connect Stripe account");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRefreshAccountLink = async (restaurantId: string) => {
+    setIsLoading(true);
+    try {
+      const result = await createStripeAccount();
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      if (result.accountLink) {
+        // Redirect to the new account link
+        window.location.href = result.accountLink;
+      }
+    } catch (error) {
+      console.error("Error refreshing account link:", error);
+      toast.error("Failed to refresh account link");
     } finally {
       setIsLoading(false);
     }
@@ -238,7 +272,7 @@ export default function ConnectPage() {
 
         console.log("Onboarding completed successfully:", result);
         toast.success("Onboarding completed successfully!");
-        
+
         // Clear onboarding progress from localStorage
         clearOnboardingProgress();
       } catch (error) {
@@ -250,6 +284,11 @@ export default function ConnectPage() {
 
     router.push("/dashboard");
   };
+
+  // Check if the restaurant's country supports Stripe Connect
+  const countrySupportsStripeConnect = restaurantCountry
+    ? COUNTRY_OPTIONS.find((c) => c.value === restaurantCountry)?.stripeConnect
+    : true;
 
   if (isCheckingStatus) {
     return (
@@ -276,6 +315,45 @@ export default function ConnectPage() {
       </div>
 
       <div className="container max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Stripe Connect Availability Notification */}
+        {!countrySupportsStripeConnect && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="mb-8"
+          >
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
+              <div className="flex items-start gap-4">
+                <AlertTriangle className="h-6 w-6 text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-left">
+                  <h4 className="font-medium text-amber-800 text-lg mb-2">
+                    Payment Processing Limited
+                  </h4>
+                  <p className="text-amber-700 mb-3">
+                    Stripe Connect is not available for businesses in{" "}
+                    {restaurantCountry}. You can still use DineEasy for menu
+                    management, table reservations, and order tracking, but
+                    payment processing will be limited to cash payments.
+                  </p>
+                  <div className="bg-white border border-amber-200 rounded-lg p-4">
+                    <h5 className="font-medium text-amber-800 mb-2">
+                      Available Features:
+                    </h5>
+                    <ul className="text-sm text-amber-700 space-y-1">
+                      <li>• Digital menu and QR code ordering</li>
+                      <li>• Table management and reservations</li>
+                      <li>• Order tracking and kitchen display</li>
+                      <li>• Staff management and analytics</li>
+                      <li>• Cash payment tracking</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -286,8 +364,8 @@ export default function ConnectPage() {
             Set Up Payments
           </h1>
           <p className="text-lg text-gray-500 mb-6">
-            Connect your Stripe account to start accepting payments from
-            customers
+            Connect your Stripe Express account to start accepting payments from
+            customers. Express accounts have a simple, fast setup process.
           </p>
         </motion.div>
 
@@ -298,18 +376,41 @@ export default function ConnectPage() {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="mb-12"
         >
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <div
+            className={`border rounded-lg p-6 ${
+              countrySupportsStripeConnect
+                ? "bg-blue-50 border-blue-200"
+                : "bg-amber-50 border-amber-200"
+            }`}
+          >
             <div className="flex items-start gap-4">
-              <CheckCircle2 className="h-6 w-6 text-blue-600 mt-0.5 shrink-0" />
+              {countrySupportsStripeConnect ? (
+                <CheckCircle2 className="h-6 w-6 text-blue-600 mt-0.5 shrink-0" />
+              ) : (
+                <AlertTriangle className="h-6 w-6 text-amber-600 mt-0.5 shrink-0" />
+              )}
               <div className="text-left">
-                <h4 className="font-medium text-blue-800 text-lg mb-2">
-                  What to Expect
+                <h4
+                  className={`font-medium text-lg mb-2 ${
+                    countrySupportsStripeConnect
+                      ? "text-blue-800"
+                      : "text-amber-800"
+                  }`}
+                >
+                  {countrySupportsStripeConnect
+                    ? "What to Expect"
+                    : "Payment Setup Notice"}
                 </h4>
-                <p className="text-blue-700">
-                  You'll be redirected to Stripe's secure platform to complete
-                  your account setup. If you don't have a Stripe account, you
-                  can create one during this process. This is required for
-                  security and compliance.
+                <p
+                  className={
+                    countrySupportsStripeConnect
+                      ? "text-blue-700"
+                      : "text-amber-700"
+                  }
+                >
+                  {countrySupportsStripeConnect
+                    ? "You'll be redirected to Stripe's Express onboarding platform to complete your account setup. Express accounts have a streamlined process that takes just a few minutes. This is required for security and compliance."
+                    : "Stripe Connect Express is not available in your country. You can still use DineEasy for all other features including menu management, order tracking, and table reservations. Contact support for alternative payment solutions."}
                 </p>
               </div>
             </div>
@@ -414,29 +515,38 @@ export default function ConnectPage() {
                         <CheckCircle2 className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
                         <div>
                           <h4 className="font-medium text-blue-800">
-                            Quick Setup
+                            Express Setup
                           </h4>
                           <p className="text-sm text-blue-700 mt-1">
-                            Takes just 5 minutes. We'll guide you through each
-                            step.
+                            Takes just 5 minutes with Stripe's streamlined
+                            Express onboarding.
                           </p>
                         </div>
                       </div>
                     </div>
                     <Button
                       onClick={handleConnectStripe}
-                      disabled={isLoading}
+                      disabled={isLoading || !countrySupportsStripeConnect}
                       size="lg"
-                      className="w-full bg-green-600 hover:bg-green-700"
+                      className={`w-full ${
+                        countrySupportsStripeConnect
+                          ? "bg-green-600 hover:bg-green-700"
+                          : "bg-gray-400 cursor-not-allowed"
+                      }`}
                     >
                       {isLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Connecting...
                         </>
+                      ) : !countrySupportsStripeConnect ? (
+                        <>
+                          Stripe Connect Not Available
+                          <AlertTriangle className="ml-2 h-4 w-4" />
+                        </>
                       ) : (
                         <>
-                          Connect Stripe Account
+                          Connect Stripe Express Account
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </>
                       )}

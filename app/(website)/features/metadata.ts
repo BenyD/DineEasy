@@ -13,7 +13,7 @@ export const metadata: Metadata = {
       "Explore DineEasy's powerful features: QR ordering, real-time analytics, payment processing, thermal printing, and more. Everything you need to modernize your restaurant.",
     images: [
       {
-        url: "/images/features-og.jpg",
+        url: `/api/og?title=${encodeURIComponent("Complete Restaurant Management Solution")}&description=${encodeURIComponent("QR ordering, real-time analytics, payment processing, thermal printing, and more")}&type=features`,
         width: 1200,
         height: 630,
         alt: "DineEasy Platform Features",
@@ -24,6 +24,8 @@ export const metadata: Metadata = {
     title: "DineEasy Features - Complete Restaurant Management Solution",
     description:
       "Explore DineEasy's powerful features: QR ordering, real-time analytics, payment processing, thermal printing, and more. Everything you need to modernize your restaurant.",
-    images: ["/images/features-og.jpg"],
+    images: [
+      `/api/og?title=${encodeURIComponent("Complete Restaurant Management Solution")}&description=${encodeURIComponent("QR ordering, real-time analytics, payment processing, thermal printing, and more")}&type=features`,
+    ],
   },
 };

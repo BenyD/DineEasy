@@ -70,10 +70,11 @@ const defaultMetadata: Metadata = {
       "Transform your restaurant with QR-based ordering, real-time dashboards, and seamless payments. Accept Stripe and cash payments with automatic thermal printing.",
     images: [
       {
-        url: "/images/android-chrome-512x512.png",
-        width: 512,
-        height: 512,
+        url: `/api/og?title=${encodeURIComponent("Modern Restaurant Management Made Simple")}&description=${encodeURIComponent("QR-based ordering, real-time dashboards, and seamless payments")}&type=default`,
+        width: 1200,
+        height: 630,
         alt: "DineEasy - Restaurant Management System",
+        type: "image/jpeg",
       },
     ],
   },
@@ -82,7 +83,9 @@ const defaultMetadata: Metadata = {
     title: "DineEasy - Modern Restaurant Management Made Simple",
     description:
       "Transform your restaurant with QR-based ordering, real-time dashboards, and seamless payments.",
-    images: ["/images/android-chrome-512x512.png"],
+    images: [
+      `/api/og?title=${encodeURIComponent("Modern Restaurant Management Made Simple")}&description=${encodeURIComponent("QR-based ordering, real-time dashboards, and seamless payments")}&type=default`,
+    ],
     creator: "@dineeasy",
     site: "@dineeasy",
   },

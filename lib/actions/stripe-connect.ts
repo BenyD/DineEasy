@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { redirect } from "next/navigation";
+import { COUNTRY_OPTIONS } from "@/lib/constants/countries";
 
 export async function createStripeAccount() {
   const supabase = createClient();
@@ -38,23 +39,24 @@ export async function createStripeAccount() {
 
       const accountLink = await stripe.accountLinks.create({
         account: restaurant.stripe_account_id,
-        refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/setup/connect`,
-        return_url: `${process.env.NEXT_PUBLIC_APP_URL}/setup/connect?success=true`,
+        refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/setup/connect?refresh=true`,
+        return_url: `${process.env.NEXT_PUBLIC_APP_URL}/setup/connect?success=true&account_id=${restaurant.stripe_account_id}`,
         type: "account_onboarding",
-        collection_options: {
-          fields: "eventually_due", // Up-front onboarding for better UX
-        },
+        // Express accounts have a streamlined onboarding flow
+        // No need for up-front collection - Stripe handles this
       });
       return { accountLink: accountLink.url };
     }
 
     // Create a new Stripe Connect account
     // Note: Stripe Connect has geographic restrictions
-    // A Swiss platform can only create accounts for certain countries
-    const supportedCountries = ["CH", "US", "EU", "GB", "AU"]; // Remove IN (India)
+    // Check if the restaurant's country supports Stripe Connect Express accounts
     const restaurantCountry = restaurant.country || "CH";
+    const countryOption = COUNTRY_OPTIONS.find(
+      (option) => option.value === restaurantCountry
+    );
 
-    if (!supportedCountries.includes(restaurantCountry)) {
+    if (!countryOption || !countryOption.stripeConnect) {
       console.error(
         "Unsupported country for Stripe Connect:",
         restaurantCountry
@@ -80,19 +82,27 @@ export async function createStripeAccount() {
     });
 
     const account = await stripe.accounts.create({
-      type: "express", // Could be "express" for simpler onboarding
+      type: "express",
       country: restaurantCountry as string,
       email: user.email,
       business_type: "company",
       company: {
         name: restaurant.name,
       },
+      // Express-specific capabilities - only request what we need
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+      // Express accounts handle most business info through onboarding
+      // Don't prefill too much - let Stripe's Express flow handle it
       metadata: {
         restaurantId: restaurant.id,
         restaurantName: restaurant.name,
         ownerEmail: user.email,
+        accountType: "express",
       },
-    } as any);
+    });
 
     console.log("Stripe Connect account created:", {
       accountId: account.id,
@@ -139,35 +149,54 @@ export async function createStripeAccount() {
       accountId: account.id,
     });
 
-    // Create an account link for onboarding with up-front collection
+    // Create an account link for Express onboarding
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/setup/connect`,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/setup/connect?success=true`,
+      refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/setup/connect?refresh=true`,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/setup/connect?success=true&account_id=${account.id}`,
       type: "account_onboarding",
-      collection_options: {
-        fields: "eventually_due", // Collect all required info upfront
-      },
+      // Express accounts have a streamlined onboarding flow
+      // No need for up-front collection - Stripe handles this
     });
 
     return { accountLink: accountLink.url };
   } catch (error: any) {
     console.error("Error creating Stripe account:", error);
 
-    // Handle specific Stripe errors
+    // Handle specific Stripe errors with detailed messages for Express accounts
     if (error.type === "StripeInvalidRequestError") {
       if (error.code === "parameter_invalid_country") {
         return {
-          error: "The selected country is not supported for Stripe Connect.",
+          error:
+            "The selected country is not supported for Stripe Connect Express accounts.",
         };
       }
       if (error.code === "parameter_invalid_email") {
         return { error: "Please provide a valid email address." };
       }
+      if (error.code === "parameter_invalid_business_type") {
+        return {
+          error:
+            "Invalid business type for Express account. Please contact support.",
+        };
+      }
       if (error.message?.includes("capabilities")) {
         return {
           error:
-            "Stripe Connect capabilities are not properly configured. Please contact support.",
+            "Stripe Connect Express capabilities are not properly configured. Please contact support.",
+        };
+      }
+      if (error.code === "parameter_invalid_company") {
+        return {
+          error:
+            "Invalid company information. Please check your business details.",
+        };
+      }
+      // Express-specific error codes
+      if (error.code === "parameter_invalid_type") {
+        return {
+          error:
+            "Invalid account type. Express accounts are required for this integration.",
         };
       }
     }
@@ -181,6 +210,21 @@ export async function createStripeAccount() {
 
     if (error.type === "StripeRateLimitError") {
       return { error: "Too many requests. Please try again in a few minutes." };
+    }
+
+    if (error.type === "StripeCardError") {
+      return { error: "Payment method error. Please try again." };
+    }
+
+    if (error.type === "StripeAuthenticationError") {
+      return { error: "Authentication error. Please contact support." };
+    }
+
+    // Handle network or unexpected errors
+    if (error.code === "ECONNRESET" || error.code === "ENOTFOUND") {
+      return {
+        error: "Network error. Please check your connection and try again.",
+      };
     }
 
     return {
@@ -228,18 +272,40 @@ export async function getStripeAccountStatus(restaurantId: string) {
       // Don't fail the function, just log the error
     }
 
-    // Check if account is fully verified and ready
+    // Enhanced status checking for Express accounts
+    // Express accounts have simpler requirements than Standard accounts
     const isFullyVerified =
       account.charges_enabled &&
       account.details_submitted &&
       (!account.requirements?.currently_due ||
         Object.keys(account.requirements.currently_due).length === 0);
 
+    const hasPendingRequirements =
+      account.requirements?.currently_due &&
+      Object.keys(account.requirements.currently_due).length > 0;
+
+    // Express accounts typically don't have eventually_due requirements
+    // They're either ready to accept payments or have current requirements
+    const hasFutureRequirements = false; // Express accounts don't typically have future requirements
+
+    let status: "not_connected" | "pending" | "active" = "pending";
+
+    if (isFullyVerified) {
+      status = "active";
+    } else if (account.details_submitted && !hasPendingRequirements) {
+      status = "pending"; // Account submitted but waiting for Stripe review
+    } else {
+      status = "pending"; // Account not fully submitted
+    }
+
     return {
-      status: isFullyVerified ? "active" : "pending",
+      status,
       requirements: account.requirements,
       chargesEnabled: account.charges_enabled,
       detailsSubmitted: account.details_submitted,
+      hasPendingRequirements,
+      hasFutureRequirements,
+      isFullyVerified,
     };
   } catch (error: any) {
     console.error("Error retrieving Stripe account:", error);
@@ -247,25 +313,18 @@ export async function getStripeAccountStatus(restaurantId: string) {
     // Handle specific Stripe errors
     if (error.type === "StripeInvalidRequestError") {
       if (error.code === "resource_missing") {
-        // Account doesn't exist, clean up the database
-        try {
-          await supabase.rpc("update_stripe_connect_status", {
-            p_restaurant_id: restaurantId,
-            p_stripe_account_id: null,
-            p_charges_enabled: false,
-            p_requirements: null,
-          });
-          return { status: "not_connected", error: "Stripe account not found" };
-        } catch (cleanupError) {
-          console.error(
-            "Error cleaning up invalid Stripe account:",
-            cleanupError
-          );
-        }
+        // Account doesn't exist, clear the stored account ID
+        await supabase.rpc("update_stripe_connect_status", {
+          p_restaurant_id: restaurantId,
+          p_stripe_account_id: null,
+          p_charges_enabled: false,
+          p_requirements: null,
+        });
+        return { status: "not_connected" };
       }
     }
 
-    return { error: "Failed to get Stripe account status" };
+    return { error: "Failed to retrieve account status" };
   }
 }
 
@@ -285,14 +344,28 @@ export async function createAccountUpdateLink(restaurantId: string) {
   try {
     const accountLink = await stripe.accountLinks.create({
       account: restaurant.stripe_account_id,
-      refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/payments`,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/payments?updated=true`,
+      refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/payments?refresh=true`,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/payments?updated=true&account_id=${restaurant.stripe_account_id}`,
       type: "account_update",
     });
 
     return { accountLink: accountLink.url };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating account update link:", error);
+
+    // Handle specific Stripe errors
+    if (error.type === "StripeInvalidRequestError") {
+      if (error.code === "resource_missing") {
+        return {
+          error: "Stripe account not found. Please reconnect your account.",
+        };
+      }
+    }
+
+    if (error.type === "StripePermissionError") {
+      return { error: "Permission denied. Please contact support." };
+    }
+
     return { error: "Failed to create update link" };
   }
 }
@@ -328,7 +401,7 @@ export async function getStripeAccountRequirements(restaurantId: string) {
 
   const { data: restaurant, error } = await supabase
     .from("restaurants")
-    .select("stripe_account_id, stripe_account_requirements")
+    .select("stripe_account_id")
     .eq("id", restaurantId)
     .single();
 
@@ -341,18 +414,58 @@ export async function getStripeAccountRequirements(restaurantId: string) {
       restaurant.stripe_account_id
     );
 
+    const requirements = account.requirements;
+    if (!requirements) {
+      return { requirements: null, message: "No requirements found" };
+    }
+
+    // Format requirements for Express accounts (simpler than Standard)
+    const formattedRequirements = {
+      currently_due: requirements.currently_due || {},
+      past_due: requirements.past_due || {},
+      disabled_reason: requirements.disabled_reason,
+      errors: requirements.errors || [],
+      // Express accounts typically don't have eventually_due requirements
+      eventually_due: {},
+    };
+
+    // Generate user-friendly messages for Express accounts
+    const messages = [];
+
+    if (Object.keys(formattedRequirements.currently_due).length > 0) {
+      messages.push(
+        "Please complete the required information to start accepting payments."
+      );
+    }
+
+    if (Object.keys(formattedRequirements.past_due).length > 0) {
+      messages.push(
+        "Some required information is overdue. Please complete it immediately."
+      );
+    }
+
+    if (formattedRequirements.disabled_reason) {
+      messages.push(
+        `Account disabled: ${formattedRequirements.disabled_reason}`
+      );
+    }
+
+    // Express accounts are typically simpler - provide encouraging messages
+    if (messages.length === 0 && account.details_submitted) {
+      messages.push(
+        "Your account is being reviewed by Stripe. This usually takes 1-2 business days."
+      );
+    }
+
     return {
-      requirements: account.requirements,
+      requirements: formattedRequirements,
+      messages,
       chargesEnabled: account.charges_enabled,
-      payoutsEnabled: account.payouts_enabled,
       detailsSubmitted: account.details_submitted,
-      currentlyDue: account.requirements?.currently_due || [],
-      eventuallyDue: account.requirements?.eventually_due || [],
-      pastDue: account.requirements?.past_due || [],
     };
   } catch (error) {
     console.error("Error retrieving Stripe account requirements:", error);
-    return { error: "Failed to get account requirements" };
+    return { error: "Failed to retrieve account requirements" };
   }
 }
 

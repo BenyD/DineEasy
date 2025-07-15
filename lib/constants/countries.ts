@@ -144,139 +144,139 @@ export const COUNTRY_OPTIONS = [
     value: "US",
     label: "🇺🇸 United States",
     currency: "USD",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "CH",
     label: "🇨🇭 Switzerland",
     currency: "CHF",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "DE",
     label: "🇩🇪 Germany",
     currency: "EUR",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "AT",
     label: "🇦🇹 Austria",
     currency: "EUR",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "NL",
     label: "🇳🇱 Netherlands",
     currency: "EUR",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "ES",
     label: "🇪🇸 Spain",
     currency: "EUR",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "PT",
     label: "🇵🇹 Portugal",
     currency: "EUR",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "AE",
     label: "🇦🇪 United Arab Emirates",
     currency: "AED",
-    stripeConnect: true,
+    stripeConnect: false, // Not in Stripe's Express supported list
   },
   {
     value: "FR",
     label: "🇫🇷 France",
     currency: "EUR",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "SE",
     label: "🇸🇪 Sweden",
     currency: "SEK",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "AU",
     label: "🇦🇺 Australia",
     currency: "AUD",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "CA",
     label: "🇨🇦 Canada",
     currency: "CAD",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "NZ",
     label: "🇳🇿 New Zealand",
     currency: "NZD",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "IT",
     label: "🇮🇹 Italy",
     currency: "EUR",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "GB",
     label: "🇬🇧 United Kingdom",
     currency: "GBP",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "LK",
     label: "🇱🇰 Sri Lanka",
     currency: "LKR",
-    stripeConnect: false,
+    stripeConnect: false, // Not in Stripe's Express supported list
   },
   {
     value: "SG",
     label: "🇸🇬 Singapore",
     currency: "SGD",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "MY",
     label: "🇲🇾 Malaysia",
     currency: "MYR",
-    stripeConnect: true,
+    stripeConnect: false, // Not in Stripe's Express supported list
   },
   {
     value: "TH",
     label: "🇹🇭 Thailand",
     currency: "THB",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "JP",
     label: "🇯🇵 Japan",
     currency: "JPY",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "HK",
     label: "🇭🇰 Hong Kong",
     currency: "HKD",
-    stripeConnect: true,
+    stripeConnect: true, // Supported by Stripe Connect Express
   },
   {
     value: "KR",
     label: "🇰🇷 South Korea",
     currency: "KRW",
-    stripeConnect: true,
+    stripeConnect: false, // Not in Stripe's Express supported list
   },
   {
     value: "IN",
     label: "🇮🇳 India",
     currency: "INR",
-    stripeConnect: false,
+    stripeConnect: false, // Not in Stripe's Express supported list
   },
 ] as const;
 

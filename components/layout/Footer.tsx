@@ -19,6 +19,7 @@ const navigation = {
     { name: "Features", href: "/features" },
     { name: "Pricing", href: "/pricing" },
     { name: "Security", href: "/security" },
+    { name: "Setup Guide", href: "/setup-guide" },
   ],
   company: [
     { name: "About", href: "/about" },

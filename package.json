@@ -42,6 +42,7 @@
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.50.4",
     "@tailwindcss/postcss": "^4.1.8",
+    "@vercel/og": "^0.7.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.0.0",
     "cmdk": "^0.2.1",
