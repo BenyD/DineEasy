@@ -17,24 +17,23 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 export type StripePlan = "starter" | "pro" | "elite";
 export type StripeInterval = "monthly" | "yearly";
-export type StripeCurrency =
-  | "USD"
-  | "CHF"
-  | "EUR"
-  | "GBP"
-  | "INR"
-  | "AUD"
-  | "AED"
-  | "SEK"
-  | "CAD"
-  | "NZD"
-  | "LKR"
-  | "SGD"
-  | "MYR"
-  | "THB"
-  | "JPY"
-  | "HKD"
-  | "KRW";
+export type StripeCurrency = "CHF";
+// | "USD"
+// | "EUR"
+// | "GBP"
+// | "INR"
+// | "AUD"
+// | "AED"
+// | "SEK"
+// | "CAD"
+// | "NZD"
+// | "LKR"
+// | "SGD"
+// | "MYR"
+// | "THB"
+// | "JPY"
+// | "HKD"
+// | "KRW";
 
 export type SubscriptionMetadata = {
   restaurantId: string;

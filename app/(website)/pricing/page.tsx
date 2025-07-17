@@ -156,7 +156,7 @@ export default function PricingPage() {
       emoji: "🥗",
       color: "green",
       description:
-        "For independent owners, food stalls & cafés with no staff complexity",
+        "Perfect for independent owners, food stalls & small cafés with no staff complexity",
       bestFor: "Independent owners",
       features: [
         ...PRICING.starter.features.map(
@@ -172,7 +172,7 @@ export default function PricingPage() {
       emoji: "🍽️",
       color: "green",
       description:
-        "Designed for busy cafés, bars, and small restaurants with a few staff",
+        "Ideal for busy cafés, bars, and growing restaurants with staff management needs",
       bestFor: "Growing restaurants",
       features: [
         ...PRICING.pro.features.map(
@@ -187,7 +187,7 @@ export default function PricingPage() {
       icon: Building2,
       emoji: "🏢",
       color: "green",
-      description: "For high-volume kitchens and restaurants with larger staff",
+      description: "Enterprise-grade solution for high-volume restaurants with unlimited features",
       bestFor: "High-volume restaurants",
       features: [
         ...PRICING.elite.features.map(

@@ -556,6 +556,47 @@ export interface Database {
           updated_at?: string;
         };
       };
+      newsletter_subscriptions: {
+        Row: {
+          id: string;
+          email: string;
+          first_name: string | null;
+          last_name: string | null;
+          is_active: boolean;
+          subscription_source: string;
+          preferences: Json;
+          created_at: string;
+          updated_at: string;
+          unsubscribed_at: string | null;
+          last_email_sent_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          is_active?: boolean;
+          subscription_source?: string;
+          preferences?: Json;
+          created_at?: string;
+          updated_at?: string;
+          unsubscribed_at?: string | null;
+          last_email_sent_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          is_active?: boolean;
+          subscription_source?: string;
+          preferences?: Json;
+          created_at?: string;
+          updated_at?: string;
+          unsubscribed_at?: string | null;
+          last_email_sent_at?: string | null;
+        };
+      };
     };
     Enums: {
       activity_type:
@@ -565,24 +606,23 @@ export interface Database {
         | "table"
         | "payment"
         | "settings";
-      currency:
-        | "USD"
-        | "CHF"
-        | "EUR"
-        | "GBP"
-        | "INR"
-        | "AUD"
-        | "AED"
-        | "SEK"
-        | "CAD"
-        | "NZD"
-        | "LKR"
-        | "SGD"
-        | "MYR"
-        | "THB"
-        | "JPY"
-        | "HKD"
-        | "KRW";
+      currency: "CHF";
+      // | "USD"
+      // | "EUR"
+      // | "GBP"
+      // | "INR"
+      // | "AUD"
+      // | "AED"
+      // | "SEK"
+      // | "CAD"
+      // | "NZD"
+      // | "LKR"
+      // | "SGD"
+      // | "MYR"
+      // | "THB"
+      // | "JPY"
+      // | "HKD"
+      // | "KRW";
       payment_method: "cash" | "card" | "other";
       payment_status: "pending" | "completed" | "failed" | "refunded";
       price_range: "$" | "$$" | "$$$" | "$$$$";

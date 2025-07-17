@@ -153,7 +153,7 @@ export default function SetupPage() {
       email: "",
       phone: "",
       website: "",
-      currency: "USD",
+      currency: "CHF",
       tax_rate: "7.7",
       vat_number: "",
       price_range: "",
@@ -162,7 +162,7 @@ export default function SetupPage() {
       address: "",
       city: "",
       postal_code: "",
-      country: "",
+      country: "CH",
       accepts_reservations: false,
       delivery_available: false,
       takeout_available: false,
@@ -186,8 +186,8 @@ export default function SetupPage() {
 
   // Add state to track previous values for change detection
   const [previousValues, setPreviousValues] = useState({
-    country: "",
-    currency: "USD",
+    country: "CH",
+    currency: "CHF",
   });
 
   // Add validation state
@@ -1174,15 +1174,19 @@ export default function SetupPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="vat_number">VAT Number</Label>
+                      <Label htmlFor="vat_number">MWST Number</Label>
                       <Input
                         id="vat_number"
                         name="vat_number"
                         value={formData.vat_number}
                         onChange={handleChange}
-                        placeholder="Enter your VAT number"
+                        placeholder="Enter your MWST number (e.g., CHE-123.456.789)"
                         className="h-11"
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Swiss VAT number (Mehrwertsteuer) - format:
+                        CHE-XXX.XXX.XXX
+                      </p>
                     </div>
                   </div>
                 </CardContent>

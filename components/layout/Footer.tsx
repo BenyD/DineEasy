@@ -12,7 +12,7 @@ import {
   MapPin,
   Phone,
 } from "lucide-react";
-import { Button } from "../ui/button";
+import { NewsletterSubscription } from "../elements/NewsletterSubscription";
 
 const navigation = {
   product: [
@@ -100,15 +100,14 @@ export function Footer() {
                 Stay updated with the latest features and releases.
               </p>
             </div>
-            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-              <input
-                type="email"
+            <div className="w-full sm:w-auto">
+              <NewsletterSubscription
+                variant="default"
                 placeholder="Enter your email"
-                className="rounded-lg border border-gray-200 px-4 py-2 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+                buttonText="Subscribe"
+                successMessage="Successfully subscribed to our newsletter!"
+                errorMessage="Failed to subscribe. Please try again."
               />
-              <Button className="bg-green-600 hover:bg-green-700">
-                Subscribe
-              </Button>
             </div>
           </div>
         </div>

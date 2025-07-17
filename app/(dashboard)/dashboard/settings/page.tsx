@@ -1163,7 +1163,7 @@ export default function SettingsPage() {
 
                         <div className="space-y-2">
                           <Label htmlFor="vatNumber" className="text-base">
-                            VAT Number
+                            MWST Number
                           </Label>
                           <Input
                             id="vatNumber"
@@ -1178,6 +1178,10 @@ export default function SettingsPage() {
                             disabled={!isEditing}
                             placeholder="e.g., CHE-123.456.789"
                           />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Swiss VAT number (Mehrwertsteuer) - format:
+                            CHE-XXX.XXX.XXX
+                          </p>
                         </div>
 
                         <div className="space-y-2">
@@ -1313,7 +1317,8 @@ export default function SettingsPage() {
                                 (country) => country.value === value
                               );
                               if (selectedCountry) {
-                                newFormData.currency = selectedCountry.currency;
+                                newFormData.currency =
+                                  selectedCountry.currency as Currency;
                               }
 
                               setFormData(newFormData);

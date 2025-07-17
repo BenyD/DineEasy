@@ -11,24 +11,23 @@ export type SubscriptionPlan = "starter" | "pro" | "elite";
 export type SubscriptionInterval = "monthly" | "yearly";
 
 export type RestaurantType = "restaurant" | "cafe" | "bar" | "food-truck";
-export type Currency =
-  | "USD"
-  | "CHF"
-  | "EUR"
-  | "GBP"
-  | "INR"
-  | "AUD"
-  | "AED"
-  | "SEK"
-  | "CAD"
-  | "NZD"
-  | "LKR"
-  | "SGD"
-  | "MYR"
-  | "THB"
-  | "JPY"
-  | "HKD"
-  | "KRW";
+export type Currency = "CHF";
+// | "USD"
+// | "EUR"
+// | "GBP"
+// | "INR"
+// | "AUD"
+// | "AED"
+// | "SEK"
+// | "CAD"
+// | "NZD"
+// | "LKR"
+// | "SGD"
+// | "MYR"
+// | "THB"
+// | "JPY"
+// | "HKD"
+// | "KRW";
 export type PriceRange = "$" | "$$" | "$$$" | "$$$$";
 
 export type OrderStatus =

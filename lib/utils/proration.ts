@@ -84,12 +84,12 @@ export function calculateProration(
 
 export function formatCurrency(amount: number, currency: string): string {
   const currencySymbols: Record<string, string> = {
-    USD: "$",
-    EUR: "€",
     CHF: "CHF ",
-    GBP: "£",
-    INR: "₹",
-    AUD: "A$",
+    // USD: "$",
+    // EUR: "€",
+    // GBP: "£",
+    // INR: "₹",
+    // AUD: "A$",
   };
 
   const symbol = currencySymbols[currency] || currency;
