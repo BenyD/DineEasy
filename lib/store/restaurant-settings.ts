@@ -2,12 +2,17 @@
 
 import { create } from "zustand";
 import { createClient } from "@/lib/supabase/client";
-import { CURRENCIES, type Currency } from "@/lib/constants/currencies";
+import {
+  CURRENCIES,
+  CURRENCY_SYMBOLS,
+  type Currency,
+} from "@/lib/constants/currencies";
 import { toast } from "sonner";
 
 interface RestaurantSettings {
   // Currency settings
   currency: Currency;
+  currencySymbol: string;
   setCurrency: (currency: Currency) => void;
 
   // Restaurant data
@@ -24,7 +29,8 @@ interface RestaurantSettings {
 
 export const useRestaurantSettings = create<RestaurantSettings>((set, get) => ({
   // Default currency
-  currency: CURRENCIES.USD,
+  currency: CURRENCIES.CHF,
+  currencySymbol: CURRENCY_SYMBOLS.CHF,
 
   // Restaurant data
   restaurant: null,
@@ -33,7 +39,10 @@ export const useRestaurantSettings = create<RestaurantSettings>((set, get) => ({
 
   // Set currency
   setCurrency: (currency: Currency) => {
-    set({ currency });
+    set({
+      currency,
+      currencySymbol: CURRENCY_SYMBOLS[currency],
+    });
     // Update in database if restaurant exists
     const { restaurant } = get();
     if (restaurant) {
@@ -86,6 +95,7 @@ export const useRestaurantSettings = create<RestaurantSettings>((set, get) => ({
         set({
           restaurant,
           currency,
+          currencySymbol: CURRENCY_SYMBOLS[currency],
           isLoading: false,
         });
       } else {

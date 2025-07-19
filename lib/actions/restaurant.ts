@@ -6,11 +6,12 @@ import type { Database } from "@/types/supabase";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
 import { revalidatePath } from "next/cache";
+import { uploadImage, deleteImage } from "@/lib/actions/upload";
 
 type Restaurant = Database["public"]["Tables"]["restaurants"]["Insert"];
 type Currency = Database["public"]["Enums"]["currency"];
 
-// Add these helper functions at the top of the file
+// Legacy helper function for backward compatibility
 async function uploadRestaurantImage(
   supabase: ReturnType<typeof createClient>,
   file: File,
@@ -18,133 +19,14 @@ async function uploadRestaurantImage(
   type: "logo" | "cover",
   restaurantSlug: string
 ): Promise<string | null> {
-  try {
-    // Validate file exists and has content
-    if (!file || file.size === 0) {
-      throw new Error("File is empty or corrupted");
-    }
+  const uploadType = type === "logo" ? "restaurant-logo" : "restaurant-cover";
+  const result = await uploadImage(file, uploadType);
 
-    // Validate file type
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      throw new Error(
-        `Invalid file type. Allowed types: ${allowedTypes.join(", ")}`
-      );
-    }
-
-    // Validate file size
-    const maxSize = 5 * 1024 * 1024; // 5MB for both logo and cover
-    if (file.size > maxSize) {
-      throw new Error(
-        `File size too large. Maximum size: ${maxSize / 1024 / 1024}MB`
-      );
-    }
-
-    // Validate file extension
-    const fileExtension = file.name.split(".").pop()?.toLowerCase();
-    if (
-      !fileExtension ||
-      !["jpg", "jpeg", "png", "webp"].includes(fileExtension)
-    ) {
-      throw new Error("Invalid file extension. Allowed: jpg, jpeg, png, webp");
-    }
-
-    // Generate a clean filename with proper extension
-    const timestamp = Date.now();
-    const cleanSlug = restaurantSlug.replace(/[^a-z0-9-]/g, "");
-    const filename = `${type}-${cleanSlug}-${timestamp}.${fileExtension}`;
-    const path = `${userId}/${filename}`;
-
-    console.log(`Uploading ${type} image:`, {
-      filename,
-      path,
-      size: file.size,
-      type: file.type,
-      userId,
-    });
-
-    // Check if bucket exists (this will throw an error if bucket doesn't exist)
-    const { data: bucketData, error: bucketError } = await supabase.storage
-      .from("restaurant-images")
-      .list("", { limit: 1 });
-
-    if (bucketError) {
-      console.error("Bucket check error:", bucketError);
-      if (
-        bucketError.message.includes("bucket") ||
-        bucketError.message.includes("not found")
-      ) {
-        throw new Error(
-          "Storage bucket not configured. Please contact support."
-        );
-      }
-      throw new Error(`Storage error: ${bucketError.message}`);
-    }
-
-    // Upload file to Supabase storage
-    const { data, error } = await supabase.storage
-      .from("restaurant-images")
-      .upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: file.type,
-      });
-
-    if (error) {
-      console.error(`Error uploading ${type}:`, error);
-
-      // Handle specific storage errors
-      if (error.message.includes("bucket")) {
-        throw new Error(
-          "Storage bucket not configured. Please contact support."
-        );
-      }
-      if (error.message.includes("permission")) {
-        throw new Error("Permission denied. Please try again.");
-      }
-      if (error.message.includes("duplicate")) {
-        throw new Error(
-          "File already exists. Please choose a different image."
-        );
-      }
-      if (
-        error.message.includes("network") ||
-        error.message.includes("timeout")
-      ) {
-        throw new Error(
-          "Network error. Please check your connection and try again."
-        );
-      }
-      if (error.message.includes("size") || error.message.includes("limit")) {
-        throw new Error("File size exceeds the allowed limit.");
-      }
-
-      throw new Error(`Failed to upload ${type}: ${error.message}`);
-    }
-
-    if (!data?.path) {
-      throw new Error(`No path returned for ${type} upload`);
-    }
-
-    // Get public URL
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("restaurant-images").getPublicUrl(data.path);
-
-    if (!publicUrl) {
-      throw new Error(`Failed to get public URL for ${type}`);
-    }
-
-    console.log(`Successfully uploaded ${type}:`, {
-      path: data.path,
-      publicUrl,
-    });
-
-    return publicUrl;
-  } catch (error) {
-    console.error(`Error in uploadRestaurantImage for ${type}:`, error);
-    throw error;
+  if (result.error) {
+    throw new Error(result.error);
   }
+
+  return result.url || null;
 }
 
 // Helper function to validate image file
@@ -964,35 +846,11 @@ export async function removeRestaurantImage(imageType: "logo" | "cover") {
 
     // Delete image from storage if it exists
     if (imageUrl) {
-      try {
-        // Extract the file path from the Supabase URL
-        // URL format: https://[project].supabase.co/storage/v1/object/public/restaurant-images/[userId]/[filename]
-        const urlParts = imageUrl.split("/");
-        const bucketIndex = urlParts.findIndex(
-          (part: string) => part === "restaurant-images"
-        );
-
-        if (bucketIndex !== -1 && bucketIndex + 2 < urlParts.length) {
-          // Get the path after the bucket name: [userId]/[filename]
-          const filePath = urlParts.slice(bucketIndex + 1).join("/");
-
-          console.log(`Attempting to delete ${imageType} from path:`, filePath);
-
-          const { error: deleteError } = await supabase.storage
-            .from("restaurant-images")
-            .remove([filePath]);
-
-          if (deleteError) {
-            console.warn(`Failed to delete ${imageType}:`, deleteError);
-            // Continue with database update even if storage deletion fails
-          } else {
-            console.log(`Successfully deleted ${imageType} from storage`);
-          }
-        } else {
-          console.warn(`Could not extract file path from URL: ${imageUrl}`);
-        }
-      } catch (error) {
-        console.warn(`Error deleting ${imageType}:`, error);
+      const uploadType =
+        imageType === "logo" ? "restaurant-logo" : "restaurant-cover";
+      const deleteResult = await deleteImage(imageUrl, uploadType);
+      if (deleteResult.error) {
+        console.warn(`Failed to delete ${imageType}:`, deleteResult.error);
         // Continue with database update even if storage deletion fails
       }
     }

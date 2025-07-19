@@ -12,12 +12,31 @@ export default function RootLayoutClient() {
   const supabase = createClient();
 
   useEffect(() => {
+    let isInitialLoad = true;
+    let previousSession: Session | null = null;
+
+    // Get initial session to compare later
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      previousSession = session;
+      isInitialLoad = false;
+    });
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       (event: AuthChangeEvent, session: Session | null) => {
         if (event === "SIGNED_IN") {
-          router.refresh();
+          // Only refresh if this is a genuine new sign-in (not a session refresh)
+          const isGenuineSignIn =
+            !previousSession && session && isInitialLoad === false;
+          const isSameUser = previousSession?.user?.id === session?.user?.id;
+
+          if (isGenuineSignIn && !isSameUser) {
+            router.refresh();
+          }
+
+          // Additional check: don't show toast if it's the same user (session refresh)
+
           // Only show the toast if not on public pages, signup, or verify-email pages
           const isPublicPage =
             pathname === "/" ||
@@ -32,6 +51,8 @@ export default function RootLayoutClient() {
             pathname?.startsWith("/solutions");
 
           if (
+            isGenuineSignIn &&
+            !isSameUser &&
             !isPublicPage &&
             !pathname?.includes("/signup") &&
             !pathname?.includes("/verify-email") &&
@@ -41,6 +62,9 @@ export default function RootLayoutClient() {
           ) {
             toast.success("Signed in successfully");
           }
+
+          // Update previous session
+          previousSession = session;
         }
         if (event === "SIGNED_OUT") {
           router.refresh();
@@ -48,10 +72,13 @@ export default function RootLayoutClient() {
           toast.success("Signed out successfully");
         }
         if (event === "USER_UPDATED") {
-          router.refresh();
-          // Only show the toast if not on verify-email page
-          if (!pathname?.includes("/verify-email")) {
-            toast.success("Profile updated");
+          // Only refresh if this is not the initial load
+          if (!isInitialLoad) {
+            router.refresh();
+            // Only show the toast if not on verify-email page
+            if (!pathname?.includes("/verify-email")) {
+              toast.success("Profile updated");
+            }
           }
         }
         if (event === "PASSWORD_RECOVERY") {

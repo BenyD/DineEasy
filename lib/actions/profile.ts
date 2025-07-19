@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { uploadImage, deleteImage } from "@/lib/actions/upload";
 
 // Helper function to validate avatar file
 function validateAvatarFile(file: File): string | null {
@@ -92,136 +93,23 @@ export async function updateProfile(formData: FormData) {
 
       // Delete old avatar if it exists
       if (currentProfile?.avatar_url) {
-        try {
-          // Extract the file path from the Supabase URL
-          const urlParts = currentProfile.avatar_url.split("/");
-          const bucketIndex = urlParts.findIndex(
-            (part: string) => part === "avatars"
-          );
-
-          if (bucketIndex !== -1 && bucketIndex + 2 < urlParts.length) {
-            // Get the path after the bucket name: [userId]/[filename]
-            const filePath = urlParts.slice(bucketIndex + 1).join("/");
-
-            console.log("Attempting to delete old avatar from path:", filePath);
-
-            const { error: deleteError } = await supabase.storage
-              .from("avatars")
-              .remove([filePath]);
-
-            if (deleteError) {
-              console.warn("Failed to delete old avatar:", deleteError);
-              // Continue with upload even if deletion fails
-            } else {
-              console.log("Successfully deleted old avatar from storage");
-            }
-          } else {
-            console.warn(
-              `Could not extract file path from avatar URL: ${currentProfile.avatar_url}`
-            );
-          }
-        } catch (error) {
-          console.warn("Error deleting old avatar:", error);
+        const deleteResult = await deleteImage(
+          currentProfile.avatar_url,
+          "avatar"
+        );
+        if (deleteResult.error) {
+          console.warn("Failed to delete old avatar:", deleteResult.error);
           // Continue with upload even if deletion fails
         }
       }
 
-      // Check if bucket exists
-      const { data: bucketData, error: bucketError } = await supabase.storage
-        .from("avatars")
-        .list("", { limit: 1 });
-
-      if (bucketError) {
-        console.error("Bucket check error:", bucketError);
-        if (
-          bucketError.message.includes("bucket") ||
-          bucketError.message.includes("not found")
-        ) {
-          return {
-            error: "Storage bucket not configured. Please contact support.",
-          };
-        }
-        return { error: `Storage error: ${bucketError.message}` };
+      // Upload new avatar using unified upload function
+      const uploadResult = await uploadImage(avatarFile, "avatar");
+      if (uploadResult.error) {
+        return { error: uploadResult.error };
       }
 
-      // Generate unique filename
-      const timestamp = Date.now();
-      const fileExtension =
-        avatarFile.name.split(".").pop()?.toLowerCase() || "jpg";
-      const filename = `${user.id}-${timestamp}.${fileExtension}`;
-      const filePath = `${user.id}/${filename}`;
-
-      console.log("Uploading avatar:", {
-        filename,
-        path: filePath,
-        size: avatarFile.size,
-        type: avatarFile.type,
-        userId: user.id,
-      });
-
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(filePath, avatarFile, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: avatarFile.type,
-        });
-
-      if (uploadError) {
-        console.error("Avatar upload error:", uploadError);
-
-        // Handle specific storage errors
-        if (uploadError.message.includes("bucket")) {
-          return {
-            error: "Storage bucket not configured. Please contact support.",
-          };
-        }
-        if (uploadError.message.includes("permission")) {
-          return { error: "Permission denied. Please try again." };
-        }
-        if (uploadError.message.includes("duplicate")) {
-          return {
-            error: "File already exists. Please choose a different image.",
-          };
-        }
-        if (
-          uploadError.message.includes("network") ||
-          uploadError.message.includes("timeout")
-        ) {
-          return {
-            error: "Network error. Please check your connection and try again.",
-          };
-        }
-        if (
-          uploadError.message.includes("size") ||
-          uploadError.message.includes("limit")
-        ) {
-          return { error: "File size exceeds the allowed limit." };
-        }
-
-        return { error: `Failed to upload avatar: ${uploadError.message}` };
-      }
-
-      if (!uploadData?.path) {
-        return { error: "No path returned for avatar upload" };
-      }
-
-      // Get public URL
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("avatars").getPublicUrl(uploadData.path);
-
-      if (!publicUrl) {
-        return { error: "Failed to get public URL for avatar" };
-      }
-
-      console.log("Successfully uploaded avatar:", {
-        path: uploadData.path,
-        publicUrl,
-      });
-
-      avatarUrl = publicUrl;
+      avatarUrl = uploadResult.url;
     }
 
     // Update profile in database
@@ -277,36 +165,9 @@ export async function deleteAvatar() {
 
     // Delete existing avatar from storage if it exists
     if (profile.avatar_url) {
-      try {
-        // Extract the file path from the Supabase URL
-        const urlParts = profile.avatar_url.split("/");
-        const bucketIndex = urlParts.findIndex(
-          (part: string) => part === "avatars"
-        );
-
-        if (bucketIndex !== -1 && bucketIndex + 2 < urlParts.length) {
-          // Get the path after the bucket name: [userId]/[filename]
-          const filePath = urlParts.slice(bucketIndex + 1).join("/");
-
-          console.log("Attempting to delete avatar from path:", filePath);
-
-          const { error: deleteError } = await supabase.storage
-            .from("avatars")
-            .remove([filePath]);
-
-          if (deleteError) {
-            console.warn("Failed to delete avatar:", deleteError);
-            // Continue with profile update even if storage deletion fails
-          } else {
-            console.log("Successfully deleted avatar from storage");
-          }
-        } else {
-          console.warn(
-            `Could not extract file path from avatar URL: ${profile.avatar_url}`
-          );
-        }
-      } catch (error) {
-        console.warn("Error deleting avatar:", error);
+      const deleteResult = await deleteImage(profile.avatar_url, "avatar");
+      if (deleteResult.error) {
+        console.warn("Failed to delete avatar:", deleteResult.error);
         // Continue with profile update even if storage deletion fails
       }
     }
