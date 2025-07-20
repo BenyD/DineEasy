@@ -301,7 +301,7 @@ Required environment variables:
 
 ```env
 RESEND_API_KEY=your_resend_api_key
-NEXT_PUBLIC_BASE_URL=https://your-domain.com
+NEXT_PUBLIC_APP_URL=https://your-domain.com
 ```
 
 ## Usage Examples

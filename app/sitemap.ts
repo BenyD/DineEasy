@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://dineeasy.com";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.com";
   const lastModified = new Date();
 
   // Main pages (highest priority)

@@ -653,6 +653,9 @@ export default function SetupPage() {
   const handleComplete = async () => {
     setIsLoading(true);
     try {
+      console.log("🚀 Starting restaurant creation process...");
+      console.log("📋 Form data:", formData);
+
       // Comprehensive validation for all steps
       const validationErrors: string[] = [];
 
@@ -719,6 +722,12 @@ export default function SetupPage() {
 
       // File validation with comprehensive edge case handling
       if (formData.logo) {
+        console.log("🖼️ Logo file details:", {
+          name: formData.logo.name,
+          size: formData.logo.size,
+          type: formData.logo.type,
+        });
+
         // Check if file is empty
         if (formData.logo.size === 0) {
           validationErrors.push("Logo file is empty");
@@ -756,6 +765,12 @@ export default function SetupPage() {
       }
 
       if (formData.coverPhoto) {
+        console.log("🖼️ Cover photo file details:", {
+          name: formData.coverPhoto.name,
+          size: formData.coverPhoto.size,
+          type: formData.coverPhoto.type,
+        });
+
         // Check if file is empty
         if (formData.coverPhoto.size === 0) {
           validationErrors.push("Cover photo file is empty");
@@ -795,12 +810,15 @@ export default function SetupPage() {
       }
 
       if (validationErrors.length > 0) {
+        console.error("❌ Validation errors:", validationErrors);
         toast.error("Please fix the following errors:", {
           description: validationErrors.join(", "),
         });
         setIsLoading(false);
         return;
       }
+
+      console.log("✅ Validation passed, creating FormData...");
 
       // Create FormData object with all the collected information
       const submitData = new FormData();
@@ -824,12 +842,28 @@ export default function SetupPage() {
         }
       });
 
+      console.log("📤 FormData created, calling createRestaurant...");
+      console.log("📋 FormData entries:");
+      for (const [key, value] of submitData.entries()) {
+        console.log(
+          `  ${key}:`,
+          value instanceof File
+            ? `File(${value.name}, ${value.size} bytes)`
+            : value
+        );
+      }
+
       const result = await createRestaurant(submitData);
 
+      console.log("📥 createRestaurant result:", result);
+
       if (result.error) {
+        console.error("❌ Restaurant creation failed:", result.error);
         toast.error(result.error);
         return;
       }
+
+      console.log("✅ Restaurant created successfully!");
 
       // Clear localStorage when setup is completed successfully
       if (typeof window !== "undefined") {
@@ -840,8 +874,25 @@ export default function SetupPage() {
       toast.success("Restaurant profile created successfully!");
       router.push("/select-plan");
     } catch (error) {
-      console.error("Error submitting form:", error);
-      toast.error("Something went wrong. Please try again.");
+      console.error("💥 Critical error in handleComplete:", error);
+      console.error("🔍 Error details:", {
+        name: error?.name,
+        message: error?.message,
+        stack: error?.stack,
+        cause: error?.cause,
+      });
+
+      // Show more detailed error information
+      let errorMessage = "Something went wrong. Please try again.";
+      if (error instanceof Error) {
+        errorMessage = `Error: ${error.message}`;
+        if (error.message.includes("restaurant_id")) {
+          errorMessage =
+            "Database error: Ambiguous column reference detected. Please contact support.";
+        }
+      }
+
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

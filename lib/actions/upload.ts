@@ -156,9 +156,9 @@ export async function uploadImage(
           .single();
 
         const cleanSlug =
-          restaurant?.slug?.replace(/[^a-z0-9-]/g, "") || user.id;
+          restaurant?.slug?.replace(/[^a-z0-9-]/g, "") || restaurantId;
         const imageType = type === "restaurant-logo" ? "logo" : "cover";
-        filePath = `${user.id}/${imageType}-${cleanSlug}-${timestamp}.${fileExtension}`;
+        filePath = `${restaurantId}/${imageType}-${cleanSlug}-${timestamp}.${fileExtension}`;
         break;
 
       case "menu-item":

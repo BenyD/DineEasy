@@ -1047,8 +1047,40 @@ export default function MenuPage() {
     const onDrop = useCallback(async (acceptedFiles: File[]) => {
       const file = acceptedFiles[0];
       if (file) {
+        // Comprehensive file validation (consistent with other uploads)
+
+        // Check if file is empty
+        if (file.size === 0) {
+          toast.error("File is empty");
+          return;
+        }
+
+        // Check if file is corrupted
+        if (file.size < 10) {
+          toast.error("File appears to be corrupted or empty");
+          return;
+        }
+
+        // Check file size
         if (file.size > MAX_FILE_SIZE) {
           toast.error("File size exceeds 5MB limit");
+          return;
+        }
+
+        // Validate file type
+        const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+        if (!allowedTypes.includes(file.type)) {
+          toast.error("Image must be a JPEG, PNG, or WebP image");
+          return;
+        }
+
+        // Validate file extension
+        const fileExtension = file.name.split(".").pop()?.toLowerCase();
+        if (
+          !fileExtension ||
+          !["jpg", "jpeg", "png", "webp"].includes(fileExtension)
+        ) {
+          toast.error("Invalid file extension. Allowed: jpg, jpeg, png, webp");
           return;
         }
 
@@ -1056,6 +1088,10 @@ export default function MenuPage() {
         const reader = new FileReader();
         reader.onload = (e) => {
           setImagePreview(e.target?.result as string);
+        };
+        reader.onerror = () => {
+          toast.error("Failed to read file. Please try a different image.");
+          return;
         };
         reader.readAsDataURL(file);
 
@@ -1090,7 +1126,8 @@ export default function MenuPage() {
             setTimeout(() => setImagePreview(null), 1000);
           }
         } catch (error) {
-          toast.error("Failed to upload image");
+          console.error("Upload error:", error);
+          toast.error("Failed to upload image. Please try again.");
           setImagePreview(null);
         } finally {
           setIsUploading(false);

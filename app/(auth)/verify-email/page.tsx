@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Mail, RotateCw, Edit, X, Check } from "lucide-react";
 import { motion } from "framer-motion";
@@ -30,7 +30,52 @@ interface VerificationResponse {
   user_id?: string;
 }
 
-export default function VerifyEmailPage() {
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Email verification error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
+          <div className="max-w-md w-full text-center space-y-6">
+            <div className="flex flex-col items-center gap-6">
+              <Logo />
+              <div className="rounded-full bg-red-100 p-3">
+                <Mail className="h-6 w-6 text-red-600" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-red-600">
+              Something went wrong
+            </h1>
+            <p className="text-gray-500">
+              We encountered an error while verifying your email. Please try
+              again.
+            </p>
+            <Button onClick={() => window.location.reload()} className="w-full">
+              Try Again
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function VerifyEmailPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -47,6 +92,7 @@ export default function VerifyEmailPage() {
   const [currentEmail, setCurrentEmail] = useState(email || "");
   const [showEmailInput, setShowEmailInput] = useState(false);
   const [tempEmail, setTempEmail] = useState("");
+  const [isPolling, setIsPolling] = useState(false);
 
   // Update currentEmail when email parameter changes
   useEffect(() => {
@@ -76,6 +122,98 @@ export default function VerifyEmailPage() {
     getEmailFromSession();
   }, [email, currentEmail]);
 
+  // Function to check verification status
+  const checkVerificationStatus = async () => {
+    try {
+      const supabase = createClient();
+
+      // Get current user session
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        return false;
+      }
+
+      // Check if email is verified using our custom verification system
+      const { data: verificationStatus, error: statusError } =
+        await supabase.rpc("is_email_verified", { p_user_id: user.id });
+
+      if (statusError) {
+        console.error("Error checking verification status:", statusError);
+        return false;
+      }
+
+      return verificationStatus === true;
+    } catch (error) {
+      console.error("Error checking verification status:", error);
+      return false;
+    }
+  };
+
+  // Function to handle successful verification
+  const handleSuccessfulVerification = async (isTokenVerification = false) => {
+    try {
+      const supabase = createClient();
+
+      // Get the user session
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error("Session error:", sessionError);
+        setVerificationStatus("error");
+        setError("Session error. Please try signing in again.");
+        return;
+      }
+
+      if (!session) {
+        // If no session, redirect to login
+        setVerificationStatus("success");
+        setTimeout(() => {
+          router.push("/login");
+        }, 2000);
+        return;
+      }
+
+      // If this is a token verification (new tab), show "safe to close" message
+      if (isTokenVerification) {
+        setVerificationStatus("success");
+        return; // Don't redirect, just show success message
+      }
+
+      // Get onboarding status and redirect accordingly (for polling-based verification)
+      try {
+        const onboardingStatus = await getOnboardingStatus(supabase);
+        setVerificationStatus("success");
+        setTimeout(() => {
+          redirectToOnboardingStep(
+            onboardingStatus.step,
+            router,
+            onboardingStatus.emailVerified
+          );
+        }, 2000);
+      } catch (onboardingError) {
+        console.error("Onboarding error:", onboardingError);
+        setVerificationStatus("success");
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 2000);
+      }
+    } catch (error) {
+      console.error("Error handling successful verification:", error);
+      setVerificationStatus("error");
+      setError(
+        "An unexpected error occurred. Please try again or contact support."
+      );
+    }
+  };
+
+  // Effect for immediate token verification
   useEffect(() => {
     const verifyEmail = async () => {
       if (!token) {
@@ -98,7 +236,9 @@ export default function VerifyEmailPage() {
         if (verifyError) {
           console.error("Verification error:", verifyError);
           setVerificationStatus("error");
-          setError(`Verification failed: ${verifyError.message}`);
+          setError(
+            "Email verification failed. The link may be invalid or expired."
+          );
           return;
         }
 
@@ -108,53 +248,73 @@ export default function VerifyEmailPage() {
           console.error("Verification failed:", response);
           setVerificationStatus("error");
           setError(
-            response?.error || "Failed to verify email. Please try again."
+            response?.error ||
+              "Email verification failed. Please try again or request a new verification link."
           );
-          setDebugInfo(response?.debug);
+          // Only show debug info in development
+          if (process.env.NODE_ENV === "development") {
+            setDebugInfo(response?.debug);
+          }
           return;
         }
 
-        // Get the user session
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error("Session error:", sessionError);
-          setVerificationStatus("error");
-          setError("Session error. Please try signing in again.");
-          return;
-        }
-
-        if (!session) {
-          // If no session, redirect to login
-          setVerificationStatus("success");
-          setTimeout(() => {
-            router.push("/login");
-          }, 2000);
-          return;
-        }
-
-        // Get onboarding status and redirect accordingly
-        const onboardingStatus = await getOnboardingStatus(supabase);
-        setVerificationStatus("success");
-        setTimeout(() => {
-          redirectToOnboardingStep(
-            onboardingStatus.step,
-            router,
-            onboardingStatus.emailVerified
-          );
-        }, 2000);
+        // Handle successful verification
+        await handleSuccessfulVerification(true);
       } catch (error) {
         console.error("Error during email verification:", error);
         setVerificationStatus("error");
-        setError("An unexpected error occurred. Please try again.");
+        setError(
+          "An unexpected error occurred. Please try again or contact support."
+        );
       }
     };
 
-    verifyEmail();
+    // Wrap the entire verification in a try-catch to prevent unhandled errors
+    try {
+      verifyEmail();
+    } catch (error) {
+      console.error("Critical error in email verification:", error);
+      setVerificationStatus("error");
+      setError(
+        "A critical error occurred. Please refresh the page and try again."
+      );
+    }
   }, [token, router]);
+
+  // Effect for polling verification status (when no token is present)
+  useEffect(() => {
+    if (token || verificationStatus !== "pending") {
+      // Don't poll if we have a token or verification is already complete/error
+      return;
+    }
+
+    let pollInterval: NodeJS.Timeout;
+
+    const startPolling = () => {
+      pollInterval = setInterval(async () => {
+        const isVerified = await checkVerificationStatus();
+
+        if (isVerified) {
+          console.log("Email verification detected via polling");
+          clearInterval(pollInterval);
+          await handleSuccessfulVerification();
+        }
+      }, 3000); // Check every 3 seconds
+    };
+
+    // Start polling after a short delay
+    const startDelay = setTimeout(() => {
+      startPolling();
+    }, 2000); // Start polling after 2 seconds
+
+    // Cleanup function
+    return () => {
+      clearTimeout(startDelay);
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [token, verificationStatus, router]);
 
   const handleResendEmail = async () => {
     const emailToUse = currentEmail || tempEmail;
@@ -282,6 +442,12 @@ export default function VerifyEmailPage() {
               . Please check your email and click the link to verify your
               account.
             </p>
+
+            {/* Active checking indicator */}
+            <div className="flex items-center justify-center gap-2 text-sm text-blue-600">
+              <RotateCw className="h-4 w-4 animate-spin" />
+              <span>Checking for verification...</span>
+            </div>
 
             <div className="flex flex-col items-center gap-4 mt-6">
               <p className="text-sm text-gray-500">
@@ -457,9 +623,26 @@ export default function VerifyEmailPage() {
             <h1 className="text-2xl font-bold text-green-600">
               Email verified!
             </h1>
-            <p className="text-gray-500">
-              Your email has been verified successfully. Redirecting you...
-            </p>
+            {token ? (
+              <div className="space-y-4">
+                <p className="text-gray-500">
+                  Your email has been verified successfully.
+                </p>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="text-green-800 font-medium">
+                    ✅ You can safely close this tab
+                  </p>
+                  <p className="text-green-700 text-sm mt-1">
+                    Return to your original tab to continue with the setup
+                    process.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-gray-500">
+                Your email has been verified successfully. Redirecting you...
+              </p>
+            )}
           </>
         )}
 
@@ -470,8 +653,8 @@ export default function VerifyEmailPage() {
             </h1>
             <p className="text-gray-500">{error}</p>
 
-            {/* Debug information */}
-            {debugInfo && (
+            {/* Debug information - only show in development */}
+            {debugInfo && process.env.NODE_ENV === "development" && (
               <div className="bg-gray-100 p-4 rounded-lg text-left text-sm">
                 <h3 className="font-semibold mb-2">Debug Information:</h3>
                 <pre className="text-xs overflow-auto">
@@ -646,19 +829,30 @@ export default function VerifyEmailPage() {
                   {showEmailForm ? "Cancel" : "Change Email Address"}
                 </Button>
 
-                <Button
-                  onClick={handleDebug}
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
-                >
-                  Debug Info
-                </Button>
+                {/* Debug button - only show in development */}
+                {process.env.NODE_ENV === "development" && (
+                  <Button
+                    onClick={handleDebug}
+                    variant="ghost"
+                    size="sm"
+                    className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                  >
+                    Debug Info
+                  </Button>
+                )}
               </div>
             </div>
           </>
         )}
       </motion.div>
     </div>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <ErrorBoundary>
+      <VerifyEmailPageContent />
+    </ErrorBoundary>
   );
 }
