@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.com";
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.ch";
 
 export const viewport: Viewport = {
   width: "device-width",

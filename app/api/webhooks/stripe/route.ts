@@ -7,7 +7,6 @@ import {
   sendSubscriptionCancellationEmail,
   sendRefundNotificationEmail,
   sendPaymentFailedEmail,
-  sendSubscriptionWelcomeEmail,
   sendPaymentDisputeEmail,
 } from "@/lib/email";
 import type { Stripe } from "stripe";
@@ -203,6 +202,30 @@ export async function POST(req: Request) {
             }
           );
 
+          // Send success email when Stripe Connect is fully set up (fallback case)
+          if (account.charges_enabled && account.details_submitted) {
+            try {
+              // Get restaurant details for the email
+              const { data: restaurant } = await adminSupabase
+                .from("restaurants")
+                .select("name, email, country")
+                .eq("id", stripeRestaurant.id)
+                .single();
+
+              if (restaurant?.email) {
+                console.log(
+                  "Stripe Connect account ready (fallback) - email will be sent during onboarding completion:",
+                  restaurant.email
+                );
+              }
+            } catch (error) {
+              console.error(
+                "Error getting restaurant details for email:",
+                error
+              );
+            }
+          }
+
           break;
         }
 
@@ -235,6 +258,17 @@ export async function POST(req: Request) {
           payoutsEnabled: account.payouts_enabled,
           detailsSubmitted: account.details_submitted,
         });
+
+        // Log when Stripe Connect is fully set up (email will be sent during onboarding completion)
+        if (account.charges_enabled && account.details_submitted) {
+          console.log(
+            "Stripe Connect account fully set up - email will be sent during onboarding completion:",
+            {
+              restaurantId: stripeRestaurant.id,
+              accountId: account.id,
+            }
+          );
+        }
 
         break;
       }
@@ -647,88 +681,6 @@ export async function POST(req: Request) {
           interval,
           currency,
         });
-
-        // Send welcome email for new trial subscriptions
-        if (
-          event.type === "customer.subscription.created" &&
-          subscription.status === "trialing"
-        ) {
-          try {
-            // Get Stripe customer email
-            const customer = (await stripe.customers.retrieve(
-              subscription.customer as string
-            )) as Stripe.Customer;
-
-            if (customer.email && customer.email.length > 0) {
-              // Get restaurant details for name
-              const { data: restaurant } = await adminSupabase
-                .from("restaurants")
-                .select("name")
-                .eq("id", restaurantId)
-                .single();
-
-              // Get plan features based on plan type
-              const getPlanFeatures = (planType: string) => {
-                switch (planType.toLowerCase()) {
-                  case "starter":
-                    return [
-                      "Up to 100 orders per month",
-                      "Basic menu management",
-                      "QR code ordering",
-                      "Email support",
-                    ];
-                  case "pro":
-                    return [
-                      "Up to 500 orders per month",
-                      "Advanced menu management",
-                      "QR code ordering",
-                      "Kitchen display system",
-                      "Analytics dashboard",
-                      "Priority support",
-                    ];
-                  case "elite":
-                    return [
-                      "Unlimited orders",
-                      "Advanced menu management",
-                      "QR code ordering",
-                      "Kitchen display system",
-                      "Advanced analytics",
-                      "Staff management",
-                      "Multi-location support",
-                      "Dedicated support",
-                    ];
-                  default:
-                    return ["Basic features included"];
-                }
-              };
-
-              const trialEndDate = (subscription as any).trial_end
-                ? new Date(
-                    (subscription as any).trial_end * 1000
-                  ).toLocaleDateString()
-                : "14 days from now";
-
-              await sendSubscriptionWelcomeEmail(customer.email, {
-                subscriptionId: subscription.id,
-                plan: plan,
-                interval: interval,
-                trialEndDate: trialEndDate,
-                customerName: customer.name || restaurant?.name,
-                restaurantName: restaurant?.name,
-                features: getPlanFeatures(plan),
-              });
-
-              console.log("Welcome email sent for new subscription:", {
-                subscriptionId: subscription.id,
-                customerEmail: customer.email,
-                plan: plan,
-              });
-            }
-          } catch (emailError) {
-            console.error("Error sending welcome email:", emailError);
-            // Don't fail the webhook if email fails
-          }
-        }
 
         // If this is an upgrade, mark the old subscription as an upgrade before it gets deleted
         if (

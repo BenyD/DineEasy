@@ -69,17 +69,18 @@ DineEasy sends business emails to restaurant subscribers for various subscriptio
   - Subscription plan details
   - Resolution instructions
 
-### 5. **Subscription Welcome Email** (`sendSubscriptionWelcomeEmail`)
+### 5. **Welcome to DineEasy Email** (`sendWelcomeToDineEasyEmail`)
 
-- **Purpose**: Sent when new trial subscriptions are created
-- **Triggers**: `customer.subscription.created` (trial status only)
-- **Recipients**: Stripe customer email
+- **Purpose**: Sent when onboarding is completed
+- **Triggers**: `completeOnboarding()` function call
+- **Recipients**: User's signup email
 - **Content**:
-  - Welcome message
-  - Subscription details (ID, plan, interval)
-  - Trial end date
+  - Welcome message and congratulations
+  - Restaurant setup details (name, plan, billing)
+  - Stripe Connect status
   - Plan features list
-  - Getting started guide
+  - Next steps guidance
+  - Pro tips for success
 
 ### 6. **Payment Dispute Email** (`sendPaymentDisputeEmail`)
 
@@ -93,19 +94,32 @@ DineEasy sends business emails to restaurant subscribers for various subscriptio
   - Resolution process
   - Response instructions
 
+### 7. **Stripe Connect Success Email** (`sendStripeConnectSuccessEmail`)
+
+- **Purpose**: Sent when Stripe Connect account is successfully set up
+- **Triggers**: `account.updated` (when charges_enabled && details_submitted)
+- **Recipients**: Restaurant business email
+- **Content**:
+  - Success confirmation
+  - Account details (ID, country, business type)
+  - Account status (payments, payouts)
+  - Next steps guidance
+  - Important notes about fees and timing
+
 ## 🔧 **Webhook Integration**
 
 ### **Complete Email Coverage**
 
 | Webhook Event                   | Email Sent           | Recipient       | Purpose                  | Status         |
 | ------------------------------- | -------------------- | --------------- | ------------------------ | -------------- |
-| `customer.subscription.created` | Welcome Email        | Stripe Customer | New trial subscription   | ✅ Implemented |
+| `completeOnboarding()`         | Welcome Email        | User Email      | Onboarding completed     | ✅ Implemented |
 | `customer.subscription.deleted` | Cancellation Email   | Stripe Customer | Subscription cancelled   | ✅ Implemented |
 | `checkout.session.completed`    | Invoice Receipt      | Stripe Customer | New subscription/upgrade | ✅ Implemented |
 | `invoice.payment_succeeded`     | Invoice Receipt      | Stripe Customer | Successful payment       | ✅ Implemented |
 | `invoice.payment_failed`        | Payment Failed       | Stripe Customer | Failed payment           | ✅ Implemented |
 | `charge.refunded`               | Refund Notification  | Stripe Customer | Refund processed         | ✅ Implemented |
 | `charge.dispute.created`        | Dispute Notification | Stripe Customer | Payment disputed         | ✅ Implemented |
+| `account.updated`               | Stripe Connect Success | Restaurant Email | Account setup complete   | ✅ Implemented |
 
 ### **Unified Email Strategy**
 

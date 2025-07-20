@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -13,6 +13,22 @@ import {
   Filter,
   X,
   Users,
+  Loader2,
+  MoreVertical,
+  CheckSquare,
+  Square,
+  Grid3X3,
+  Layout,
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
+  Upload,
+  FileText,
+  MapPin,
+  Clock,
+  BarChart3,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,50 +57,63 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import {
+  getTables,
+  createTable,
+  updateTable,
+  deleteTable,
+  updateTableStatus,
+  bulkUpdateTableStatus,
+  getTableStats,
+  bulkUpdateTableLayouts,
+  generateTableQRCode,
+  updateAllQRCodesForEnvironment,
+} from "@/lib/actions/tables";
+import { getUserRestaurants } from "@/lib/actions/restaurant";
 
-// Mock table data
-const mockTables = [
-  {
-    id: "1",
-    number: "1",
-    capacity: 4,
-    qrCode: "/placeholder.svg?height=120&width=120",
-    status: "available",
-  },
-  {
-    id: "2",
-    number: "2",
-    capacity: 2,
-    qrCode: "/placeholder.svg?height=120&width=120",
-    status: "occupied",
-  },
-  {
-    id: "3",
-    number: "3",
-    capacity: 6,
-    qrCode: "/placeholder.svg?height=120&width=120",
-    status: "available",
-  },
-  {
-    id: "4",
-    number: "4",
-    capacity: 4,
-    qrCode: "/placeholder.svg?height=120&width=120",
-    status: "occupied",
-  },
-  {
-    id: "5",
-    number: "5",
-    capacity: 8,
-    qrCode: "/placeholder.svg?height=120&width=120",
-    status: "available",
-  },
-];
+import type { Database } from "@/types/supabase";
+import TableLayoutEditor from "@/components/dashboard/tables/TableLayoutEditor";
+import BulkOperations from "@/components/dashboard/tables/BulkOperations";
+import { TableQRCode } from "@/components/dashboard/tables/TableQRCode";
+import { QRSetupModal } from "@/components/dashboard/tables/QRSetupModal";
+import { getTableWebSocket, disconnectTableWebSocket } from "@/lib/websocket";
+import {
+  generateTableQRData,
+  isQRCodeEnvironmentCorrect,
+} from "@/lib/utils/qr-code";
+import { QR_CONFIG } from "@/lib/constants";
 
+type Table = Database["public"]["Tables"]["tables"]["Row"];
+type TableStatus = Database["public"]["Enums"]["table_status"];
+
+// Table status options
 const tableStatuses = [
   { value: "all", label: "All Tables" },
   { value: "available", label: "Available" },
   { value: "occupied", label: "Occupied" },
+  { value: "reserved", label: "Reserved" },
+  { value: "unavailable", label: "Unavailable" },
 ];
 
 const capacityOptions = [
@@ -145,10 +175,214 @@ const qrCodeHoverVariants = {
 
 export default function TablesPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [editingTable, setEditingTable] = useState<any>(null);
+  const [editingTable, setEditingTable] = useState<Table | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [capacityFilter, setCapacityFilter] = useState("all");
+  const [sortBy, setSortBy] = useState<
+    "number" | "capacity" | "status" | "created_at"
+  >("number");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [tables, setTables] = useState<Table[]>([]);
+  const [page, setPage] = useState(1);
+  const [itemsPerPage] = useState(20);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [stats, setStats] = useState({
+    total: 0,
+    available: 0,
+    occupied: 0,
+    reserved: 0,
+    unavailable: 0,
+    totalCapacity: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedTables, setSelectedTables] = useState<string[]>([]);
+  const [bulkAction, setBulkAction] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"grid" | "layout">("grid");
+  const [showLayoutEditor, setShowLayoutEditor] = useState(false);
+  const [showQRSetup, setShowQRSetup] = useState(false);
+  const [selectedTableForQR, setSelectedTableForQR] = useState<Table | null>(
+    null
+  );
+  const [restaurant, setRestaurant] = useState<any>(null);
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"csv" | "json">("csv");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  // Fetch tables and stats with error handling
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [tablesResult, statsResult, restaurantsResult] = await Promise.all([
+        getTables(),
+        getTableStats(),
+        getUserRestaurants(),
+      ]);
+
+      if (tablesResult.success && tablesResult.data) {
+        setTables(tablesResult.data);
+      } else {
+        setError(tablesResult.error || "Failed to load tables");
+      }
+
+      if (statsResult.success && statsResult.data) {
+        setStats(statsResult.data);
+      } else {
+        setError(statsResult.error || "Failed to load table statistics");
+      }
+
+      if (
+        restaurantsResult.restaurants &&
+        restaurantsResult.restaurants.length > 0
+      ) {
+        setRestaurant(restaurantsResult.restaurants[0]);
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      setError("Failed to load tables");
+      toast.error("Failed to load tables");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Search function without debounce to prevent random refreshes
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  // Refresh data optimized to prevent unnecessary re-renders
+  const handleRefresh = useCallback(async () => {
+    if (!loading && !refreshing) {
+      setRefreshing(true);
+      try {
+        await fetchData();
+        toast.success("Tables refreshed");
+      } catch (error) {
+        toast.error("Failed to refresh tables");
+      } finally {
+        setRefreshing(false);
+      }
+    }
+  }, [fetchData]); // Removed loading and refreshing from dependencies
+
+  // Load data on mount
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Auto-refresh disabled - only manual refresh allowed
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     // Only auto-refresh if not loading, not refreshing, and no dialogs are open
+  //     if (
+  //       !loading &&
+  //       !refreshing &&
+  //       !isAddDialogOpen &&
+  //       !editingTable &&
+  //       !showLayoutEditor &&
+  //       !actionLoading // Don't refresh while any action is loading
+  //     ) {
+  //       fetchData();
+  //     }
+  //   }, 60000); // 60 seconds (increased from 30 to reduce frequency)
+
+  //   return () => clearInterval(interval);
+  // }, [
+  //   loading,
+  //   refreshing,
+  //   fetchData,
+  //   isAddDialogOpen,
+  //   editingTable,
+  //   showLayoutEditor,
+  //   actionLoading,
+  // ]);
+
+  // WebSocket integration for real-time updates (removed debounce to prevent random refreshes)
+  useEffect(() => {
+    const webSocket = getTableWebSocket();
+
+    // Subscribe to all table updates without debouncing
+    const unsubscribe = webSocket.subscribeToAll((payload: any) => {
+      const { eventType, newRecord, oldRecord } = payload;
+
+      // Only process updates if we have data
+      if (!newRecord && !oldRecord) return;
+
+      if (eventType === "INSERT" && newRecord) {
+        // New table added - only add if not already present
+        setTables((prev) => {
+          const exists = prev.some((table) => table.id === newRecord.id);
+          if (!exists) {
+            toast.success(`Table ${newRecord.number} added`);
+            return [...prev, newRecord];
+          }
+          return prev;
+        });
+      } else if (eventType === "UPDATE" && newRecord) {
+        // Table updated - only update if the record actually changed
+        setTables((prev) => {
+          const existingTable = prev.find((table) => table.id === newRecord.id);
+          if (
+            existingTable &&
+            JSON.stringify(existingTable) !== JSON.stringify(newRecord)
+          ) {
+            // Show toast for status changes
+            if (existingTable.status !== newRecord.status) {
+              toast.success(
+                `Table ${newRecord.number} status updated to ${newRecord.status}`
+              );
+            }
+            return prev.map((table) =>
+              table.id === newRecord.id ? newRecord : table
+            );
+          }
+          return prev;
+        });
+      } else if (eventType === "DELETE" && oldRecord) {
+        // Table deleted - only remove if it exists
+        setTables((prev) => {
+          const exists = prev.some((table) => table.id === oldRecord.id);
+          if (exists) {
+            toast.success(`Table ${oldRecord.number} deleted`);
+            return prev.filter((table) => table.id !== oldRecord.id);
+          }
+          return prev;
+        });
+      }
+    });
+
+    // Update presence
+    webSocket.updatePresence({
+      user_id: "current_user",
+      page: "tables",
+      timestamp: new Date().toISOString(),
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // Cleanup WebSocket on component unmount
+  useEffect(() => {
+    return () => {
+      disconnectTableWebSocket();
+    };
+  }, []);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, statusFilter, capacityFilter]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -156,6 +390,10 @@ export default function TablesPage() {
         return "bg-green-100 text-green-800 border-green-200";
       case "occupied":
         return "bg-red-100 text-red-800 border-red-200";
+      case "reserved":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "unavailable":
+        return "bg-gray-100 text-gray-800 border-gray-200";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
     }
@@ -169,53 +407,285 @@ export default function TablesPage() {
     setSearchQuery("");
     setStatusFilter("all");
     setCapacityFilter("all");
+    setPage(1); // Reset to first page when clearing filters
   };
 
   const hasActiveFilters =
     searchQuery || statusFilter !== "all" || capacityFilter !== "all";
 
-  const filteredTables = mockTables.filter((table) => {
-    const matchesSearch = table.number
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" || table.status === statusFilter;
-    const matchesCapacity =
-      capacityFilter === "all" ||
-      (capacityFilter === "1-2" && table.capacity <= 2) ||
-      (capacityFilter === "3-4" &&
-        table.capacity >= 3 &&
-        table.capacity <= 4) ||
-      (capacityFilter === "5-6" &&
-        table.capacity >= 5 &&
-        table.capacity <= 6) ||
-      (capacityFilter === "7+" && table.capacity >= 7);
-    return matchesSearch && matchesStatus && matchesCapacity;
-  });
+  // Bulk operations handlers
+  const handleSelectAll = () => {
+    if (selectedTables.length === paginatedTables.length) {
+      setSelectedTables([]);
+    } else {
+      setSelectedTables(paginatedTables.map((table) => table.id));
+    }
+  };
+
+  const handleSelectTable = (tableId: string, selected: boolean) => {
+    if (selected) {
+      setSelectedTables((prev) => [...prev, tableId]);
+    } else {
+      setSelectedTables((prev) => prev.filter((id) => id !== tableId));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedTables.length === 0) return;
+
+    try {
+      const confirmed = window.confirm(
+        `Are you sure you want to delete ${selectedTables.length} table(s)? This action cannot be undone.`
+      );
+
+      if (!confirmed) return;
+
+      for (const id of selectedTables) {
+        const result = await deleteTable(id);
+        if (!result.success) {
+          toast.error(`Failed to delete table: ${result.error}`);
+          return;
+        }
+      }
+
+      toast.success(`Successfully deleted ${selectedTables.length} table(s)`);
+      setSelectedTables([]);
+      setIsBulkMode(false);
+      setShowBulkActions(false);
+    } catch (error) {
+      toast.error("Failed to delete tables");
+    }
+  };
+
+  const handleBulkStatusUpdate = async (status: TableStatus) => {
+    if (selectedTables.length === 0) return;
+
+    try {
+      const result = await bulkUpdateTableStatus(selectedTables, status);
+      if (result.success) {
+        toast.success(`Updated status for ${selectedTables.length} table(s)`);
+        setSelectedTables([]);
+        setIsBulkMode(false);
+        setShowBulkActions(false);
+      } else {
+        toast.error(result.error || "Failed to update table status");
+      }
+    } catch (error) {
+      toast.error("Failed to update table status");
+    }
+  };
+
+  const handleBulkExport = async (format: "csv" | "json") => {
+    if (selectedTables.length === 0) return;
+
+    try {
+      setIsExporting(true);
+      const selectedTableData = tables.filter((t) =>
+        selectedTables.includes(t.id)
+      );
+      let content = "";
+
+      if (format === "csv") {
+        const headers = [
+          "Table Number",
+          "Capacity",
+          "Status",
+          "QR Code URL",
+          "Created At",
+        ];
+        content = [
+          headers.join(","),
+          ...selectedTableData.map((table) =>
+            [
+              table.number,
+              table.capacity,
+              table.status,
+              table.qr_code,
+              new Date(table.created_at).toLocaleDateString(),
+            ].join(",")
+          ),
+        ].join("\n");
+      } else {
+        content = JSON.stringify(selectedTableData, null, 2);
+      }
+
+      const blob = new Blob([content], {
+        type: format === "csv" ? "text/csv" : "application/json",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tables-export.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success(
+        `Exported ${selectedTables.length} table(s) as ${format.toUpperCase()}`
+      );
+    } catch (error) {
+      toast.error("Failed to export tables");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleBulkQRDownload = async () => {
+    if (selectedTables.length === 0) return;
+
+    try {
+      // Open QR setup modal for the first table
+      const firstTable = tables.find((t) => t.id === selectedTables[0]);
+      if (firstTable) {
+        setSelectedTableForQR(firstTable);
+        setShowQRSetup(true);
+      }
+    } catch (error) {
+      toast.error("Failed to download QR codes");
+    }
+  };
+
+  const handleUpdateAllQRCodes = async () => {
+    try {
+      const result = await updateAllQRCodesForEnvironment();
+      if (result.success) {
+        toast.success(result.message);
+        await fetchData(); // Refresh the tables
+      } else {
+        toast.error(result.error || "Failed to update QR codes");
+      }
+    } catch (error) {
+      console.error("Error updating QR codes:", error);
+      toast.error("Failed to update QR codes");
+    }
+  };
+
+  // Keyboard shortcuts for bulk operations
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!isBulkMode) return;
+
+      if (event.key === "Delete" && selectedTables.length > 0) {
+        event.preventDefault();
+        handleBulkDelete();
+      } else if (event.ctrlKey && event.key === "a") {
+        event.preventDefault();
+        handleSelectAll();
+      } else if (event.key === "Escape") {
+        setIsBulkMode(false);
+        setSelectedTables([]);
+        setShowBulkActions(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isBulkMode, selectedTables]);
+
+  // Update bulk actions visibility
+  useEffect(() => {
+    setShowBulkActions(selectedTables.length > 0);
+  }, [selectedTables]);
+
+  // Memoized filtered and sorted tables
+  const filteredAndSortedTables = useMemo(() => {
+    let filtered = tables.filter((table: Table) => {
+      const matchesSearch = table.number
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      const matchesStatus =
+        statusFilter === "all" || table.status === statusFilter;
+      const matchesCapacity =
+        capacityFilter === "all" ||
+        (capacityFilter === "1-2" && table.capacity <= 2) ||
+        (capacityFilter === "3-4" &&
+          table.capacity >= 3 &&
+          table.capacity <= 4) ||
+        (capacityFilter === "5-6" &&
+          table.capacity >= 5 &&
+          table.capacity <= 6) ||
+        (capacityFilter === "7+" && table.capacity >= 7);
+      return matchesSearch && matchesStatus && matchesCapacity;
+    });
+
+    // Sort tables
+    filtered.sort((a, b) => {
+      let aValue: any = a[sortBy];
+      let bValue: any = b[sortBy];
+
+      // Handle string sorting for table numbers
+      if (sortBy === "number") {
+        aValue = parseInt(aValue) || 0;
+        bValue = parseInt(bValue) || 0;
+      }
+
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
+    return filtered;
+  }, [tables, searchQuery, statusFilter, capacityFilter, sortBy, sortOrder]);
+
+  // Paginated tables for performance
+  const paginatedTables = useMemo(() => {
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredAndSortedTables.slice(startIndex, endIndex);
+  }, [filteredAndSortedTables, page, itemsPerPage]);
+
+  // Total pages for pagination
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredAndSortedTables.length / itemsPerPage);
+  }, [filteredAndSortedTables.length, itemsPerPage]);
 
   const TableForm = ({
     table,
     onClose,
   }: {
-    table?: any;
+    table?: Table | null;
     onClose: () => void;
   }) => {
     const [formData, setFormData] = useState({
       number: table?.number || "",
       capacity: table?.capacity?.toString() || "",
     });
+    const [submitting, setSubmitting] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      const tableData = {
-        id: table?.id || Date.now().toString(),
-        number: formData.number,
-        capacity: Number.parseInt(formData.capacity),
-        qrCode: `/placeholder.svg?height=120&width=120`,
-        status: table?.status || "available",
-      };
-      console.log(table ? "Updating table:" : "Adding new table:", tableData);
-      onClose();
+      setSubmitting(true);
+
+      try {
+        const formDataObj = new FormData();
+        formDataObj.append("number", formData.number);
+        formDataObj.append("capacity", formData.capacity);
+
+        let result;
+        if (table) {
+          result = await updateTable(table.id, formDataObj);
+        } else {
+          result = await createTable(formDataObj);
+        }
+
+        if (result.success) {
+          toast.success(
+            table ? "Table updated successfully" : "Table created successfully"
+          );
+          // Don't call fetchData() - let WebSocket handle the update
+          onClose();
+        } else {
+          toast.error(result.error || "Failed to save table");
+        }
+      } catch (error) {
+        console.error("Error saving table:", error);
+        toast.error("Failed to save table");
+      } finally {
+        setSubmitting(false);
+      }
     };
 
     return (
@@ -251,13 +721,140 @@ export default function TablesPage() {
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" className="bg-green-600 hover:bg-green-700">
-            {table ? "Update Table" : "Add Table"}
+          <Button
+            type="submit"
+            className="bg-green-600 hover:bg-green-700"
+            disabled={submitting}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                {table ? "Updating..." : "Adding..."}
+              </>
+            ) : table ? (
+              "Update Table"
+            ) : (
+              "Add Table"
+            )}
           </Button>
         </div>
       </form>
     );
   };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        {/* Header Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <Skeleton className="h-8 w-48 mb-2" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-32" />
+          </div>
+        </div>
+
+        {/* Stats Cards Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="overflow-hidden">
+              <CardContent className="p-4 space-y-3">
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-4 w-24" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Filters and Search Skeleton */}
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-5 w-5" />
+              <Skeleton className="h-6 w-32" />
+            </div>
+            <Skeleton className="h-4 w-48" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="relative col-span-full lg:col-span-2">
+                <Skeleton className="absolute left-2.5 top-2.5 h-4 w-4" />
+                <Skeleton className="h-10 w-full pl-8" />
+              </div>
+              <Skeleton className="h-10 w-full" />
+              <div className="flex gap-2">
+                <Skeleton className="h-10 flex-1" />
+                <Skeleton className="h-10 w-20" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Tables Grid Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Card
+              key={i}
+              className="overflow-hidden hover:shadow-lg transition-shadow"
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-6 w-24" />
+                    <Skeleton className="h-5 w-20" />
+                  </div>
+                  <Skeleton className="h-5 w-16" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Skeleton className="h-4 w-4" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* QR Code Skeleton */}
+                <div className="flex justify-center">
+                  <Skeleton className="w-32 h-32 rounded-lg" />
+                </div>
+                {/* QR URL Skeleton */}
+                <div className="text-center">
+                  <Skeleton className="h-8 w-48 mx-auto" />
+                </div>
+                {/* Action Buttons Skeleton */}
+                <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                  </div>
+                  <Skeleton className="h-9 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-red-600">
+            Error Loading Tables
+          </h2>
+          <p className="text-gray-600 mt-2">{error}</p>
+          <Button onClick={fetchData} className="mt-4" variant="outline">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -278,6 +875,179 @@ export default function TablesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+            asChild
+          >
+            <motion.div
+              variants={buttonHoverVariants}
+              whileHover="hover"
+              whileTap="tap"
+              className="flex items-center"
+            >
+              {refreshing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </motion.div>
+          </Button>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsBulkMode(!isBulkMode)}
+                  className={cn(
+                    "transition-all",
+                    isBulkMode && "bg-blue-50 border-blue-200 text-blue-700",
+                    isBulkMode &&
+                      selectedTables.length === 0 &&
+                      "bg-yellow-50 border-yellow-200 text-yellow-700"
+                  )}
+                >
+                  {isBulkMode ? (
+                    <>
+                      <CheckSquare className="w-4 h-4 mr-2" />
+                      {selectedTables.length > 0
+                        ? `Bulk Mode (${selectedTables.length})`
+                        : "Bulk Mode - Select Items"}
+                    </>
+                  ) : (
+                    <>
+                      <Square className="w-4 h-4 mr-2" />
+                      Bulk Mode
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="space-y-1">
+                  <p className="font-medium">Bulk Operations</p>
+                  <p className="text-xs text-muted-foreground">
+                    Select multiple tables to perform bulk actions
+                  </p>
+                  {isBulkMode && selectedTables.length > 0 && (
+                    <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                      <p>
+                        <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">
+                          Delete
+                        </kbd>{" "}
+                        - Delete selected
+                      </p>
+                      <p>
+                        <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">
+                          Ctrl+A
+                        </kbd>{" "}
+                        - Select all
+                      </p>
+                      <p>
+                        <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">
+                          Esc
+                        </kbd>{" "}
+                        - Exit bulk mode
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowLayoutEditor(true)}
+            disabled={loading}
+            asChild
+          >
+            <motion.div
+              variants={buttonHoverVariants}
+              whileHover="hover"
+              whileTap="tap"
+              className="flex items-center"
+            >
+              <Grid3X3 className="w-4 h-4 mr-2" />
+              Layout Editor
+            </motion.div>
+          </Button>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="icon" asChild>
+                <motion.div
+                  variants={buttonHoverVariants}
+                  whileHover="hover"
+                  whileTap="tap"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </motion.div>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72" align="end">
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <h4 className="font-medium leading-none">Quick Actions</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Export, import, and manage your tables
+                  </p>
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowExportDialog(true)}
+                    className="w-full justify-start"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Tables
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowImportDialog(true)}
+                    className="w-full justify-start"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Import Tables
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      // Open QR setup for the first table if available
+                      if (tables.length > 0) {
+                        setSelectedTableForQR(tables[0]);
+                        setShowQRSetup(true);
+                      } else {
+                        toast.error("No tables available for QR setup");
+                      }
+                    }}
+                    className="w-full justify-start"
+                  >
+                    <QrCode className="w-4 h-4 mr-2" />
+                    QR Code Setup
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleUpdateAllQRCodes}
+                    className="w-full justify-start"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Update All QR Codes
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-green-600 hover:bg-green-700" asChild>
@@ -308,26 +1078,22 @@ export default function TablesPage() {
           {[
             {
               title: "Available Tables",
-              value: filteredTables.filter(
-                (table) => table.status === "available"
-              ).length,
+              value: stats.available,
               description: "Ready to seat guests",
             },
             {
               title: "Occupied Tables",
-              value: filteredTables.filter(
-                (table) => table.status === "occupied"
-              ).length,
+              value: stats.occupied,
               description: "Currently serving guests",
             },
             {
               title: "Total Tables",
-              value: mockTables.length,
+              value: stats.total,
               description: "All restaurant tables",
             },
             {
               title: "Total Seating Capacity",
-              value: mockTables.reduce((sum, table) => sum + table.capacity, 0),
+              value: stats.totalCapacity,
               description: "Maximum guest capacity",
             },
           ].map((stat, index) => (
@@ -357,6 +1123,107 @@ export default function TablesPage() {
         </AnimatePresence>
       </motion.div>
 
+      {/* Bulk Actions */}
+      {showBulkActions && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="sticky bottom-4 bg-white border border-gray-200 rounded-lg shadow-lg p-4 mt-6 z-50"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckSquare className="w-5 h-5 text-blue-600" />
+              <span className="font-medium text-sm">
+                {selectedTables.length} table
+                {selectedTables.length !== 1 ? "s" : ""} selected
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <MoreVertical className="w-4 h-4 mr-2" />
+                    Status
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => handleBulkStatusUpdate("available")}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-green-500 mr-2" />
+                    Set Available
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleBulkStatusUpdate("occupied")}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-red-500 mr-2" />
+                    Set Occupied
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleBulkStatusUpdate("reserved")}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-blue-500 mr-2" />
+                    Set Reserved
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleBulkStatusUpdate("unavailable")}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-gray-500 mr-2" />
+                    Set Unavailable
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Download className="w-4 h-4 mr-2" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => handleBulkExport("csv")}
+                    disabled={isExporting}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Export as CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleBulkExport("json")}
+                    disabled={isExporting}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Export as JSON
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkQRDownload}
+                disabled={selectedTables.length === 0}
+              >
+                <QrCode className="w-4 h-4 mr-2" />
+                Download QR
+              </Button>
+
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDelete}
+                disabled={selectedTables.length === 0}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Selected
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Filters Card */}
       <motion.div variants={itemVariants}>
         <Card>
@@ -383,7 +1250,7 @@ export default function TablesPage() {
                 <Input
                   placeholder="Search by table number..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="pl-8"
                 />
               </div>
@@ -437,11 +1304,11 @@ export default function TablesPage() {
 
       {/* Tables Grid */}
       <motion.div
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
         variants={itemVariants}
       >
         <AnimatePresence mode="wait">
-          {filteredTables.map((table, index) => (
+          {paginatedTables.map((table: Table, index: number) => (
             <motion.div
               key={table.id}
               variants={cardHoverVariants}
@@ -450,52 +1317,234 @@ export default function TablesPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
             >
-              <Card className="relative">
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: "spring", stiffness: 200 }}
-                >
-                  <Badge
-                    className={`absolute top-4 right-4 ${getStatusColor(
-                      table.status
-                    )}`}
-                  >
-                    {getStatusLabel(table.status)}
-                  </Badge>
-                </motion.div>
-                <CardHeader className="pb-3 space-y-1">
-                  <div className="flex items-center">
-                    <CardTitle className="text-lg">
-                      Table {table.number}
-                    </CardTitle>
-                  </div>
-                  <CardDescription className="flex items-center gap-1.5">
-                    <Users className="h-4 w-4" />
-                    Seats {table.capacity} people
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* QR Code */}
+              <Card
+                className={cn(
+                  "group relative overflow-hidden transition-all duration-300 hover:shadow-xl",
+                  "bg-gradient-to-br from-white to-gray-50/50 border border-gray-200/60",
+                  isBulkMode && "ring-2 ring-blue-200",
+                  selectedTables.includes(table.id) &&
+                    "ring-2 ring-blue-500 bg-blue-50/80",
+                  "hover:border-gray-300 hover:scale-[1.02]"
+                )}
+              >
+                {/* Bulk Selection Checkbox */}
+                {isBulkMode && (
                   <motion.div
-                    className="flex justify-center"
-                    variants={qrCodeHoverVariants}
-                    whileHover="hover"
+                    className="absolute top-3 left-3 z-20"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 300 }}
                   >
-                    <div className="w-32 h-32 bg-gray-50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-200 hover:border-gray-300 transition-colors">
-                      <QrCode className="w-16 h-16 text-gray-400" />
-                    </div>
+                    <Checkbox
+                      checked={selectedTables.includes(table.id)}
+                      onCheckedChange={(checked) => {
+                        handleSelectTable(table.id, !!checked);
+                      }}
+                      className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 shadow-lg"
+                    />
                   </motion.div>
+                )}
 
-                  {/* QR Code URL */}
-                  <div className="text-center">
-                    <code className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded select-all">
-                      dineeasy.com/qr/table-{table.number}
-                    </code>
+                {/* Status Badge */}
+                <div className="absolute top-3 right-3 z-10">
+                  <motion.div
+                    initial={{ scale: 0, rotate: -180 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 300, delay: 0.1 }}
+                  >
+                    <Badge
+                      className={cn(
+                        "px-3 py-1 text-xs font-medium shadow-sm transition-all duration-200",
+                        "hover:scale-105 cursor-pointer",
+                        getStatusColor(table.status)
+                      )}
+                      onClick={() => {
+                        // Quick status change functionality
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className={cn(
+                            "w-2 h-2 rounded-full",
+                            table.status === "available" && "bg-green-500",
+                            table.status === "occupied" && "bg-red-500",
+                            table.status === "reserved" && "bg-blue-500",
+                            table.status === "unavailable" && "bg-gray-500"
+                          )}
+                        />
+                        {getStatusLabel(table.status)}
+                      </div>
+                    </Badge>
+                  </motion.div>
+                </div>
+
+                {/* Header Section */}
+                <div className="p-6 pb-4">
+                  {/* Table Number and Title */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <motion.div
+                        className="relative"
+                        whileHover={{ scale: 1.05 }}
+                        transition={{ type: "spring", stiffness: 300 }}
+                      >
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 via-blue-500 to-blue-700 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                          {table.number}
+                        </div>
+                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-sm" />
+                      </motion.div>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-1">
+                          Table {table.number}
+                        </h3>
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Users className="w-4 h-4" />
+                          <span className="font-medium">
+                            {table.capacity} seats
+                          </span>
+                          <span className="text-gray-400">•</span>
+                          <span className="text-gray-500">
+                            {table.capacity <= 2
+                              ? "Small"
+                              : table.capacity <= 4
+                                ? "Medium"
+                                : table.capacity <= 6
+                                  ? "Large"
+                                  : "Extra Large"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex flex-col gap-2">
+                  {/* Quick Stats */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-white/60 rounded-lg p-3 border border-gray-100">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                        <span className="text-xs font-medium text-gray-600">
+                          ID
+                        </span>
+                      </div>
+                      <p className="text-sm font-mono text-gray-800">
+                        {table.id.slice(0, 8)}...
+                      </p>
+                    </div>
+                    <div className="bg-white/60 rounded-lg p-3 border border-gray-100">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Clock className="w-3 h-3 text-gray-500" />
+                        <span className="text-xs font-medium text-gray-600">
+                          Created
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-800">
+                        {new Date(table.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* QR Code Section */}
+                  <div className="relative">
+                    <div className="bg-gradient-to-br from-white to-blue-50/30 rounded-xl p-6 border border-blue-200/50 shadow-lg">
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <QrCode className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <h4 className="text-lg font-bold text-gray-800">
+                              QR Code
+                            </h4>
+                            <p className="text-xs text-gray-500">
+                              Ready to scan
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className="text-xs bg-blue-50 text-blue-700 border-blue-200 font-medium"
+                          >
+                            Table {table.number}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={`text-xs font-medium ${
+                              isQRCodeEnvironmentCorrect(table.qr_code || "")
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                            }`}
+                          >
+                            <div
+                              className={`w-2 h-2 rounded-full mr-1.5 ${
+                                isQRCodeEnvironmentCorrect(table.qr_code || "")
+                                  ? "bg-green-500"
+                                  : "bg-yellow-500"
+                              }`}
+                            />
+                            {isQRCodeEnvironmentCorrect(table.qr_code || "")
+                              ? "Active"
+                              : "Needs Update"}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* QR Code Display */}
+                      <div className="flex justify-center mb-6">
+                        <div className="relative group">
+                          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-300" />
+                          <div className="relative bg-white rounded-2xl p-4 shadow-xl border border-gray-200">
+                            <TableQRCode
+                              tableData={generateTableQRData(
+                                table.id,
+                                table.number,
+                                table.restaurant_id
+                              )}
+                              size="lg"
+                              showActions={false}
+                              className="mx-auto"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* QR Code Info */}
+                      <div className="text-center space-y-3">
+                        <div className="bg-blue-50/50 rounded-lg p-3 border border-blue-100">
+                          <p className="text-sm font-medium text-gray-700 mb-1">
+                            Scan to access menu & order
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Customers can scan this QR code to view your menu
+                            and place orders
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 bg-green-500 rounded-full" />
+                            <span className="font-medium">Ready to scan</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Users className="w-3 h-3" />
+                            <span className="font-medium">
+                              {table.capacity} seats
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 bg-blue-500 rounded-sm" />
+                            <span className="font-medium">HD Quality</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="px-6 pb-6">
+                  <div className="space-y-3">
+                    {/* Primary Actions */}
                     <div className="grid grid-cols-2 gap-2">
                       <Dialog
                         open={editingTable?.id === table.id}
@@ -505,19 +1554,11 @@ export default function TablesPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="w-full text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                            className="h-10 bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-800 transition-all duration-200"
                             onClick={() => setEditingTable(table)}
-                            asChild
                           >
-                            <motion.div
-                              variants={buttonHoverVariants}
-                              whileHover="hover"
-                              whileTap="tap"
-                              className="flex items-center justify-center w-full"
-                            >
-                              <Edit className="w-4 h-4 mr-1.5" />
-                              Edit
-                            </motion.div>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Edit
                           </Button>
                         </DialogTrigger>
                         <DialogContent>
@@ -530,46 +1571,573 @@ export default function TablesPage() {
                           />
                         </DialogContent>
                       </Dialog>
+
                       <Button
                         variant="outline"
                         size="sm"
-                        className="w-full text-gray-600 hover:text-gray-700 hover:bg-gray-50 whitespace-nowrap"
-                        asChild
+                        className="h-10 bg-white hover:bg-blue-50 border-gray-200 hover:border-blue-300 text-blue-600 hover:text-blue-700 transition-all duration-200"
+                        onClick={() => {
+                          setSelectedTableForQR(table);
+                          setShowQRSetup(true);
+                        }}
                       >
-                        <motion.div
-                          variants={buttonHoverVariants}
-                          whileHover="hover"
-                          whileTap="tap"
-                          className="flex items-center justify-center w-full"
-                        >
-                          <Download className="w-4 h-4 mr-1.5" />
-                          Get QR
-                        </motion.div>
+                        <QrCode className="w-4 h-4 mr-2" />
+                        QR Setup
                       </Button>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
-                      asChild
-                    >
-                      <motion.div
-                        variants={buttonHoverVariants}
-                        whileHover="hover"
-                        whileTap="tap"
-                        className="flex items-center justify-center w-full"
+
+                    {/* Secondary Actions */}
+                    <div className="flex gap-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 h-9 bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300 text-gray-600 hover:text-gray-700"
+                          >
+                            <MoreVertical className="w-4 h-4 mr-2" />
+                            More
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <div className="px-2 py-1.5 text-sm font-medium text-gray-500">
+                            Quick Actions
+                          </div>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedTableForQR(table);
+                              setShowQRSetup(true);
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <QrCode className="w-4 h-4" />
+                            Download QR Code
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              // Copy QR URL to clipboard
+                              const qrUrl =
+                                table.qr_code ||
+                                `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${table.id}`;
+                              navigator.clipboard.writeText(qrUrl);
+                              toast.success("QR URL copied to clipboard");
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Copy className="w-4 h-4" />
+                            Copy QR URL
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              // Test QR code by opening in new tab
+                              const qrUrl =
+                                table.qr_code ||
+                                `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${table.id}`;
+                              window.open(qrUrl, "_blank");
+                              toast.success("Opening QR code page in new tab");
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            Test QR Code
+                          </DropdownMenuItem>
+                          <Separator className="my-1" />
+                          <div className="px-2 py-1.5 text-sm font-medium text-gray-500">
+                            Change Status
+                          </div>
+                          {tableStatuses
+                            .filter((status) => status.value !== "all")
+                            .map((status) => (
+                              <DropdownMenuItem
+                                key={status.value}
+                                onClick={async () => {
+                                  const result = await updateTableStatus(
+                                    table.id,
+                                    status.value as TableStatus
+                                  );
+                                  if (result.success) {
+                                    toast.success(
+                                      `Table ${table.number} status updated to ${status.label}`
+                                    );
+                                  } else {
+                                    toast.error(
+                                      result.error || "Failed to update status"
+                                    );
+                                  }
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <div
+                                  className={`w-2 h-2 rounded-full ${
+                                    status.value === "available"
+                                      ? "bg-green-500"
+                                      : status.value === "occupied"
+                                        ? "bg-red-500"
+                                        : status.value === "reserved"
+                                          ? "bg-blue-500"
+                                          : "bg-gray-500"
+                                  }`}
+                                />
+                                {status.label}
+                              </DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 px-3 bg-white hover:bg-red-50 border-gray-200 hover:border-red-300 text-red-600 hover:text-red-700 transition-all duration-200"
+                        disabled={actionLoading === table.id}
+                        onClick={async () => {
+                          if (
+                            confirm(
+                              `Are you sure you want to delete Table ${table.number}?`
+                            )
+                          ) {
+                            setActionLoading(table.id);
+                            try {
+                              const result = await deleteTable(table.id);
+                              if (result.success) {
+                                toast.success("Table deleted successfully");
+                              } else {
+                                toast.error(
+                                  result.error || "Failed to delete table"
+                                );
+                              }
+                            } finally {
+                              setActionLoading(null);
+                            }
+                          }
+                        }}
                       >
-                        <Trash2 className="w-4 h-4 mr-1.5" />
-                        Delete
-                      </motion.div>
-                    </Button>
+                        {actionLoading === table.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
-                </CardContent>
+                </div>
+
+                {/* Hover Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
               </Card>
             </motion.div>
           ))}
         </AnimatePresence>
+
+        {/* Empty State */}
+        <AnimatePresence>
+          {!loading && filteredAndSortedTables.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="col-span-full"
+            >
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <motion.div
+                    className="flex flex-col items-center gap-2"
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 200 }}
+                  >
+                    <QrCode className="w-12 h-12 text-gray-400" />
+                    <h3 className="font-semibold text-lg">
+                      {tables.length === 0
+                        ? "No tables yet"
+                        : "No tables found"}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {tables.length === 0
+                        ? "Get started by adding your first table"
+                        : searchQuery
+                          ? "Try adjusting your search or filters"
+                          : `No ${
+                              statusFilter === "all" ? "" : statusFilter
+                            } tables available`}
+                    </p>
+                    {tables.length === 0 && (
+                      <Button
+                        onClick={() => setIsAddDialogOpen(true)}
+                        className="mt-4 bg-green-600 hover:bg-green-700"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Your First Table
+                      </Button>
+                    )}
+                  </motion.div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
+
+      {/* Pagination Controls */}
+      {!loading && totalPages > 1 && (
+        <motion.div
+          className="flex items-center justify-between"
+          variants={itemVariants}
+        >
+          <div className="text-sm text-muted-foreground">
+            Showing {(page - 1) * itemsPerPage + 1} to{" "}
+            {Math.min(page * itemsPerPage, filteredAndSortedTables.length)} of{" "}
+            {filteredAndSortedTables.length} tables
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const pageNum = i + 1;
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={page === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setPage(pageNum)}
+                    className="w-8 h-8 p-0"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(Math.min(totalPages, page + 1))}
+              disabled={page === totalPages}
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Table Layout Editor */}
+      {showLayoutEditor && (
+        <TableLayoutEditor
+          tables={tables}
+          onSave={async (positions) => {
+            const result = await bulkUpdateTableLayouts(positions);
+            if (result.success) {
+              // Don't call fetchData() - let WebSocket handle the update
+            } else {
+              throw new Error(result.error);
+            }
+          }}
+          onClose={() => setShowLayoutEditor(false)}
+          restaurantId={restaurant?.id || ""}
+        />
+      )}
+
+      {/* QR Setup Modal */}
+      {showQRSetup && selectedTableForQR && (
+        <QRSetupModal
+          isOpen={showQRSetup}
+          onClose={() => {
+            setShowQRSetup(false);
+            setSelectedTableForQR(null);
+          }}
+          table={selectedTableForQR}
+          onQRCodeUpdate={async () => {
+            try {
+              // Only update when user explicitly saves
+              const result = await generateTableQRCode(selectedTableForQR.id);
+              if (result.success) {
+                toast.success("QR code updated successfully");
+                // Refresh the tables data
+                await fetchData();
+              } else {
+                toast.error(result.error || "Failed to update QR code");
+              }
+            } catch (error) {
+              console.error("Error updating QR code:", error);
+              toast.error("Failed to update QR code");
+            }
+          }}
+        />
+      )}
+
+      {/* Export Dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export Tables</DialogTitle>
+            <DialogDescription>
+              Export your table data in your preferred format. The file will
+              include all tables with their details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Export Stats */}
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <BarChart3 className="w-4 h-4 text-green-600" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-green-900">
+                    Export Summary
+                  </h4>
+                  <p className="text-sm text-green-700">
+                    {stats.total} total tables • {stats.available} available •{" "}
+                    {stats.occupied} occupied
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Format Selection */}
+            <div className="space-y-2">
+              <Label>Export Format</Label>
+              <Select
+                value={exportFormat}
+                onValueChange={(value: "csv" | "json") =>
+                  setExportFormat(value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="csv">CSV (Excel compatible)</SelectItem>
+                  <SelectItem value="json">
+                    JSON (Developer friendly)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Format Details */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Format Details</h4>
+              <div className="text-sm text-muted-foreground space-y-1">
+                {exportFormat === "csv" ? (
+                  <>
+                    <p>
+                      • <strong>CSV Format:</strong> Comma-separated values
+                    </p>
+                    <p>
+                      • <strong>Compatibility:</strong> Excel, Google Sheets,
+                      Numbers
+                    </p>
+                    <p>
+                      • <strong>Best for:</strong> Data analysis, sharing with
+                      non-technical users
+                    </p>
+                    <p>
+                      • <strong>File extension:</strong> .csv
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      • <strong>JSON Format:</strong> JavaScript Object Notation
+                    </p>
+                    <p>
+                      • <strong>Compatibility:</strong> APIs, databases,
+                      development tools
+                    </p>
+                    <p>
+                      • <strong>Best for:</strong> Data integration, programming
+                    </p>
+                    <p>
+                      • <strong>File extension:</strong> .json
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Export Button */}
+            <Button
+              onClick={() => handleBulkExport(exportFormat)}
+              disabled={isExporting}
+              className="w-full"
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export Tables
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import Tables</DialogTitle>
+            <DialogDescription>
+              Import table data from a CSV or JSON file. Make sure your file
+              follows the correct format.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Sample Download */}
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Download className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-blue-900">
+                    Need a sample file?
+                  </h4>
+                  <p className="text-sm text-blue-700">
+                    Download our sample CSV template to see the correct format
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const sampleData = [
+                    ["Table Number", "Capacity", "Status"],
+                    ["1", "4", "available"],
+                    ["2", "6", "available"],
+                    ["3", "2", "available"],
+                  ];
+                  const csvContent = sampleData
+                    .map((row) => row.join(","))
+                    .join("\n");
+                  const blob = new Blob([csvContent], { type: "text/csv" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "tables-sample.csv";
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                }}
+                className="mt-2"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download Sample CSV
+              </Button>
+            </div>
+
+            {/* File Upload */}
+            <div className="space-y-2">
+              <Label>Select File</Label>
+              <Input
+                type="file"
+                accept=".csv,.json"
+                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                className="cursor-pointer"
+              />
+            </div>
+
+            {/* Import Instructions */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Import Instructions</h4>
+              <div className="text-sm text-muted-foreground space-y-1">
+                <p>• Supported formats: CSV, JSON</p>
+                <p>• CSV should have headers: Table Number, Capacity, Status</p>
+                <p>
+                  • Status options: available, occupied, reserved, unavailable
+                </p>
+                <p>• Capacity should be between 1-20 people</p>
+                <p>• Table numbers must be unique</p>
+              </div>
+            </div>
+
+            {/* Import Button */}
+            <Button
+              onClick={async () => {
+                if (!importFile) return;
+
+                try {
+                  setIsImporting(true);
+                  const text = await importFile.text();
+                  let importedTables: any[] = [];
+
+                  if (importFile.name.endsWith(".csv")) {
+                    const lines = text.split("\n");
+                    const headers = lines[0]
+                      .split(",")
+                      .map((h) => h.replace(/"/g, "").trim());
+                    importedTables = lines.slice(1).map((line) => {
+                      const values = line
+                        .split(",")
+                        .map((v) => v.replace(/"/g, "").trim());
+                      const table: any = {};
+                      headers.forEach((header, index) => {
+                        table[header.toLowerCase().replace(/\s+/g, "_")] =
+                          values[index];
+                      });
+                      return table;
+                    });
+                  } else if (importFile.name.endsWith(".json")) {
+                    importedTables = JSON.parse(text);
+                  }
+
+                  // Create tables
+                  let successCount = 0;
+                  for (const tableData of importedTables) {
+                    if (tableData.table_number && tableData.capacity) {
+                      const formData = new FormData();
+                      formData.append("number", tableData.table_number);
+                      formData.append("capacity", tableData.capacity);
+
+                      const result = await createTable(formData);
+                      if (result.success) {
+                        successCount++;
+                      }
+                    }
+                  }
+
+                  toast.success(`Successfully imported ${successCount} tables`);
+                  setShowImportDialog(false);
+                  setImportFile(null);
+                } catch (error) {
+                  toast.error("Failed to import tables");
+                } finally {
+                  setIsImporting(false);
+                }
+              }}
+              disabled={!importFile || isImporting}
+              className="w-full"
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import Tables
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

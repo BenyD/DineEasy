@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -40,6 +40,9 @@ import {
   Package,
   CheckCircle,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,14 +92,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDropzone } from "react-dropzone";
 import { bytesToSize } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+
 import { toast } from "sonner";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useMenuWebSocket } from "@/hooks/useMenuWebSocket";
+import {
+  saveMenuItemFormProgress,
+  loadMenuItemFormProgress,
+  clearMenuItemFormProgress,
+  hasMenuItemFormProgress,
+} from "@/lib/utils";
 
-// Custom hook for debouncing
+// Custom hook for debouncing (keeping for backward compatibility)
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
 
@@ -239,6 +256,7 @@ export default function MenuPage() {
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isImageUploading, setIsImageUploading] = useState(false);
 
   // Phase 2: Advanced Features
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -258,12 +276,21 @@ export default function MenuPage() {
     popular: null as boolean | null,
   });
 
+  // Performance optimizations
+  const [page, setPage] = useState(1);
+  const [itemsPerPage] = useState(20);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
   const { currency, currencySymbol } = useRestaurantSettings();
   const {
     menuItems,
     categories: menuCategories,
     allergens: menuAllergens,
     isLoading,
+    isMenuItemsLoading,
+    isCategoriesLoading,
+    isAllergensLoading,
     error,
     fetchMenuItems,
     fetchCategories,
@@ -271,11 +298,42 @@ export default function MenuPage() {
     addMenuItem,
     updateMenuItem,
     removeMenuItem,
+    removeMultipleMenuItems,
     addCategory,
     addAllergen,
   } = useMenuSettings();
 
-  // Debounced search
+  // Search function without debounce to prevent random refreshes
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchTerm(query);
+  }, []);
+
+  // Refresh function optimized to prevent unnecessary re-renders
+  const handleRefresh = useCallback(async () => {
+    if (!isMenuItemsLoading && !refreshing) {
+      setRefreshing(true);
+      try {
+        await Promise.all([
+          fetchMenuItems(),
+          fetchCategories(),
+          fetchAllergens(),
+        ]);
+        toast.success("Menu refreshed");
+      } catch (error) {
+        toast.error("Failed to refresh menu");
+      } finally {
+        setRefreshing(false);
+      }
+    }
+  }, [
+    fetchMenuItems,
+    fetchCategories,
+    fetchAllergens,
+    isMenuItemsLoading,
+    refreshing,
+  ]);
+
+  // Debounced search term for filtering (keeping existing logic)
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   // Menu statistics
@@ -385,12 +443,35 @@ export default function MenuPage() {
     sortOrder,
   ]);
 
+  // Paginated items for performance
+  const paginatedItems = useMemo(() => {
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredAndSortedItems.slice(startIndex, endIndex);
+  }, [filteredAndSortedItems, page, itemsPerPage]);
+
+  // Total pages for pagination
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredAndSortedItems.length / itemsPerPage);
+  }, [filteredAndSortedItems.length, itemsPerPage]);
+
+  // Clear filters function
+  const clearFilters = () => {
+    setSearchTerm("");
+    setActiveCategory("all");
+    setShowUnavailable(true);
+    setPriceRange([0, 1000]);
+    setPreparationTimeRange([0, 120]);
+    setPopularOnly(false);
+    setPage(1);
+  };
+
   // Bulk operations handlers
   const handleSelectAll = () => {
-    if (selectedItems.length === filteredAndSortedItems.length) {
+    if (selectedItems.length === paginatedItems.length) {
       setSelectedItems([]);
     } else {
-      setSelectedItems(filteredAndSortedItems.map((item) => item.id));
+      setSelectedItems(paginatedItems.map((item) => item.id));
     }
   };
 
@@ -414,14 +495,11 @@ export default function MenuPage() {
 
       if (!confirmed) return;
 
-      // Delete items
-      for (const itemId of selectedItems) {
-        await removeMenuItem(itemId);
-      }
+      // Use the new bulk delete function for better performance and image cleanup
+      await removeMultipleMenuItems(selectedItems);
 
       setSelectedItems([]);
       setIsBulkMode(false);
-      toast.success(`Successfully deleted ${selectedItems.length} item(s)`);
     } catch (error) {
       toast.error("Failed to delete some items");
     } finally {
@@ -467,7 +545,7 @@ export default function MenuPage() {
       "Description",
       "Price",
       "Category",
-      "Preparation Time",
+      "Preparation Time (minutes)",
       "Available",
       "Popular",
       "Allergens",
@@ -488,6 +566,55 @@ export default function MenuPage() {
       .join("\n");
   };
 
+  const generateSampleCSV = () => {
+    const headers = [
+      "Name",
+      "Description",
+      "Price",
+      "Category",
+      "Preparation Time (minutes)",
+      "Available",
+      "Popular",
+      "Allergens",
+    ];
+    const sampleRows = [
+      [
+        "Margherita Pizza",
+        "Classic tomato sauce with mozzarella cheese",
+        "12.99",
+        "Pizza",
+        "15",
+        "Yes",
+        "Yes",
+        "Dairy, Gluten",
+      ],
+      [
+        "Caesar Salad",
+        "Fresh romaine lettuce with Caesar dressing",
+        "8.99",
+        "Salads",
+        "10",
+        "Yes",
+        "No",
+        "Dairy, Eggs",
+      ],
+      [
+        "Chicken Pasta",
+        "Grilled chicken with creamy alfredo sauce",
+        "14.99",
+        "Pasta",
+        "20",
+        "Yes",
+        "Yes",
+        "Dairy, Gluten",
+      ],
+    ];
+
+    return [headers, ...sampleRows]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n");
+  };
+
   const downloadCSV = (content: string, filename: string) => {
     const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
@@ -498,6 +625,13 @@ export default function MenuPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url); // Clean up the URL object
+  };
+
+  const downloadSampleCSV = () => {
+    const sampleContent = generateSampleCSV();
+    downloadCSV(sampleContent, "menu-import-sample.csv");
+    toast.success("Sample CSV downloaded successfully");
   };
 
   // Phase 2: Advanced Features Functions
@@ -544,38 +678,104 @@ export default function MenuPage() {
       setIsImporting(true);
       const text = await importFile.text();
       let importedItems: any[] = [];
+      let errors: string[] = [];
 
       if (importFile.name.endsWith(".csv")) {
-        // Parse CSV
-        const lines = text.split("\n");
+        // Parse CSV with better error handling
+        const lines = text.split("\n").filter((line) => line.trim());
+
+        if (lines.length < 2) {
+          throw new Error(
+            "CSV file must have at least a header row and one data row"
+          );
+        }
+
         const headers = lines[0]
           .split(",")
           .map((h) => h.replace(/"/g, "").trim());
-        importedItems = lines.slice(1).map((line) => {
+
+        // Validate required headers
+        const requiredHeaders = ["Name", "Price"];
+        const missingHeaders = requiredHeaders.filter(
+          (h) => !headers.includes(h)
+        );
+        if (missingHeaders.length > 0) {
+          throw new Error(
+            `Missing required headers: ${missingHeaders.join(", ")}`
+          );
+        }
+
+        importedItems = lines.slice(1).map((line, index) => {
           const values = line.split(",").map((v) => v.replace(/"/g, "").trim());
           const item: any = {};
-          headers.forEach((header, index) => {
-            item[header.toLowerCase().replace(/\s+/g, "_")] = values[index];
+          headers.forEach((header, headerIndex) => {
+            item[header.toLowerCase().replace(/\s+/g, "_")] =
+              values[headerIndex] || "";
           });
-          return item;
+          return { ...item, _rowNumber: index + 2 }; // Add row number for error reporting
         });
       } else if (importFile.name.endsWith(".json")) {
         // Parse JSON
-        importedItems = JSON.parse(text);
+        try {
+          importedItems = JSON.parse(text);
+        } catch (parseError) {
+          throw new Error("Invalid JSON format");
+        }
+      } else {
+        throw new Error(
+          "Unsupported file format. Please use CSV or JSON files."
+        );
       }
 
       // Validate and process imported items
       let successCount = 0;
+      let skippedCount = 0;
+      let errorCount = 0;
+
       for (const item of importedItems) {
-        if (item.name && item.price) {
-          const formData = new FormData();
-          formData.append("name", item.name);
-          formData.append("description", item.description || "");
-          formData.append("price", item.price.toString());
-          const categoryId = item.category_id || menuCategories[0]?.id;
-          if (categoryId) {
-            formData.append("categoryId", categoryId);
+        try {
+          // Validate required fields
+          if (!item.name || !item.name.trim()) {
+            errors.push(
+              `Row ${item._rowNumber || "unknown"}: Name is required`
+            );
+            errorCount++;
+            continue;
           }
+
+          if (!item.price || isNaN(parseFloat(item.price))) {
+            errors.push(
+              `Row ${item._rowNumber || "unknown"}: Valid price is required`
+            );
+            errorCount++;
+            continue;
+          }
+
+          // Check if item already exists (case-insensitive)
+          const existingItem = menuItems.find(
+            (existing) =>
+              existing.name.toLowerCase() === item.name.toLowerCase()
+          );
+
+          if (existingItem) {
+            skippedCount++;
+            continue; // Skip existing items
+          }
+
+          // Find category by name (case-insensitive)
+          let categoryId = item.category_id;
+          if (item.category && !categoryId) {
+            const category = menuCategories.find(
+              (c) => c.name.toLowerCase() === item.category.toLowerCase()
+            );
+            categoryId = category?.id || menuCategories[0]?.id;
+          }
+
+          const formData = new FormData();
+          formData.append("name", item.name.trim());
+          formData.append("description", item.description || "");
+          formData.append("price", parseFloat(item.price).toString());
+          formData.append("category", categoryId || "");
           formData.append("preparationTime", item.preparation_time || "15");
           formData.append(
             "available",
@@ -585,14 +785,38 @@ export default function MenuPage() {
 
           await addMenuItem(formData);
           successCount++;
+        } catch (itemError: any) {
+          errors.push(
+            `Row ${item._rowNumber || "unknown"}: ${itemError.message}`
+          );
+          errorCount++;
         }
       }
 
-      toast.success(`Successfully imported ${successCount} items`);
+      // Show detailed results
+      let resultMessage = `Imported ${successCount} items successfully`;
+      if (skippedCount > 0) {
+        resultMessage += `, skipped ${skippedCount} existing items`;
+      }
+      if (errorCount > 0) {
+        resultMessage += `, ${errorCount} errors`;
+      }
+
+      if (errorCount > 0) {
+        toast.error(resultMessage, {
+          duration: 5000,
+          description: `Check the console for detailed error information.`,
+        });
+        console.error("Import errors:", errors);
+      } else {
+        toast.success(resultMessage);
+      }
+
       setImportFile(null);
       setShowImportDialog(false);
-    } catch (error) {
-      toast.error("Failed to import menu items");
+    } catch (error: any) {
+      toast.error(`Import failed: ${error.message}`);
+      console.error("Import error:", error);
     } finally {
       setIsImporting(false);
     }
@@ -650,7 +874,7 @@ export default function MenuPage() {
         const formData = new FormData();
 
         if (bulkEditData.categoryId) {
-          formData.append("categoryId", bulkEditData.categoryId);
+          formData.append("category", bulkEditData.categoryId);
         }
         if (bulkEditData.available !== null) {
           formData.append("available", bulkEditData.available.toString());
@@ -681,14 +905,113 @@ export default function MenuPage() {
     fetchAllergens();
   }, [fetchMenuItems, fetchCategories, fetchAllergens]);
 
+  // State to track if we're adding categories/allergens for WebSocket coordination
+  const [isAddingCategoryOrAllergen, setIsAddingCategoryOrAllergen] =
+    useState(false);
+
+  // WebSocket integration for real-time menu updates
+  // This enables real-time collaboration when multiple users are managing the menu
+  // Changes made by one user will appear instantly for all other users
+  // NOTE: WebSocket updates are disabled when dialogs are open to prevent form resets
+  const { disconnect: disconnectWebSocket, isConnected } = useMenuWebSocket({
+    isAddDialogOpen,
+    editingItem,
+    isSubmitting,
+    isAddingCategoryOrAllergen,
+  });
+
+  // Auto-refresh disabled - only manual refresh allowed
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     // Only auto-refresh if not loading, not refreshing, and no dialogs are open
+  //     if (
+  //       !isLoading &&
+  //       !refreshing &&
+  //       !isAddDialogOpen &&
+  //       !editingItem &&
+  //       !deleteConfirmItem &&
+  //       !showBulkEditDialog &&
+  //       !showDuplicateDialog &&
+  //       !showExportDialog &&
+  //       !showImportDialog
+  //     ) {
+  //       handleRefresh();
+  //     }
+  //   }, 60000); // 60 seconds (increased from 30 to reduce frequency)
+
+  //   return () => clearInterval(interval);
+  // }, [
+  //   isLoading,
+  //   refreshing,
+  //   handleRefresh,
+  //   isAddDialogOpen,
+  //   editingItem,
+  //   deleteConfirmItem,
+  //   showBulkEditDialog,
+  //   showDuplicateDialog,
+  //   showExportDialog,
+  //   showImportDialog,
+  // ]);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [
+    searchTerm,
+    activeCategory,
+    showUnavailable,
+    priceRange,
+    preparationTimeRange,
+    popularOnly,
+  ]);
+
   // Update bulk mode based on selections
   useEffect(() => {
     setIsBulkMode(selectedItems.length > 0);
     setShowBulkActions(selectedItems.length > 0);
   }, [selectedItems]);
 
-  // Show loading state
-  if (isLoading) {
+  // Keyboard shortcuts for bulk operations
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only handle shortcuts when bulk mode is active and items are selected
+      if (!isBulkMode || selectedItems.length === 0) return;
+
+      // Prevent shortcuts when typing in input fields
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      switch (event.key) {
+        case "Delete":
+        case "Backspace":
+          event.preventDefault();
+          handleBulkDelete();
+          break;
+        case "a":
+        case "A":
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            handleSelectAll();
+          }
+          break;
+        case "Escape":
+          event.preventDefault();
+          setSelectedItems([]);
+          setIsBulkMode(false);
+          break;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isBulkMode, selectedItems.length, handleBulkDelete, handleSelectAll]);
+
+  // Show loading state only when menu items are loading
+  if (isMenuItemsLoading) {
     return (
       <div className="p-6 space-y-6">
         {/* Header Skeleton */}
@@ -801,61 +1124,579 @@ export default function MenuPage() {
     item?: any;
     onClose: () => void;
   }) => {
+    // Use parent's state for WebSocket coordination
+    const parentSetIsAddingCategoryOrAllergen = setIsAddingCategoryOrAllergen;
+    // Access parent component's dialog state to prevent form resets
+    const isDialogOpen = isAddDialogOpen || !!editingItem;
+
     // Form state management
     const { currency, currencySymbol } = useRestaurantSettings();
-    const { addCategory, addAllergen } = useMenuSettings();
-    const [isAddingCategory, setIsAddingCategory] = useState(false);
-    const [isAddingAllergen, setIsAddingAllergen] = useState(false);
-    const [isAddingCategoryLoading, setIsAddingCategoryLoading] =
-      useState(false);
-    const [isAddingAllergenLoading, setIsAddingAllergenLoading] =
-      useState(false);
-    const [newCategory, setNewCategory] = useState({
-      name: "",
-      description: "",
-    });
-    const [newAllergen, setNewAllergen] = useState({ name: "", icon: "" });
-    const [activeTab, setActiveTab] = useState("basic");
+    const {
+      addCategory,
+      addAllergen,
+      isCategoriesLoading,
+      isAllergensLoading,
+    } = useMenuSettings();
 
-    // Enhanced state management
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
-    const [isUploading, setIsUploading] = useState(false);
-    const [imagePreview, setImagePreview] = useState<string | null>(null);
-    const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-    const [isFormInitialized, setIsFormInitialized] = useState(false);
-
-    const [formData, setFormData] = useState({
-      name: "",
-      description: "",
-      price: "",
-      category: "",
-      preparationTime: "",
-      available: true,
-      allergens: [] as string[],
-      popular: false,
-      image: "",
-    });
-
-    useEffect(() => {
+    // Initialize form state with localStorage persistence
+    const [formState, setFormState] = useState(() => {
+      // If editing an existing item, don't load from localStorage
       if (item) {
-        // For editing, always set the form data
-        setFormData({
-          name: item.name || "",
-          description: item.description || "",
-          price: item.price?.toString() || "",
-          category: item.categoryId || "",
-          preparationTime: item.preparationTime?.toString() || "",
-          available: item.available ?? true,
-          allergens: item.allergenIds || [],
-          popular: item.popular || false,
-          image: item.image || "",
-        });
-        setIsFormInitialized(true);
-      } else if (!isFormInitialized) {
+        return {
+          // Form data
+          formData: {
+            name: "",
+            description: "",
+            price: "",
+            category: "",
+            preparationTime: "",
+            available: true,
+            allergens: [] as string[],
+            popular: false,
+            image: "",
+          },
+          // UI state
+          activeTab: "basic",
+          isSubmitting: false,
+          isUploading: false,
+          isImageUploading: false,
+          uploadProgress: 0,
+          imagePreview: null as string | null,
+          formErrors: {} as Record<string, string>,
+          hasUnsavedChanges: false,
+          // Category/Allergen creation state
+          isAddingCategory: false,
+          isAddingAllergen: false,
+          newCategory: { name: "", description: "" },
+          newAllergen: { name: "", icon: "" },
+          // Form lifecycle
+          isFormInitialized: false,
+          visitedSteps: new Set(["basic"]) as Set<string>,
+        };
+      }
+
+      // Load from localStorage for new items
+      const savedProgress = loadMenuItemFormProgress();
+      if (savedProgress.hasResumed) {
+        return {
+          // Form data
+          formData: {
+            name: savedProgress.formData?.name || "",
+            description: savedProgress.formData?.description || "",
+            price: savedProgress.formData?.price || "",
+            category: savedProgress.formData?.category || "",
+            preparationTime: savedProgress.formData?.preparationTime || "",
+            available: savedProgress.formData?.available ?? true,
+            allergens: savedProgress.formData?.allergens || [],
+            popular: savedProgress.formData?.popular || false,
+            image: "",
+          },
+          // UI state
+          activeTab: savedProgress.activeTab || "basic",
+          isSubmitting: false,
+          isUploading: false,
+          isImageUploading: false,
+          uploadProgress: 0,
+          imagePreview: null as string | null,
+          formErrors: {} as Record<string, string>,
+          hasUnsavedChanges: true, // Mark as having unsaved changes
+          // Category/Allergen creation state
+          isAddingCategory: false,
+          isAddingAllergen: false,
+          newCategory: { name: "", description: "" },
+          newAllergen: { name: "", icon: "" },
+          // Form lifecycle
+          isFormInitialized: true,
+          visitedSteps: new Set([
+            savedProgress.activeTab || "basic",
+          ]) as Set<string>,
+        };
+      }
+
+      // Default state for new items
+      return {
+        // Form data
+        formData: {
+          name: "",
+          description: "",
+          price: "",
+          category: "",
+          preparationTime: "",
+          available: true,
+          allergens: [] as string[],
+          popular: false,
+          image: "",
+        },
+        // UI state
+        activeTab: "basic",
+        isSubmitting: false,
+        isUploading: false,
+        isImageUploading: false,
+        uploadProgress: 0,
+        imagePreview: null as string | null,
+        formErrors: {} as Record<string, string>,
+        hasUnsavedChanges: false,
+        // Category/Allergen creation state
+        isAddingCategory: false,
+        isAddingAllergen: false,
+        newCategory: { name: "", description: "" },
+        newAllergen: { name: "", icon: "" },
+        // Form lifecycle
+        isFormInitialized: false,
+        visitedSteps: new Set(["basic"]) as Set<string>,
+      };
+    });
+
+    // State to track if we've resumed from localStorage
+    const [hasResumed, setHasResumed] = useState(() => {
+      if (item) return false; // Don't show resume message for editing
+      const savedProgress = loadMenuItemFormProgress();
+      return savedProgress.hasResumed;
+    });
+
+    // Refs for stable references
+    const activeTabRef = useRef(formState.activeTab);
+    const formDataRef = useRef(formState.formData);
+    const isAutoSelectingRef = useRef(false);
+
+    // Update refs when state changes
+    useEffect(() => {
+      activeTabRef.current = formState.activeTab;
+      formDataRef.current = formState.formData;
+    }, [formState.activeTab, formState.formData]);
+
+    // Save form progress to localStorage whenever form data or active tab changes
+    useEffect(() => {
+      // Don't save during auto-selection to prevent triggering resume toast
+      if (isAutoSelectingRef.current) {
+        console.log("Skipping localStorage save during auto-selection");
+        return;
+      }
+
+      // Add a small delay to prevent immediate saves after auto-selection
+      const timeoutId = setTimeout(() => {
+        // Only save for new items, not when editing
+        if (!item && formState.isFormInitialized) {
+          saveMenuItemFormProgress(
+            formState.formData,
+            formState.activeTab,
+            false
+          );
+        }
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
+    }, [
+      formState.formData,
+      formState.activeTab,
+      formState.isFormInitialized,
+      item,
+    ]);
+
+    // Show resume notification if we have resumed data (only once per session)
+    useEffect(() => {
+      // Don't show resume toast during auto-selection
+      if (isAutoSelectingRef.current) {
+        console.log("Skipping resume toast during auto-selection");
+        return;
+      }
+
+      if (hasResumed && !item) {
+        // Check if we've already shown the toast in this session
+        const hasShownToast = sessionStorage.getItem(
+          "menu-form-resume-toast-shown"
+        );
+        if (!hasShownToast) {
+          sessionStorage.setItem("menu-form-resume-toast-shown", "true");
+          setTimeout(() => {
+            toast.info(
+              "Welcome back! Your previous progress has been restored.",
+              {
+                duration: 4000,
+              }
+            );
+          }, 1000);
+        }
+      }
+    }, [hasResumed, item]);
+
+    // Simplified form initialization - only run once when component mounts or item changes
+    useEffect(() => {
+      // Skip initialization if we're adding categories/allergens
+      if (isAddingCategoryOrAllergen) {
+        // This is the parent's state
+        console.log(
+          "Skipping form initialization during category/allergen addition"
+        );
+        return;
+      }
+
+      // Skip if we're in the middle of auto-selection
+      if (isAutoSelectingRef.current) {
+        console.log(
+          "Skipping form initialization - auto-selection in progress"
+        );
+        return;
+      }
+
+      // Only initialize once when the component mounts or when switching between add/edit modes
+      if (item) {
+        // For editing, set the form data
+        setFormState((prev) => ({
+          ...prev,
+          formData: {
+            name: item.name || "",
+            description: item.description || "",
+            price: item.price?.toString() || "",
+            category: item.categoryId || "",
+            preparationTime: item.preparationTime?.toString() || "",
+            available: item.available ?? true,
+            allergens: item.allergenIds || [],
+            popular: item.popular || false,
+            image: item.image || "",
+          },
+          // Only reset tab if we're not on details or image tab (preserve user's current step)
+          activeTab:
+            activeTabRef.current === "basic" ? "basic" : activeTabRef.current,
+          isFormInitialized: true,
+        }));
+      } else if (!formState.isFormInitialized) {
         // For new items, only initialize once
-        setFormData({
+        setFormState((prev) => ({
+          ...prev,
+          formData: {
+            ...prev.formData,
+            category: menuCategories.length > 0 ? menuCategories[0].id : "",
+          },
+          isFormInitialized: true,
+        }));
+      }
+    }, [item?.id, isAddingCategoryOrAllergen]); // Added parent's state dependency
+
+    // Update category when categories are loaded (only if not already set and form is initialized)
+    useEffect(() => {
+      // Skip if we're adding categories/allergens to prevent form reset
+      if (isAddingCategoryOrAllergen) {
+        // This is the parent's state
+        console.log(
+          "Skipping category update during category/allergen addition"
+        );
+        return;
+      }
+
+      // Skip if we're on details tab and have a category selected (preserve user's choice)
+      if (formState.activeTab === "details" && formState.formData.category) {
+        console.log("Skipping category update - user has selected a category");
+        return;
+      }
+
+      // Skip if we're in the middle of auto-selection
+      if (isAutoSelectingRef.current) {
+        console.log("Skipping category update - auto-selection in progress");
+        return;
+      }
+
+      if (
+        !item &&
+        formState.isFormInitialized &&
+        menuCategories.length > 0 &&
+        !formState.formData.category
+      ) {
+        setFormState((prev) => ({
+          ...prev,
+          formData: {
+            ...prev.formData,
+            category: menuCategories[0].id,
+          },
+        }));
+      }
+    }, [
+      menuCategories,
+      item,
+      formState.formData.category,
+      formState.isFormInitialized,
+      formState.activeTab, // Added activeTab dependency
+      isAddingCategoryOrAllergen, // Added parent's state dependency
+    ]);
+
+    // Helper functions to check step completion
+    const isStep1Completed = useCallback(() => {
+      return (
+        formState.formData.name.trim() &&
+        formState.formData.price &&
+        formState.formData.preparationTime
+      );
+    }, [
+      formState.formData.name,
+      formState.formData.price,
+      formState.formData.preparationTime,
+    ]);
+
+    const isStep2Completed = useCallback(() => {
+      return isStep1Completed() && formState.formData.category;
+    }, [isStep1Completed, formState.formData.category]);
+
+    // Validate step completion before allowing tab changes
+    const handleTabChange = useCallback(
+      (newTab: string) => {
+        // Prevent moving to step 2 without completing step 1
+        if (newTab === "details" && formState.activeTab === "basic") {
+          const step1Validation = () => {
+            const errors: Record<string, string> = {};
+
+            if (!formState.formData.name.trim()) {
+              errors.name = "Name is required";
+            }
+            if (
+              !formState.formData.price ||
+              parseFloat(formState.formData.price) <= 0
+            ) {
+              errors.price = "Valid price is required";
+            }
+            if (
+              !formState.formData.preparationTime ||
+              parseInt(formState.formData.preparationTime) <= 0
+            ) {
+              errors.preparationTime = "Preparation time is required";
+            }
+
+            setFormState((prev) => ({ ...prev, formErrors: errors }));
+            return Object.keys(errors).length === 0;
+          };
+
+          if (!step1Validation()) {
+            toast.error(
+              "Please complete step 1 (Basic Info) before proceeding to step 2"
+            );
+            return;
+          }
+        }
+
+        // Prevent moving to step 3 without completing step 2
+        if (newTab === "image" && formState.activeTab === "details") {
+          const step2Validation = () => {
+            const errors: Record<string, string> = {};
+
+            if (!formState.formData.category) {
+              errors.category = "Category is required";
+            }
+
+            setFormState((prev) => ({ ...prev, formErrors: errors }));
+            return Object.keys(errors).length === 0;
+          };
+
+          if (!step2Validation()) {
+            toast.error(
+              "Please complete step 2 (Details) before proceeding to step 3"
+            );
+            return;
+          }
+        }
+
+        // Prevent moving to step 3 from step 1 (skip step 2)
+        if (newTab === "image" && formState.activeTab === "basic") {
+          toast.error(
+            "Please complete step 2 (Details) before proceeding to step 3"
+          );
+          return;
+        }
+
+        setFormState((prev) => ({
+          ...prev,
+          activeTab: newTab,
+          visitedSteps: new Set([...prev.visitedSteps, newTab]),
+          formErrors: {}, // Clear errors when switching tabs
+        }));
+      },
+      [formState.activeTab, formState.formData]
+    );
+
+    // Enhanced category and allergen management with better race condition handling
+    const handleAddCategory = useCallback(async () => {
+      if (!formState.newCategory.name.trim()) {
+        toast.error("Category name is required");
+        return;
+      }
+
+      try {
+        // Set flag to prevent tab reset during category addition
+        parentSetIsAddingCategoryOrAllergen(true);
+
+        // Create FormData for the new category
+        const formData = new FormData();
+        formData.append("name", formState.newCategory.name.trim());
+        formData.append(
+          "description",
+          formState.newCategory.description.trim()
+        );
+
+        // Store the category name for auto-selection
+        const categoryName = formState.newCategory.name.trim();
+
+        // Call the createCategory action directly to get the result
+        const { createCategory } = await import("@/lib/actions/menu");
+        const result = await createCategory(formData);
+
+        if (result.error) {
+          throw new Error(result.error);
+        }
+
+        // Clear the form immediately
+        setFormState((prev) => ({
+          ...prev,
+          newCategory: { name: "", description: "" },
+          isAddingCategory: false,
+        }));
+
+        // Manually add the category to the store to avoid WebSocket interference
+        const newCategory = {
+          id: result.data?.id || `temp-${Date.now()}`,
+          name: categoryName,
+          description: formState.newCategory.description.trim(),
+          sortOrder: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        // Update the store manually
+        useMenuSettings.setState((state) => ({
+          categories: [...state.categories, newCategory],
+        }));
+
+        console.log("Manually added category to store:", newCategory);
+
+        // Set auto-selection flag to prevent interference
+        isAutoSelectingRef.current = true;
+
+        // Auto-select the newly created category immediately
+        setFormState((prev) => ({
+          ...prev,
+          formData: {
+            ...prev.formData,
+            category: newCategory.id,
+          },
+          // Ensure we stay on the details tab
+          activeTab: "details",
+          visitedSteps: new Set([...prev.visitedSteps, "details"]),
+        }));
+
+        console.log("Auto-selected newly created category:", newCategory);
+
+        // Show success toast (only show this one, not the store's toast)
+        toast.success("Category added and selected!");
+
+        // Reset the flags after a longer delay to ensure state updates are processed
+        // This prevents localStorage saves and resume toasts during auto-selection
+        setTimeout(() => {
+          parentSetIsAddingCategoryOrAllergen(false);
+          isAutoSelectingRef.current = false;
+          console.log("Auto-selection flags reset");
+        }, 1000);
+
+        // Flag is already reset above, no need to reset again
+        console.log("Category addition completed");
+      } catch (error: any) {
+        console.error("Error adding category:", error);
+        toast.error(error.message || "Failed to add category");
+        // Reset the flag on error
+        parentSetIsAddingCategoryOrAllergen(false);
+        isAutoSelectingRef.current = false;
+      }
+    }, [formState.newCategory, addCategory]);
+
+    const handleAddAllergen = useCallback(async () => {
+      if (!formState.newAllergen.name.trim()) {
+        toast.error("Allergen name is required");
+        return;
+      }
+
+      try {
+        // Set flag to prevent tab reset during allergen addition
+        parentSetIsAddingCategoryOrAllergen(true);
+
+        // Create FormData for the new allergen
+        const formData = new FormData();
+        formData.append("name", formState.newAllergen.name.trim());
+        formData.append("icon", formState.newAllergen.icon || "⚠️");
+
+        // Store the allergen name for auto-selection
+        const allergenName = formState.newAllergen.name.trim();
+
+        // Call the createAllergen action directly to get the result
+        const { createAllergen } = await import("@/lib/actions/menu");
+        const result = await createAllergen(formData);
+
+        if (result.error) {
+          throw new Error(result.error);
+        }
+
+        // Clear the form immediately
+        setFormState((prev) => ({
+          ...prev,
+          newAllergen: { name: "", icon: "" },
+          isAddingAllergen: false,
+        }));
+
+        // Manually add the allergen to the store to avoid WebSocket interference
+        const newAllergen = {
+          id: result.data?.id || `temp-${Date.now()}`,
+          name: allergenName,
+          icon: formState.newAllergen.icon || "⚠️",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        // Update the store manually
+        useMenuSettings.setState((state) => ({
+          allergens: [...state.allergens, newAllergen],
+        }));
+
+        console.log("Manually added allergen to store:", newAllergen);
+
+        // Set auto-selection flag to prevent interference
+        isAutoSelectingRef.current = true;
+
+        // Auto-select the newly created allergen immediately
+        setFormState((prev) => ({
+          ...prev,
+          formData: {
+            ...prev.formData,
+            allergens: [...prev.formData.allergens, newAllergen.id],
+          },
+          // Ensure we stay on the details tab
+          activeTab: "details",
+          visitedSteps: new Set([...prev.visitedSteps, "details"]),
+        }));
+
+        console.log("Auto-selected newly created allergen:", newAllergen);
+
+        // Show success toast (only show this one, not the store's toast)
+        toast.success("Allergen added and selected!");
+
+        // Reset the flags after a longer delay to ensure state updates are processed
+        // This prevents localStorage saves and resume toasts during auto-selection
+        setTimeout(() => {
+          parentSetIsAddingCategoryOrAllergen(false);
+          isAutoSelectingRef.current = false;
+          console.log("Auto-selection flags reset");
+        }, 1000);
+
+        // Flag is already reset above, no need to reset again
+        console.log("Allergen addition completed");
+      } catch (error: any) {
+        console.error("Error adding allergen:", error);
+        toast.error(error.message || "Failed to add allergen");
+        // Reset the flag on error
+        parentSetIsAddingCategoryOrAllergen(false);
+        isAutoSelectingRef.current = false;
+      }
+    }, [formState.newAllergen, addAllergen]);
+
+    // Reset form data function
+    const resetForm = useCallback(() => {
+      setFormState((prev) => ({
+        ...prev,
+        formData: {
           name: "",
           description: "",
           price: "",
@@ -865,183 +1706,113 @@ export default function MenuPage() {
           allergens: [],
           popular: false,
           image: "",
+        },
+        activeTab: "basic",
+        formErrors: {},
+        isFormInitialized: false,
+        visitedSteps: new Set(["basic"]),
+      }));
+    }, [menuCategories.length]);
+
+    // Simplified form data management
+    const updateFormData = useCallback(
+      (updates: Partial<typeof formState.formData>) => {
+        setFormState((prev) => {
+          const newFormData = { ...prev.formData, ...updates };
+          const newFormErrors = { ...prev.formErrors };
+
+          // Clear errors when user starts typing
+          if (updates.name && newFormErrors.name) delete newFormErrors.name;
+          if (updates.price && newFormErrors.price) delete newFormErrors.price;
+          if (updates.preparationTime && newFormErrors.preparationTime)
+            delete newFormErrors.preparationTime;
+          if (updates.category && newFormErrors.category)
+            delete newFormErrors.category;
+
+          return {
+            ...prev,
+            formData: newFormData,
+            formErrors: newFormErrors,
+            hasUnsavedChanges: true,
+          };
         });
-        setIsFormInitialized(true);
-      }
-    }, [item, menuCategories, isFormInitialized]);
+      },
+      []
+    );
 
-    // Update category when categories are loaded (only if not already set)
-    useEffect(() => {
-      if (
-        !item &&
-        menuCategories.length > 0 &&
-        !formData.category &&
-        isFormInitialized
-      ) {
-        setFormData((prev) => ({
-          ...prev,
-          category: menuCategories[0].id,
-        }));
-      }
-    }, [menuCategories, item, formData.category, isFormInitialized]);
-
-    // Preserve form data when categories/allergens are updated
-    useEffect(() => {
-      // Don't reset form data when categories/allergens are refreshed
-      // This prevents the form from resetting when new items are added
-    }, [menuCategories, menuAllergens]);
-
-    // Preserve form data when switching tabs
-    const handleTabChange = (newTab: string) => {
-      setActiveTab(newTab);
-      // Don't reset form data when switching tabs
-    };
-
-    // Enhanced category and allergen management
-    const handleAddCategory = async () => {
-      if (!newCategory.name.trim()) {
-        toast.error("Category name is required");
-        return;
-      }
-
-      setIsAddingCategoryLoading(true);
-
-      try {
-        // Create FormData for the new category
-        const formData = new FormData();
-        formData.append("name", newCategory.name.trim());
-        formData.append("description", newCategory.description.trim());
-
-        // Call the addCategory function
-        await addCategory(formData);
-
-        // Clear the form
-        setNewCategory({ name: "", description: "" });
-        setIsAddingCategory(false);
-
-        // The store will automatically refresh categories, but we'll handle it gracefully
-        toast.success("Category added successfully!");
-      } catch (error: any) {
-        console.error("Error adding category:", error);
-        toast.error(error.message || "Failed to add category");
-      } finally {
-        setIsAddingCategoryLoading(false);
-      }
-    };
-
-    const handleAddAllergen = async () => {
-      if (!newAllergen.name.trim()) {
-        toast.error("Allergen name is required");
-        return;
-      }
-
-      setIsAddingAllergenLoading(true);
-
-      try {
-        // Create FormData for the new allergen
-        const formData = new FormData();
-        formData.append("name", newAllergen.name.trim());
-        formData.append("icon", newAllergen.icon || "⚠️");
-
-        // Call the addAllergen function
-        await addAllergen(formData);
-
-        // Clear the form
-        setNewAllergen({ name: "", icon: "" });
-        setIsAddingAllergen(false);
-
-        // The store will automatically refresh allergens, but we'll handle it gracefully
-        toast.success("Allergen added successfully!");
-      } catch (error: any) {
-        console.error("Error adding allergen:", error);
-        toast.error(error.message || "Failed to add allergen");
-      } finally {
-        setIsAddingAllergenLoading(false);
-      }
-    };
-
-    // Preserve active tab when allergens load
-    useEffect(() => {
-      // This effect ensures the active tab doesn't change when allergens load
-      // The activeTab state is already stable and doesn't need to be reset
-    }, [menuAllergens]);
-
-    // Reset form when switching between add and edit modes
-    useEffect(() => {
-      if (!item) {
-        // Reset to basic tab for new items
-        setActiveTab("basic");
-        // Reset form initialization flag when opening new item modal
-        setIsFormInitialized(false);
-      } else {
-        // Reset form initialization flag when opening edit modal
-        setIsFormInitialized(false);
-      }
-    }, [item]);
-
-    // Reset form data function
-    const resetForm = () => {
-      setFormData({
-        name: "",
-        description: "",
-        price: "",
-        category: menuCategories.length > 0 ? menuCategories[0].id : "",
-        preparationTime: "",
-        available: true,
-        allergens: [],
-        popular: false,
-        image: "",
-      });
-      setActiveTab("basic");
-    };
-
-    // Enhanced form data management
-    const updateFormData = (updates: Partial<typeof formData>) => {
-      setFormData((prev) => ({ ...prev, ...updates }));
-      setHasUnsavedChanges(true);
-      // Clear errors when user starts typing
-      if (updates.name && formErrors.name)
-        setFormErrors((prev) => ({ ...prev, name: "" }));
-      if (updates.price && formErrors.price)
-        setFormErrors((prev) => ({ ...prev, price: "" }));
-      if (updates.preparationTime && formErrors.preparationTime)
-        setFormErrors((prev) => ({ ...prev, preparationTime: "" }));
-    };
+    // Separate function for image updates
+    const updateImageData = useCallback((imageUrl: string) => {
+      setFormState((prev) => ({
+        ...prev,
+        formData: { ...prev.formData, image: imageUrl },
+        hasUnsavedChanges: true,
+      }));
+    }, []);
 
     // Form validation
-    const validateForm = () => {
+    const validateForm = useCallback(() => {
       const errors: Record<string, string> = {};
 
-      if (!formData.name.trim()) {
-        errors.name = "Name is required";
+      // Only validate fields that are relevant to the current tab
+      if (formState.activeTab === "basic") {
+        if (!formState.formData.name.trim()) {
+          errors.name = "Name is required";
+        }
+
+        if (
+          !formState.formData.price ||
+          parseFloat(formState.formData.price) <= 0
+        ) {
+          errors.price = "Valid price is required";
+        }
+
+        if (
+          !formState.formData.preparationTime ||
+          parseInt(formState.formData.preparationTime) <= 0
+        ) {
+          errors.preparationTime = "Preparation time is required";
+        }
       }
 
-      if (!formData.price || parseFloat(formData.price) <= 0) {
-        errors.price = "Valid price is required";
-      }
-
+      // Validate category only when on details tab or when submitting
       if (
-        !formData.preparationTime ||
-        parseInt(formData.preparationTime) <= 0
+        formState.activeTab === "details" ||
+        formState.activeTab === "image"
       ) {
-        errors.preparationTime = "Preparation time is required";
+        if (!formState.formData.category) {
+          errors.category = "Category is required";
+        }
       }
 
-      if (!formData.category) {
-        errors.category = "Category is required";
+      setFormState((prev) => ({ ...prev, formErrors: errors }));
+
+      // Debug: Log validation errors if any
+      if (Object.keys(errors).length > 0) {
+        console.log("Form validation errors:", errors);
+        console.log("Current form data:", formState.formData);
+        console.log("Current active tab:", formState.activeTab);
       }
 
-      setFormErrors(errors);
       return Object.keys(errors).length === 0;
-    };
+    }, [formState.activeTab, formState.formData]);
 
     // Clear category error when user selects a category
-    const handleCategoryChange = (value: string) => {
-      updateFormData({ category: value });
-      if (formErrors.category) {
-        setFormErrors((prev) => ({ ...prev, category: "" }));
-      }
-    };
+    const handleCategoryChange = useCallback(
+      (value: string) => {
+        updateFormData({ category: value });
+        setFormState((prev) => {
+          const newFormErrors = { ...prev.formErrors };
+          if (newFormErrors.category) delete newFormErrors.category;
+          return { ...prev, formErrors: newFormErrors };
+        });
+      },
+      [updateFormData]
+    );
+
+    // Function to clear all form errors
+    const clearAllErrors = useCallback(() => {
+      setFormState((prev) => ({ ...prev, formErrors: {} }));
+    }, []);
 
     // Enhanced image upload with progress
     const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -1087,7 +1858,10 @@ export default function MenuPage() {
         // Create preview
         const reader = new FileReader();
         reader.onload = (e) => {
-          setImagePreview(e.target?.result as string);
+          setFormState((prev) => ({
+            ...prev,
+            imagePreview: e.target?.result as string,
+          }));
         };
         reader.onerror = () => {
           toast.error("Failed to read file. Please try a different image.");
@@ -1095,43 +1869,60 @@ export default function MenuPage() {
         };
         reader.readAsDataURL(file);
 
-        setIsUploading(true);
-        setUploadProgress(0);
+        setFormState((prev) => ({
+          ...prev,
+          isUploading: true,
+          isImageUploading: true,
+          uploadProgress: 0,
+        }));
 
         try {
           // Simulate upload progress
           const progressInterval = setInterval(() => {
-            setUploadProgress((prev) => {
-              if (prev >= 90) {
-                clearInterval(progressInterval);
-                return prev;
-              }
-              return prev + 10;
-            });
+            setFormState((prev) => ({
+              ...prev,
+              uploadProgress: prev.uploadProgress + 10,
+            }));
           }, 200);
 
           const result = await uploadImage(file, "menu-item");
 
           clearInterval(progressInterval);
-          setUploadProgress(100);
+          setFormState((prev) => ({ ...prev, uploadProgress: 100 }));
 
           if (result.error) {
             toast.error(result.error);
-            setImagePreview(null);
+            setFormState((prev) => ({ ...prev, imagePreview: null }));
           } else {
-            updateFormData({ image: result.url || "" });
+            // Update image data using the dedicated function
+            updateImageData(result.url || "");
             toast.success("Image uploaded successfully");
 
             // Clear preview after successful upload
-            setTimeout(() => setImagePreview(null), 1000);
+            setTimeout(
+              () => setFormState((prev) => ({ ...prev, imagePreview: null })),
+              1000
+            );
+
+            // Debug: Log successful upload
+            console.log("Image upload completed successfully:", {
+              imageUrl: result.url,
+              formData: formDataRef.current,
+              activeTab: activeTabRef.current,
+            });
           }
         } catch (error) {
           console.error("Upload error:", error);
           toast.error("Failed to upload image. Please try again.");
-          setImagePreview(null);
+          setFormState((prev) => ({ ...prev, imagePreview: null }));
         } finally {
-          setIsUploading(false);
-          setUploadProgress(0);
+          // Reset upload states
+          setFormState((prev) => ({
+            ...prev,
+            isUploading: false,
+            isImageUploading: false,
+            uploadProgress: 0,
+          }));
         }
       }
     }, []);
@@ -1145,10 +1936,10 @@ export default function MenuPage() {
       });
 
     const handleNext = () => {
-      if (activeTab === "basic") {
-        setActiveTab("details");
-      } else if (activeTab === "details") {
-        setActiveTab("image");
+      if (formState.activeTab === "basic") {
+        setFormState((prev) => ({ ...prev, activeTab: "details" }));
+      } else if (formState.activeTab === "details") {
+        setFormState((prev) => ({ ...prev, activeTab: "image" }));
       }
     };
 
@@ -1156,11 +1947,32 @@ export default function MenuPage() {
       e.preventDefault();
 
       // If not on the last tab, validate current tab and move to next
-      if (activeTab !== "image") {
+      if (formState.activeTab !== "image") {
         // Validate current tab before proceeding
-        if (activeTab === "basic") {
+        if (formState.activeTab === "basic") {
           if (!validateForm()) {
-            toast.error("Please fix the errors before continuing");
+            // Show specific error message with details
+            const errorCount = Object.keys(formState.formErrors).length;
+            if (errorCount > 0) {
+              toast.error(
+                `Please fix ${errorCount} error${errorCount > 1 ? "s" : ""} before continuing`
+              );
+            } else {
+              toast.error("Please fix the errors before continuing");
+            }
+            return;
+          }
+        } else if (formState.activeTab === "details") {
+          // Validate details tab (including category)
+          if (!validateForm()) {
+            const errorCount = Object.keys(formState.formErrors).length;
+            if (errorCount > 0) {
+              toast.error(
+                `Please fix ${errorCount} error${errorCount > 1 ? "s" : ""} before continuing`
+              );
+            } else {
+              toast.error("Please fix the errors before continuing");
+            }
             return;
           }
         }
@@ -1168,28 +1980,67 @@ export default function MenuPage() {
         return;
       }
 
-      // Final validation on last tab
-      if (!validateForm()) {
+      // Final validation on last tab - validate all required fields
+      const finalValidation = () => {
+        const errors: Record<string, string> = {};
+
+        // Validate all required fields regardless of tab
+        if (!formState.formData.name.trim()) {
+          errors.name = "Name is required";
+        }
+
+        if (
+          !formState.formData.price ||
+          parseFloat(formState.formData.price) <= 0
+        ) {
+          errors.price = "Valid price is required";
+        }
+
+        if (
+          !formState.formData.preparationTime ||
+          parseInt(formState.formData.preparationTime) <= 0
+        ) {
+          errors.preparationTime = "Preparation time is required";
+        }
+
+        if (!formState.formData.category) {
+          errors.category = "Category is required";
+        }
+
+        setFormState((prev) => ({ ...prev, formErrors: errors }));
+        return Object.keys(errors).length === 0;
+      };
+
+      if (!finalValidation()) {
         toast.error("Please fix the errors before submitting");
         return;
       }
 
-      setIsSubmitting(true);
+      setFormState((prev) => ({ ...prev, isSubmitting: true }));
 
       try {
         // Create FormData for server action
         const formDataToSubmit = new FormData();
-        formDataToSubmit.append("name", formData.name);
-        formDataToSubmit.append("description", formData.description);
-        formDataToSubmit.append("price", formData.price);
-        formDataToSubmit.append("category", formData.category);
-        formDataToSubmit.append("preparationTime", formData.preparationTime);
-        formDataToSubmit.append("available", formData.available.toString());
-        formDataToSubmit.append("popular", formData.popular.toString());
-        formDataToSubmit.append("imageUrl", formData.image);
+        formDataToSubmit.append("name", formState.formData.name);
+        formDataToSubmit.append("description", formState.formData.description);
+        formDataToSubmit.append("price", formState.formData.price);
+        formDataToSubmit.append("category", formState.formData.category);
+        formDataToSubmit.append(
+          "preparationTime",
+          formState.formData.preparationTime
+        );
+        formDataToSubmit.append(
+          "available",
+          formState.formData.available.toString()
+        );
+        formDataToSubmit.append(
+          "popular",
+          formState.formData.popular.toString()
+        );
+        formDataToSubmit.append("imageUrl", formState.formData.image);
 
         // Add allergens
-        formData.allergens.forEach((allergenId) => {
+        formState.formData.allergens.forEach((allergenId: string) => {
           formDataToSubmit.append("allergens", allergenId);
         });
 
@@ -1199,76 +2050,236 @@ export default function MenuPage() {
         } else {
           await addMenuItem(formDataToSubmit);
           toast.success("Menu item added successfully!");
+
+          // Clear localStorage when form is successfully submitted
+          clearMenuItemFormProgress();
+          // Clear the resume toast flag so it can show again in future sessions
+          sessionStorage.removeItem("menu-form-resume-toast-shown");
         }
 
-        setHasUnsavedChanges(false);
+        setFormState((prev) => ({ ...prev, hasUnsavedChanges: false }));
         onClose();
       } catch (error: any) {
         console.error("Error submitting form:", error);
         toast.error(error.message || "Failed to save menu item");
       } finally {
-        setIsSubmitting(false);
+        setFormState((prev) => ({ ...prev, isSubmitting: false }));
       }
     };
 
+    // Handle modal close - preserve localStorage for normal close actions
+    const handleClose = () => {
+      // For normal close (close button, pressing outside), preserve the data
+      // The data will be automatically saved by the useEffect that watches form changes
+      onClose();
+    };
+
+    // Handle explicit cancel - clear localStorage when user clicks Cancel
+    const handleCancel = () => {
+      // Clear localStorage when user explicitly cancels
+      if (!item) {
+        clearMenuItemFormProgress();
+        // Clear the resume toast flag so it can show again in future sessions
+        sessionStorage.removeItem("menu-form-resume-toast-shown");
+        toast.info("Progress cleared. You can start fresh next time.");
+      }
+      onClose();
+    };
+
     return (
-      <form
-        key={item ? `edit-${item.id}` : "new"}
-        onSubmit={handleSubmit}
-        className="space-y-6"
-      >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Error Summary */}
+        {Object.keys(formState.formErrors).length > 0 && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-red-800">
+                Please fix the following errors:
+              </h3>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearAllErrors}
+                className="h-6 px-2 text-red-600 hover:text-red-700"
+              >
+                Clear All
+              </Button>
+            </div>
+            <ul className="text-sm text-red-700 space-y-1">
+              {Object.entries(formState.formErrors).map(([field, error]) => (
+                <li key={field} className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                  <span className="capitalize">{field}:</span>
+                  <span>{error}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Progress Indicator */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-muted-foreground">
               Step{" "}
-              {activeTab === "basic"
+              {formState.activeTab === "basic"
                 ? "1"
-                : activeTab === "details"
+                : formState.activeTab === "details"
                   ? "2"
                   : "3"}{" "}
               of 3
             </span>
             <span className="text-sm text-muted-foreground">
-              {activeTab === "basic"
+              {formState.activeTab === "basic"
                 ? "Basic Information"
-                : activeTab === "details"
+                : formState.activeTab === "details"
                   ? "Details & Settings"
                   : "Image Upload"}
             </span>
           </div>
+
+          {/* Step completion indicators */}
+          <div className="flex items-center gap-2 mb-2">
+            {/* Step 1: Basic Info */}
+            <div
+              className={cn(
+                "flex items-center gap-1 text-xs",
+                isStep1Completed() ? "text-green-600" : "text-gray-400"
+              )}
+            >
+              <div
+                className={cn(
+                  "w-4 h-4 rounded-full flex items-center justify-center",
+                  isStep1Completed()
+                    ? "bg-green-100 text-green-600"
+                    : "bg-gray-100 text-gray-400"
+                )}
+              >
+                {isStep1Completed() ? <CheckCircle className="w-3 h-3" /> : "1"}
+              </div>
+              <span>Basic Info</span>
+            </div>
+
+            <div className="w-8 h-px bg-gray-300"></div>
+
+            {/* Step 2: Details */}
+            <div
+              className={cn(
+                "flex items-center gap-1 text-xs",
+                isStep2Completed() ? "text-green-600" : "text-gray-400"
+              )}
+            >
+              <div
+                className={cn(
+                  "w-4 h-4 rounded-full flex items-center justify-center",
+                  isStep2Completed()
+                    ? "bg-green-100 text-green-600"
+                    : "bg-gray-100 text-gray-400"
+                )}
+              >
+                {isStep2Completed() ? <CheckCircle className="w-3 h-3" /> : "2"}
+              </div>
+              <span>Details</span>
+            </div>
+
+            <div className="w-8 h-px bg-gray-300"></div>
+
+            {/* Step 3: Image - Only lights up when user has visited the image tab and step 2 is completed */}
+            <div
+              className={cn(
+                "flex items-center gap-1 text-xs",
+                isStep2Completed() && formState.visitedSteps.has("image")
+                  ? "text-green-600"
+                  : "text-gray-400"
+              )}
+            >
+              <div
+                className={cn(
+                  "w-4 h-4 rounded-full flex items-center justify-center",
+                  isStep2Completed() && formState.visitedSteps.has("image")
+                    ? "bg-green-100 text-green-600"
+                    : "bg-gray-100 text-gray-400"
+                )}
+              >
+                {isStep2Completed() && formState.visitedSteps.has("image") ? (
+                  <CheckCircle className="w-3 h-3" />
+                ) : (
+                  "3"
+                )}
+              </div>
+              <span>Image</span>
+            </div>
+          </div>
+
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
               className="bg-green-600 h-2 rounded-full transition-all duration-300"
               style={{
                 width:
-                  activeTab === "basic"
-                    ? "33%"
-                    : activeTab === "details"
-                      ? "66%"
-                      : "100%",
+                  // Step 1 completed: 33%
+                  isStep1Completed()
+                    ? formState.activeTab === "basic"
+                      ? "33%"
+                      : // Step 2 completed: 66%
+                        isStep2Completed()
+                        ? formState.activeTab === "details"
+                          ? "66%"
+                          : // Step 3: 100%
+                            "100%"
+                        : // Step 1 completed but step 2 not: 33%
+                          "33%"
+                    : // No steps completed: 0%
+                      "0%",
               }}
             ></div>
           </div>
         </div>
 
         <Tabs
-          value={activeTab}
+          value={formState.activeTab}
           onValueChange={handleTabChange}
           className="w-full"
         >
           <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="basic" className="text-sm">
+            <TabsTrigger
+              value="basic"
+              className={cn(
+                "text-sm",
+                Object.keys(formState.formErrors).length > 0 &&
+                  "text-red-600 border-red-200"
+              )}
+            >
               <FileText className="w-4 h-4 mr-2" />
               Basic Info
+              {Object.keys(formState.formErrors).length > 0 && (
+                <span className="ml-1 w-2 h-2 bg-red-500 rounded-full"></span>
+              )}
             </TabsTrigger>
-            <TabsTrigger value="details" className="text-sm">
+            <TabsTrigger
+              value="details"
+              className={cn(
+                "text-sm",
+                // Disable if step 1 is not completed
+                !isStep1Completed() && "opacity-50 cursor-not-allowed"
+              )}
+              disabled={!isStep1Completed()}
+            >
               <Settings2 className="w-4 h-4 mr-2" />
               Details
+              {!isStep1Completed() ? <Lock className="w-3 h-3 ml-1" /> : null}
             </TabsTrigger>
-            <TabsTrigger value="image" className="text-sm">
+            <TabsTrigger
+              value="image"
+              className={cn(
+                "text-sm",
+                // Disable if step 2 is not completed
+                !isStep2Completed() && "opacity-50 cursor-not-allowed"
+              )}
+              disabled={!isStep2Completed()}
+            >
               <Image className="w-4 h-4 mr-2" />
               Image
+              {!isStep2Completed() ? <Lock className="w-3 h-3 ml-1" /> : null}
             </TabsTrigger>
           </TabsList>
 
@@ -1280,17 +2291,20 @@ export default function MenuPage() {
                 </Label>
                 <Input
                   id="name"
-                  value={formData.name}
+                  value={formState.formData.name}
                   onChange={(e) => updateFormData({ name: e.target.value })}
                   placeholder="e.g. Margherita Pizza"
                   required
                   className={cn(
                     "h-10",
-                    formErrors.name && "border-red-500 focus:border-red-500"
+                    formState.formErrors.name &&
+                      "border-red-500 focus:border-red-500"
                   )}
                 />
-                {formErrors.name && (
-                  <p className="text-sm text-red-500">{formErrors.name}</p>
+                {formState.formErrors.name && (
+                  <p className="text-sm text-red-500">
+                    {formState.formErrors.name}
+                  </p>
                 )}
               </div>
 
@@ -1300,7 +2314,7 @@ export default function MenuPage() {
                 </Label>
                 <Textarea
                   id="description"
-                  value={formData.description}
+                  value={formState.formData.description}
                   onChange={(e) =>
                     updateFormData({ description: e.target.value })
                   }
@@ -1308,7 +2322,7 @@ export default function MenuPage() {
                   className="h-24 resize-none"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {formData.description.length}/500 characters
+                  {formState.formData.description.length}/500 characters
                 </p>
               </div>
 
@@ -1324,21 +2338,23 @@ export default function MenuPage() {
                       type="number"
                       step="0.50"
                       min="0"
-                      value={formData.price}
+                      value={formState.formData.price}
                       onChange={(e) =>
                         updateFormData({ price: e.target.value })
                       }
                       placeholder="0.00"
                       className={cn(
                         "pl-10 h-10",
-                        formErrors.price &&
+                        formState.formErrors.price &&
                           "border-red-500 focus:border-red-500"
                       )}
                       required
                     />
                   </div>
-                  {formErrors.price && (
-                    <p className="text-sm text-red-500">{formErrors.price}</p>
+                  {formState.formErrors.price && (
+                    <p className="text-sm text-red-500">
+                      {formState.formErrors.price}
+                    </p>
                   )}
                 </div>
 
@@ -1355,22 +2371,22 @@ export default function MenuPage() {
                       id="preparationTime"
                       type="number"
                       min="1"
-                      value={formData.preparationTime}
+                      value={formState.formData.preparationTime}
                       onChange={(e) =>
                         updateFormData({ preparationTime: e.target.value })
                       }
                       placeholder="15"
                       className={cn(
                         "pl-10 h-10",
-                        formErrors.preparationTime &&
+                        formState.formErrors.preparationTime &&
                           "border-red-500 focus:border-red-500"
                       )}
                       required
                     />
                   </div>
-                  {formErrors.preparationTime && (
+                  {formState.formErrors.preparationTime && (
                     <p className="text-sm text-red-500">
-                      {formErrors.preparationTime}
+                      {formState.formErrors.preparationTime}
                     </p>
                   )}
                 </div>
@@ -1382,19 +2398,31 @@ export default function MenuPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="category">Category*</Label>
+                  <Label
+                    htmlFor="category"
+                    className={cn(
+                      formState.formErrors.category && "text-red-600"
+                    )}
+                  >
+                    Category*
+                  </Label>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setIsAddingCategory(true)}
+                    onClick={() =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        isAddingCategory: true,
+                      }))
+                    }
                     className="h-8 px-2 text-green-600 hover:text-green-700"
                   >
                     <Plus className="w-4 h-4 mr-1" />
                     Add New
                   </Button>
                 </div>
-                {isAddingCategory ? (
+                {formState.isAddingCategory ? (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1402,19 +2430,28 @@ export default function MenuPage() {
                   >
                     <Input
                       placeholder="Category name"
-                      value={newCategory.name}
+                      value={formState.newCategory.name}
                       onChange={(e) =>
-                        setNewCategory({ ...newCategory, name: e.target.value })
+                        setFormState((prev) => ({
+                          ...prev,
+                          newCategory: {
+                            ...prev.newCategory,
+                            name: e.target.value,
+                          },
+                        }))
                       }
                     />
                     <Input
                       placeholder="Category description (optional)"
-                      value={newCategory.description}
+                      value={formState.newCategory.description}
                       onChange={(e) =>
-                        setNewCategory({
-                          ...newCategory,
-                          description: e.target.value,
-                        })
+                        setFormState((prev) => ({
+                          ...prev,
+                          newCategory: {
+                            ...prev.newCategory,
+                            description: e.target.value,
+                          },
+                        }))
                       }
                     />
                     <div className="flex gap-2">
@@ -1423,10 +2460,10 @@ export default function MenuPage() {
                         variant="outline"
                         size="sm"
                         onClick={handleAddCategory}
-                        disabled={isAddingCategoryLoading}
+                        disabled={isCategoriesLoading}
                         className="flex-1"
                       >
-                        {isAddingCategoryLoading ? (
+                        {isCategoriesLoading ? (
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
                             Adding...
@@ -1440,10 +2477,13 @@ export default function MenuPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          setIsAddingCategory(false);
-                          setNewCategory({ name: "", description: "" });
+                          setFormState((prev) => ({
+                            ...prev,
+                            isAddingCategory: false,
+                            newCategory: { name: "", description: "" },
+                          }));
                         }}
-                        disabled={isAddingCategoryLoading}
+                        disabled={isCategoriesLoading}
                         className="flex-1"
                       >
                         Cancel
@@ -1452,12 +2492,13 @@ export default function MenuPage() {
                   </motion.div>
                 ) : (
                   <Select
-                    value={formData.category}
+                    key={`category-select-${menuCategories.length}-${useMenuSettings.getState().categories.length}-${formState.formData.category}`}
+                    value={formState.formData.category}
                     onValueChange={handleCategoryChange}
                   >
                     <SelectTrigger
                       className={cn(
-                        formErrors.category &&
+                        formState.formErrors.category &&
                           "border-red-500 focus:border-red-500"
                       )}
                     >
@@ -1466,7 +2507,7 @@ export default function MenuPage() {
                     <SelectContent>
                       {menuCategories.length === 0 ? (
                         <SelectItem value="loading" disabled>
-                          Loading categories...
+                          No categories available. Please add a category first.
                         </SelectItem>
                       ) : (
                         menuCategories.map((category) => (
@@ -1478,8 +2519,15 @@ export default function MenuPage() {
                     </SelectContent>
                   </Select>
                 )}
-                {formErrors.category && (
-                  <p className="text-sm text-red-500">{formErrors.category}</p>
+                {formState.formErrors.category && (
+                  <p className="text-sm text-red-500">
+                    {formState.formErrors.category}
+                    {menuCategories.length > 0 && (
+                      <span className="block text-xs text-gray-500 mt-1">
+                        Please select a category from the dropdown above.
+                      </span>
+                    )}
+                  </p>
                 )}
               </div>
 
@@ -1492,14 +2540,19 @@ export default function MenuPage() {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setIsAddingAllergen(true)}
+                    onClick={() =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        isAddingAllergen: true,
+                      }))
+                    }
                     className="h-8 px-2 text-green-600 hover:text-green-700"
                   >
                     <Plus className="w-4 h-4 mr-1" />
                     Add New
                   </Button>
                 </div>
-                {isAddingAllergen ? (
+                {formState.isAddingAllergen ? (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1508,22 +2561,28 @@ export default function MenuPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <Input
                         placeholder="Allergen name"
-                        value={newAllergen.name}
+                        value={formState.newAllergen.name}
                         onChange={(e) =>
-                          setNewAllergen({
-                            ...newAllergen,
-                            name: e.target.value,
-                          })
+                          setFormState((prev) => ({
+                            ...prev,
+                            newAllergen: {
+                              ...prev.newAllergen,
+                              name: e.target.value,
+                            },
+                          }))
                         }
                       />
                       <Input
                         placeholder="Icon (emoji)"
-                        value={newAllergen.icon}
+                        value={formState.newAllergen.icon}
                         onChange={(e) =>
-                          setNewAllergen({
-                            ...newAllergen,
-                            icon: e.target.value,
-                          })
+                          setFormState((prev) => ({
+                            ...prev,
+                            newAllergen: {
+                              ...prev.newAllergen,
+                              icon: e.target.value,
+                            },
+                          }))
                         }
                       />
                     </div>
@@ -1533,10 +2592,10 @@ export default function MenuPage() {
                         variant="outline"
                         size="sm"
                         onClick={handleAddAllergen}
-                        disabled={isAddingAllergenLoading}
+                        disabled={isAllergensLoading}
                         className="flex-1"
                       >
-                        {isAddingAllergenLoading ? (
+                        {isAllergensLoading ? (
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
                             Adding...
@@ -1550,10 +2609,13 @@ export default function MenuPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          setIsAddingAllergen(false);
-                          setNewAllergen({ name: "", icon: "" });
+                          setFormState((prev) => ({
+                            ...prev,
+                            isAddingAllergen: false,
+                            newAllergen: { name: "", icon: "" },
+                          }));
                         }}
-                        disabled={isAddingAllergenLoading}
+                        disabled={isAllergensLoading}
                         className="flex-1"
                       >
                         Cancel
@@ -1561,7 +2623,10 @@ export default function MenuPage() {
                     </div>
                   </motion.div>
                 ) : (
-                  <ScrollArea className="h-32 rounded-md border">
+                  <ScrollArea
+                    key={`allergens-scroll-${menuAllergens.length}-${useMenuSettings.getState().allergens.length}`}
+                    className="h-32 rounded-md border"
+                  >
                     <div className="p-2 grid grid-cols-2 gap-2">
                       {menuAllergens.length === 0 ? (
                         <div className="col-span-2 text-center text-sm text-muted-foreground py-4">
@@ -1575,13 +2640,18 @@ export default function MenuPage() {
                           >
                             <Checkbox
                               id={`allergen-${allergen.id}`}
-                              checked={formData.allergens.includes(allergen.id)}
+                              checked={formState.formData.allergens.includes(
+                                allergen.id
+                              )}
                               onCheckedChange={(checked) => {
                                 updateFormData({
                                   allergens: checked
-                                    ? [...formData.allergens, allergen.id]
-                                    : formData.allergens.filter(
-                                        (id) => id !== allergen.id
+                                    ? [
+                                        ...formState.formData.allergens,
+                                        allergen.id,
+                                      ]
+                                    : formState.formData.allergens.filter(
+                                        (id: string) => id !== allergen.id
                                       ),
                                 });
                               }}
@@ -1620,7 +2690,7 @@ export default function MenuPage() {
                     </p>
                   </div>
                   <Switch
-                    checked={formData.available}
+                    checked={formState.formData.available}
                     onCheckedChange={(checked) =>
                       updateFormData({ available: checked })
                     }
@@ -1636,7 +2706,7 @@ export default function MenuPage() {
                     </p>
                   </div>
                   <Switch
-                    checked={formData.popular}
+                    checked={formState.formData.popular}
                     onCheckedChange={(checked) =>
                       updateFormData({ popular: checked })
                     }
@@ -1659,7 +2729,7 @@ export default function MenuPage() {
               </div>
 
               {/* Upload Progress */}
-              {isUploading && (
+              {formState.isUploading && (
                 <div className="space-y-4">
                   <div className="relative">
                     <div className="w-full h-64 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -1672,11 +2742,11 @@ export default function MenuPage() {
                           <div className="w-48 bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${uploadProgress}%` }}
+                              style={{ width: `${formState.uploadProgress}%` }}
                             ></div>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            {uploadProgress}%
+                            {formState.uploadProgress}%
                           </p>
                         </div>
                       </div>
@@ -1686,11 +2756,11 @@ export default function MenuPage() {
               )}
 
               {/* Image Preview */}
-              {imagePreview && !isUploading && (
+              {formState.imagePreview && !formState.isUploading && (
                 <div className="space-y-4">
                   <div className="relative">
                     <img
-                      src={imagePreview}
+                      src={formState.imagePreview}
                       alt="Image preview"
                       className="w-full h-64 object-cover rounded-lg"
                     />
@@ -1705,11 +2775,13 @@ export default function MenuPage() {
               )}
 
               {/* Existing Image */}
-              {formData.image && !isUploading && !imagePreview ? (
+              {formState.formData.image &&
+              !formState.isUploading &&
+              !formState.imagePreview ? (
                 <div className="space-y-4">
                   <div className="relative group">
                     <img
-                      src={formData.image}
+                      src={formState.formData.image}
                       alt="Menu item preview"
                       className="w-full h-64 object-cover rounded-lg"
                     />
@@ -1731,7 +2803,7 @@ export default function MenuPage() {
                     onClick={() =>
                       document.getElementById("image-upload")?.click()
                     }
-                    disabled={isUploading}
+                    disabled={formState.isUploading}
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     Change Image
@@ -1740,7 +2812,9 @@ export default function MenuPage() {
               ) : null}
 
               {/* Upload Area */}
-              {!formData.image && !isUploading && !imagePreview ? (
+              {!formState.formData.image &&
+              !formState.isUploading &&
+              !formState.imagePreview ? (
                 <div
                   {...getRootProps()}
                   className={cn(
@@ -1829,22 +2903,22 @@ export default function MenuPage() {
           <Button
             type="button"
             variant="outline"
-            onClick={onClose}
-            disabled={isSubmitting || isUploading}
+            onClick={handleCancel}
+            disabled={formState.isSubmitting || formState.isUploading}
           >
             Cancel
           </Button>
           <Button
             type="submit"
             className="bg-green-600 hover:bg-green-700"
-            disabled={isSubmitting || isUploading}
+            disabled={formState.isSubmitting || formState.isUploading}
           >
-            {isSubmitting ? (
+            {formState.isSubmitting ? (
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 {item ? "Updating..." : "Adding..."}
               </div>
-            ) : activeTab === "image" ? (
+            ) : formState.activeTab === "image" ? (
               (item ? "Update" : "Add") + " Item"
             ) : (
               "Next"
@@ -2188,38 +3262,118 @@ export default function MenuPage() {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => setIsBulkMode(!isBulkMode)}
-            className={cn(
-              "transition-all",
-              isBulkMode && "bg-blue-50 border-blue-200 text-blue-700"
-            )}
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing || isLoading}
+            className="flex items-center gap-2"
           >
-            {isBulkMode ? (
-              <>
-                <CheckSquare className="w-4 h-4 mr-2" />
-                Bulk Mode
-              </>
+            {refreshing ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
             ) : (
-              <>
-                <Square className="w-4 h-4 mr-2" />
-                Bulk Mode
-              </>
+              <RefreshCw className="w-4 h-4" />
             )}
+            {refreshing ? "Refreshing..." : "Refresh"}
           </Button>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-green-600 hover:bg-green-700" asChild>
-                <motion.div
-                  variants={buttonHoverVariants}
-                  whileHover="hover"
-                  whileTap="tap"
-                  className="flex items-center"
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsBulkMode(!isBulkMode)}
+                  className={cn(
+                    "transition-all",
+                    isBulkMode && "bg-blue-50 border-blue-200 text-blue-700",
+                    isBulkMode &&
+                      selectedItems.length === 0 &&
+                      "bg-yellow-50 border-yellow-200 text-yellow-700"
+                  )}
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Menu Item
-                </motion.div>
-              </Button>
-            </DialogTrigger>
+                  {isBulkMode ? (
+                    <>
+                      <CheckSquare className="w-4 h-4 mr-2" />
+                      {selectedItems.length > 0
+                        ? `Bulk Mode (${selectedItems.length})`
+                        : "Bulk Mode - Select Items"}
+                    </>
+                  ) : (
+                    <>
+                      <Square className="w-4 h-4 mr-2" />
+                      Bulk Mode
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="space-y-1">
+                  <p className="font-medium">Bulk Operations</p>
+                  <p className="text-xs text-muted-foreground">
+                    Select multiple items to perform bulk actions
+                  </p>
+                  {isBulkMode && selectedItems.length > 0 && (
+                    <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                      <p>
+                        <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">
+                          Delete
+                        </kbd>{" "}
+                        - Delete selected
+                      </p>
+                      <p>
+                        <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">
+                          Ctrl+A
+                        </kbd>{" "}
+                        - Select all
+                      </p>
+                      <p>
+                        <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">
+                          Esc
+                        </kbd>{" "}
+                        - Exit bulk mode
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <Dialog
+            open={isAddDialogOpen}
+            onOpenChange={(open) => {
+              if (!open) {
+                // When dialog is closing (close button, pressing outside), preserve data
+                setIsAddDialogOpen(false);
+              } else {
+                setIsAddDialogOpen(true);
+              }
+            }}
+          >
+            <div className="flex gap-2">
+              {hasMenuItemFormProgress() && (
+                <Button
+                  variant="outline"
+                  className="border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100"
+                  onClick={() => {
+                    setIsAddDialogOpen(true);
+                    // Don't show toast here since the form will show its own resume toast
+                  }}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Resume Progress
+                </Button>
+              )}
+              <DialogTrigger asChild>
+                <Button className="bg-green-600 hover:bg-green-700" asChild>
+                  <motion.div
+                    variants={buttonHoverVariants}
+                    whileHover="hover"
+                    whileTap="tap"
+                    className="flex items-center"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Menu Item
+                  </motion.div>
+                </Button>
+              </DialogTrigger>
+            </div>
             <DialogContent className="max-w-3xl">
               <DialogHeader>
                 <DialogTitle>Add New Menu Item</DialogTitle>
@@ -2268,16 +3422,6 @@ export default function MenuPage() {
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     {isImporting ? "Importing..." : "Import Menu"}
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start text-sm"
-                    onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                  >
-                    <Filter className="w-4 h-4 mr-2" />
-                    {showAdvancedFilters ? "Hide" : "Show"} Advanced Filters
                   </Button>
 
                   <Separator className="my-2" />
@@ -2397,27 +3541,38 @@ export default function MenuPage() {
                   Find and organize your menu items
                 </CardDescription>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSearchTerm("");
-                  setActiveCategory("all");
-                  setShowUnavailable(true);
-                  setPriceRange([0, 1000]);
-                  setPreparationTimeRange([0, 120]);
-                  setPopularOnly(false);
-                  setSortBy("name");
-                  setSortOrder("asc");
-                  setSelectedItems([]);
-                  setIsBulkMode(false);
-                  setShowBulkActions(false);
-                }}
-                className="shrink-0"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Clear All
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={showAdvancedFilters ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  className="shrink-0"
+                >
+                  <Settings2 className="w-4 h-4 mr-2" />
+                  {showAdvancedFilters ? "Hide" : "Show"} Advanced
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setActiveCategory("all");
+                    setShowUnavailable(true);
+                    setPriceRange([0, 1000]);
+                    setPreparationTimeRange([0, 120]);
+                    setPopularOnly(false);
+                    setSortBy("name");
+                    setSortOrder("asc");
+                    setSelectedItems([]);
+                    setIsBulkMode(false);
+                    setShowBulkActions(false);
+                  }}
+                  className="shrink-0"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Clear All
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -2429,7 +3584,7 @@ export default function MenuPage() {
                 <Input
                   placeholder="Search by name or description..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="pl-10 h-11"
                 />
               </div>
@@ -2440,6 +3595,7 @@ export default function MenuPage() {
                   Category
                 </Label>
                 <Select
+                  key={`category-filter-${categoriesWithCounts.length}-${categoriesWithCounts.map((c) => c.id).join("-")}`}
                   value={activeCategory}
                   onValueChange={setActiveCategory}
                 >
@@ -2462,105 +3618,60 @@ export default function MenuPage() {
               </div>
             </div>
 
-            {/* Quick Filters & View Controls Row */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap gap-3">
+            {/* Quick Filters Row */}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant={showUnavailable ? "default" : "outline"}
+                onClick={() => setShowUnavailable(!showUnavailable)}
+                size="sm"
+                className={`${
+                  showUnavailable ? "bg-green-600 hover:bg-green-700" : ""
+                }`}
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                {showUnavailable ? "Showing All" : "Available Only"}
+              </Button>
+
+              <Button
+                variant={popularOnly ? "default" : "outline"}
+                onClick={() => setPopularOnly(!popularOnly)}
+                size="sm"
+                className={`${
+                  popularOnly ? "bg-orange-600 hover:bg-orange-700" : ""
+                }`}
+              >
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Popular Only
+              </Button>
+
+              {categoriesWithCounts.slice(1).map((category) => (
                 <Button
-                  variant={showUnavailable ? "default" : "outline"}
-                  onClick={() => setShowUnavailable(!showUnavailable)}
-                  size="sm"
-                  className={`${
-                    showUnavailable ? "bg-green-600 hover:bg-green-700" : ""
-                  }`}
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  {showUnavailable ? "Showing All" : "Available Only"}
-                </Button>
-
-                <Button
-                  variant={popularOnly ? "default" : "outline"}
-                  onClick={() => setPopularOnly(!popularOnly)}
-                  size="sm"
-                  className={`${
-                    popularOnly ? "bg-orange-600 hover:bg-orange-700" : ""
-                  }`}
-                >
-                  <TrendingUp className="w-4 h-4 mr-2" />
-                  Popular Only
-                </Button>
-
-                {categoriesWithCounts.slice(1).map((category) => (
-                  <Button
-                    key={category.id}
-                    variant={
-                      activeCategory === category.id ? "default" : "outline"
-                    }
-                    onClick={() => setActiveCategory(category.id)}
-                    size="sm"
-                    className={`${
-                      activeCategory === category.id
-                        ? "bg-blue-600 hover:bg-blue-700"
-                        : ""
-                    }`}
-                  >
-                    {category.name}
-                    <Badge variant="secondary" className="ml-2 text-xs">
-                      {category.count}
-                    </Badge>
-                  </Button>
-                ))}
-              </div>
-
-              {/* Compact View & Sort Controls */}
-              <div className="flex items-center gap-2">
-                <Select
-                  value={viewMode}
-                  onValueChange={(value: "grid" | "list") => setViewMode(value)}
-                >
-                  <SelectTrigger className="h-8 w-24 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="list">List</SelectItem>
-                    <SelectItem value="grid">Grid</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={sortBy}
-                  onValueChange={(
-                    value: "name" | "price" | "popularity" | "preparationTime"
-                  ) => setSortBy(value)}
-                >
-                  <SelectTrigger className="h-8 w-28 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="name">Name</SelectItem>
-                    <SelectItem value="price">Price</SelectItem>
-                    <SelectItem value="popularity">Popular</SelectItem>
-                    <SelectItem value="preparationTime">Prep Time</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                  key={category.id}
+                  variant={
+                    activeCategory === category.id ? "default" : "outline"
                   }
-                  className="h-8 w-8 p-0"
+                  onClick={() => setActiveCategory(category.id)}
+                  size="sm"
+                  className={`${
+                    activeCategory === category.id
+                      ? "bg-blue-600 hover:bg-blue-700"
+                      : ""
+                  }`}
                 >
-                  {sortOrder === "asc" ? "↑" : "↓"}
+                  {category.name}
+                  <Badge variant="secondary" className="ml-2 text-xs">
+                    {category.count}
+                  </Badge>
                 </Button>
-              </div>
+              ))}
             </div>
 
-            <Separator />
+            {/* Separator before Advanced Filters */}
+            {showAdvancedFilters && <Separator />}
 
             {/* Advanced Filters */}
             {showAdvancedFilters && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="flex items-center gap-2">
                   <Settings2 className="h-4 w-4 text-gray-500" />
                   <h4 className="text-sm font-medium text-gray-700">
@@ -2568,55 +3679,149 @@ export default function MenuPage() {
                   </h4>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Price Range */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium">Price Range</Label>
-                      <span className="text-xs text-gray-500">
-                        {currencySymbol}
-                        {priceRange[0].toFixed(2)} - {currencySymbol}
-                        {priceRange[1].toFixed(2)}
-                      </span>
-                    </div>
-                    <Slider
-                      value={[priceRange[0], priceRange[1]]}
-                      onValueChange={(val: number[]) =>
-                        setPriceRange(val as [number, number])
-                      }
-                      min={0}
-                      max={1000}
-                      step={0.5}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>{currencySymbol}0</span>
-                      <span>{currencySymbol}1000</span>
-                    </div>
+                {/* Sorting & View Controls */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-gray-500" />
+                    <h5 className="text-sm font-medium text-gray-600">
+                      Sorting & Display
+                    </h5>
                   </div>
 
-                  {/* Preparation Time */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium">Prep Time</Label>
-                      <span className="text-xs text-gray-500">
-                        {preparationTimeRange[0]} - {preparationTimeRange[1]}{" "}
-                        min
-                      </span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* View Mode */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">View Mode</Label>
+                      <Select
+                        value={viewMode}
+                        onValueChange={(value: "grid" | "list") =>
+                          setViewMode(value)
+                        }
+                      >
+                        <SelectTrigger className="h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="list">List View</SelectItem>
+                          <SelectItem value="grid">Grid View</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <Slider
-                      value={[preparationTimeRange[0], preparationTimeRange[1]]}
-                      onValueChange={(val: number[]) =>
-                        setPreparationTimeRange(val as [number, number])
-                      }
-                      min={0}
-                      max={120}
-                      step={1}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>0 min</span>
-                      <span>120 min</span>
+
+                    {/* Sort By */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Sort By</Label>
+                      <Select
+                        value={sortBy}
+                        onValueChange={(
+                          value:
+                            | "name"
+                            | "price"
+                            | "popularity"
+                            | "preparationTime"
+                        ) => setSortBy(value)}
+                      >
+                        <SelectTrigger className="h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="name">Name</SelectItem>
+                          <SelectItem value="price">Price</SelectItem>
+                          <SelectItem value="popularity">Popularity</SelectItem>
+                          <SelectItem value="preparationTime">
+                            Prep Time
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Sort Order */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Sort Order</Label>
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                        }
+                        className="h-10 w-full justify-between"
+                      >
+                        <span>
+                          {sortOrder === "asc" ? "Ascending" : "Descending"}
+                        </span>
+                        <span className="text-lg">
+                          {sortOrder === "asc" ? "↑" : "↓"}
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Range Filters */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Slider className="h-4 w-4 text-gray-500" />
+                    <h5 className="text-sm font-medium text-gray-600">
+                      Range Filters
+                    </h5>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Price Range */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">
+                          Price Range
+                        </Label>
+                        <span className="text-xs text-gray-500">
+                          {currencySymbol}
+                          {priceRange[0].toFixed(2)} - {currencySymbol}
+                          {priceRange[1].toFixed(2)}
+                        </span>
+                      </div>
+                      <Slider
+                        value={[priceRange[0], priceRange[1]]}
+                        onValueChange={(val: number[]) =>
+                          setPriceRange(val as [number, number])
+                        }
+                        min={0}
+                        max={1000}
+                        step={0.5}
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>{currencySymbol}0</span>
+                        <span>{currencySymbol}1000</span>
+                      </div>
+                    </div>
+
+                    {/* Preparation Time */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Prep Time</Label>
+                        <span className="text-xs text-gray-500">
+                          {preparationTimeRange[0]} - {preparationTimeRange[1]}{" "}
+                          min
+                        </span>
+                      </div>
+                      <Slider
+                        value={[
+                          preparationTimeRange[0],
+                          preparationTimeRange[1],
+                        ]}
+                        onValueChange={(val: number[]) =>
+                          setPreparationTimeRange(val as [number, number])
+                        }
+                        min={0}
+                        max={120}
+                        step={1}
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>0 min</span>
+                        <span>120 min</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2633,11 +3838,22 @@ export default function MenuPage() {
               preparationTimeRange[0] > 0 ||
               preparationTimeRange[1] < 120) && (
               <div className="bg-gray-50 rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Filter className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700">
-                    Active Filters:
-                  </span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700">
+                      Active Filters:
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="h-6 px-2 text-xs"
+                  >
+                    <X className="w-3 h-3 mr-1" />
+                    Clear All
+                  </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {searchTerm && (
@@ -2712,25 +3928,43 @@ export default function MenuPage() {
         >
           <div className="flex items-center gap-4">
             <Checkbox
-              checked={selectedItems.length === filteredAndSortedItems.length}
+              checked={selectedItems.length === paginatedItems.length}
               onCheckedChange={handleSelectAll}
             />
-            <span className="text-sm font-medium">
-              {selectedItems.length} of {filteredAndSortedItems.length} items
-              selected
-            </span>
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">
+                {selectedItems.length} of {paginatedItems.length} items selected
+              </span>
+              {selectedItems.length === 0 && (
+                <span className="text-xs text-blue-600">
+                  Click on items or use "Select All" to get started
+                </span>
+              )}
+            </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setSelectedItems([]);
-              setIsBulkMode(false);
-            }}
-          >
-            <X className="w-4 h-4 mr-2" />
-            Clear Selection
-          </Button>
+          <div className="flex items-center gap-2">
+            {selectedItems.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedItems([])}
+              >
+                <X className="w-4 h-4 mr-2" />
+                Clear Selection
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedItems([]);
+                setIsBulkMode(false);
+              }}
+            >
+              <X className="w-4 h-4 mr-2" />
+              Exit Bulk Mode
+            </Button>
+          </div>
         </motion.div>
       )}
 
@@ -2763,7 +3997,7 @@ export default function MenuPage() {
                   </Card>
                 </motion.div>
               ))
-            : filteredAndSortedItems.map((item, index) => (
+            : paginatedItems.map((item, index) => (
                 <motion.div
                   key={item.id}
                   variants={cardHoverVariants}
@@ -2842,32 +4076,51 @@ export default function MenuPage() {
 
       {/* Bulk Actions */}
       {showBulkActions && (
-        <div className="flex justify-end gap-2 pt-4 border-t">
-          <Button
-            variant="outline"
-            onClick={() => setShowBulkEditDialog(true)}
-            disabled={selectedItems.length === 0 || isSubmitting}
-          >
-            <Edit className="w-4 h-4 mr-2" />
-            Bulk Edit ({selectedItems.length})
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleBulkToggleAvailability}
-            disabled={selectedItems.length === 0 || isSubmitting}
-          >
-            <CheckSquare className="w-4 h-4 mr-2" />
-            Toggle Availability ({selectedItems.length})
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleBulkDelete}
-            disabled={selectedItems.length === 0 || isSubmitting}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete Selected ({selectedItems.length})
-          </Button>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="sticky bottom-4 bg-white border border-gray-200 rounded-lg shadow-lg p-4 mt-6"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckSquare className="w-5 h-5 text-blue-600" />
+              <span className="font-medium text-sm">
+                {selectedItems.length} item
+                {selectedItems.length !== 1 ? "s" : ""} selected
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBulkEditDialog(true)}
+                disabled={selectedItems.length === 0}
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Bulk Edit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkToggleAvailability}
+                disabled={selectedItems.length === 0}
+              >
+                <CheckSquare className="w-4 h-4 mr-2" />
+                Toggle Availability
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDelete}
+                disabled={selectedItems.length === 0}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Selected
+              </Button>
+            </div>
+          </div>
+        </motion.div>
       )}
 
       {/* Edit Dialog */}
@@ -2937,14 +4190,35 @@ export default function MenuPage() {
 
       {/* Export Dialog */}
       <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Export Menu</DialogTitle>
+            <DialogTitle>Export Menu Items</DialogTitle>
             <DialogDescription>
-              Choose the format to export your menu data
+              Export your menu data in your preferred format. The file will
+              include all menu items with their details.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Export Stats */}
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <BarChart3 className="w-4 h-4 text-green-600" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-green-900">
+                    Export Summary
+                  </h4>
+                  <p className="text-sm text-green-700">
+                    {menuStats.totalItems} total items •{" "}
+                    {menuStats.availableItems} available •{" "}
+                    {menuStats.popularItems} popular
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Format Selection */}
             <div className="space-y-2">
               <Label>Export Format</Label>
               <Select
@@ -2964,9 +4238,47 @@ export default function MenuPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="text-sm text-muted-foreground">
-              <p>• CSV: Best for spreadsheet applications</p>
-              <p>• JSON: Best for data migration and backups</p>
+
+            {/* Format Details */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Format Details</h4>
+              <div className="text-sm text-muted-foreground space-y-1">
+                {exportFormat === "csv" ? (
+                  <>
+                    <p>
+                      • <strong>CSV Format:</strong> Comma-separated values
+                    </p>
+                    <p>
+                      • <strong>Compatibility:</strong> Excel, Google Sheets,
+                      Numbers
+                    </p>
+                    <p>
+                      • <strong>Best for:</strong> Data analysis, sharing with
+                      non-technical users
+                    </p>
+                    <p>
+                      • <strong>File extension:</strong> .csv
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      • <strong>JSON Format:</strong> JavaScript Object Notation
+                    </p>
+                    <p>
+                      • <strong>Compatibility:</strong> APIs, databases,
+                      development tools
+                    </p>
+                    <p>
+                      • <strong>Best for:</strong> Data migration, backups,
+                      integrations
+                    </p>
+                    <p>
+                      • <strong>File extension:</strong> .json
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -2998,14 +4310,43 @@ export default function MenuPage() {
 
       {/* Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Import Menu</DialogTitle>
+            <DialogTitle>Import Menu Items</DialogTitle>
             <DialogDescription>
-              Import menu items from a CSV or JSON file
+              Import menu items from a CSV or JSON file. Download the sample CSV
+              to see the required format.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Sample CSV Download */}
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Download className="w-4 h-4 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-blue-900 mb-1">
+                    Need help with the format?
+                  </h4>
+                  <p className="text-sm text-blue-700 mb-3">
+                    Download our sample CSV file to see the exact format
+                    required for importing menu items.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={downloadSampleCSV}
+                    className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50"
+                  >
+                    <Download className="w-3 h-3 mr-2" />
+                    Download Sample CSV
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* File Upload */}
             <div className="space-y-2">
               <Label>Select File</Label>
               <Input
@@ -3014,14 +4355,39 @@ export default function MenuPage() {
                 onChange={(e) => setImportFile(e.target.files?.[0] || null)}
                 className="cursor-pointer"
               />
+              {importFile && (
+                <p className="text-sm text-green-600">
+                  ✓ Selected: {importFile.name}
+                </p>
+              )}
             </div>
-            <div className="text-sm text-muted-foreground">
-              <p>• Supported formats: CSV, JSON</p>
-              <p>
-                • CSV should have headers: Name, Description, Price, Category,
-                etc.
-              </p>
-              <p>• Existing items with the same name will be skipped</p>
+
+            {/* Import Guidelines */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Import Guidelines</h4>
+              <div className="text-sm text-muted-foreground space-y-1">
+                <p>
+                  • <strong>Required fields:</strong> Name, Price
+                </p>
+                <p>
+                  • <strong>Optional fields:</strong> Description, Category,
+                  Preparation Time, Available, Popular, Allergens
+                </p>
+                <p>
+                  • <strong>Price format:</strong> Numbers only (e.g., 12.99)
+                </p>
+                <p>
+                  • <strong>Available/Popular:</strong> Use "Yes" or "No"
+                </p>
+                <p>
+                  • <strong>Categories:</strong> Will be matched by name or
+                  created if needed
+                </p>
+                <p>
+                  • <strong>Existing items:</strong> Will be skipped to avoid
+                  duplicates
+                </p>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -3111,6 +4477,7 @@ export default function MenuPage() {
             <div className="space-y-2">
               <Label>Category</Label>
               <Select
+                key={`bulk-edit-category-${menuCategories.length}-${menuCategories.map((c) => c.id).join("-")}`}
                 value={bulkEditData.categoryId}
                 onValueChange={(value) =>
                   setBulkEditData((prev) => ({ ...prev, categoryId: value }))
@@ -3210,6 +4577,56 @@ export default function MenuPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Pagination Controls */}
+      {!isLoading && totalPages > 1 && (
+        <motion.div
+          className="flex items-center justify-between mt-6"
+          variants={itemVariants}
+        >
+          <div className="text-sm text-muted-foreground">
+            Showing {(page - 1) * itemsPerPage + 1} to{" "}
+            {Math.min(page * itemsPerPage, filteredAndSortedItems.length)} of{" "}
+            {filteredAndSortedItems.length} items
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const pageNum = i + 1;
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={page === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setPage(pageNum)}
+                    className="w-8 h-8 p-0"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(Math.min(totalPages, page + 1))}
+              disabled={page === totalPages}
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   );
 }

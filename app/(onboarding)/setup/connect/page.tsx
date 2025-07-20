@@ -80,6 +80,46 @@ export default function ConnectPage() {
       const onboardingStatus = await getOnboardingStatus(supabase);
 
       if (onboardingStatus.step !== "connect-stripe") {
+        // Check if onboarding is complete but welcome email might not have been sent
+        if (onboardingStatus.step === "complete") {
+          console.log(
+            "🔍 Onboarding already complete, checking if welcome email was sent..."
+          );
+
+          // Get the full restaurant data to check onboarding status
+          const { data: fullRestaurant, error: fullRestaurantError } =
+            await supabase
+              .from("restaurants")
+              .select(
+                "id, onboarding_completed, name, stripe_account_id, stripe_account_enabled"
+              )
+              .eq("owner_id", user.id)
+              .single();
+
+          if (!fullRestaurantError && fullRestaurant) {
+            // Check if onboarding is marked as complete but we should ensure welcome email was sent
+            if (fullRestaurant.onboarding_completed) {
+              console.log(
+                "📧 Onboarding marked as complete, ensuring welcome email was sent..."
+              );
+
+              try {
+                // Send welcome email if onboarding is complete
+                await completeOnboarding(fullRestaurant.id);
+                console.log(
+                  "✅ Welcome email sent for already completed onboarding"
+                );
+              } catch (emailError) {
+                console.error(
+                  "❌ Error sending welcome email for completed onboarding:",
+                  emailError
+                );
+                // Don't block the redirect if email fails
+              }
+            }
+          }
+        }
+
         // User has already completed this step or needs to go to a different step
         redirectToOnboardingStep(
           onboardingStatus.step,

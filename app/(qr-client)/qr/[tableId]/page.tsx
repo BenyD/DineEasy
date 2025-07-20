@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,120 +8,25 @@ import { MenuItemCard } from "@/components/qr/MenuItemCard";
 import { CartButton } from "@/components/qr/CartButton";
 import { useCart } from "@/hooks/useCart";
 import { MenuItem } from "@/types";
-import { MapPin, Clock, Star, Info } from "lucide-react";
+import { MapPin, Clock, Star, Info, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getTableInfo, getRestaurantMenu } from "@/lib/actions/qr-client";
+import { toast } from "sonner";
 
-// Mock data - in real app this would come from API
-const mockRestaurant = {
-  id: "1",
-  name: "Bella Vista",
-  logo: "/placeholder.svg?height=60&width=60",
-  address: "123 Main Street, Zurich",
-  rating: 4.8,
-  reviews: 243,
-  cuisine: "Italian",
-  openingHours: "11:30 - 23:00",
-};
+// Types for real data
+interface RestaurantData {
+  id: string;
+  name: string;
+  logo_url?: string;
+  address?: string;
+  cuisine?: string;
+  opening_hours?: string;
+  currency?: string;
+}
 
-const mockMenu = {
-  starters: [
-    {
-      id: "1",
-      restaurantId: "1",
-      name: "Bruschetta Classica",
-      description: "Toasted bread with fresh tomatoes, basil, and garlic",
-      price: 12.5,
-      image: "/placeholder.svg?height=200&width=300",
-      category: "starters",
-      available: true,
-      tags: ["Popular", "Vegetarian"],
-      allergens: ["gluten"],
-      preparationTime: 10,
-    },
-    {
-      id: "2",
-      restaurantId: "1",
-      name: "Antipasto Misto",
-      description: "Selection of Italian cured meats and cheeses",
-      price: 18.9,
-      image: "/placeholder.svg?height=200&width=300",
-      category: "starters",
-      available: true,
-      tags: [],
-      allergens: ["dairy", "nuts"],
-      preparationTime: 15,
-    },
-  ],
-  mains: [
-    {
-      id: "3",
-      restaurantId: "1",
-      name: "Margherita Pizza",
-      description: "Fresh mozzarella, tomato sauce, and basil",
-      price: 22.0,
-      image: "/placeholder.svg?height=200&width=300",
-      category: "mains",
-      available: true,
-      tags: ["Popular", "Vegetarian"],
-      allergens: ["gluten", "dairy"],
-      preparationTime: 20,
-    },
-    {
-      id: "4",
-      restaurantId: "1",
-      name: "Spaghetti Carbonara",
-      description: "Pasta with eggs, cheese, pancetta, and black pepper",
-      price: 24.5,
-      image: "/placeholder.svg?height=200&width=300",
-      category: "mains",
-      available: true,
-      tags: [],
-      allergens: ["gluten", "dairy", "eggs"],
-      preparationTime: 15,
-    },
-    {
-      id: "5",
-      restaurantId: "1",
-      name: "Risotto ai Funghi",
-      description: "Creamy risotto with mixed mushrooms and parmesan",
-      price: 26.0,
-      image: "/placeholder.svg?height=200&width=300",
-      category: "mains",
-      available: false,
-      tags: ["Vegetarian"],
-      allergens: ["dairy"],
-      preparationTime: 25,
-    },
-  ],
-  drinks: [
-    {
-      id: "6",
-      restaurantId: "1",
-      name: "House Wine Red",
-      description: "Local Merlot, glass",
-      price: 8.5,
-      image: "/placeholder.svg?height=200&width=300",
-      category: "drinks",
-      available: true,
-      tags: [],
-      allergens: ["sulfites"],
-      preparationTime: 2,
-    },
-    {
-      id: "7",
-      restaurantId: "1",
-      name: "San Pellegrino",
-      description: "Sparkling water, 500ml",
-      price: 4.5,
-      image: "/placeholder.svg?height=200&width=300",
-      category: "drinks",
-      available: true,
-      tags: [],
-      allergens: [],
-      preparationTime: 1,
-    },
-  ],
-};
+interface MenuData {
+  [category: string]: MenuItem[];
+}
 
 export default function MenuPage({
   params,
@@ -131,14 +36,128 @@ export default function MenuPage({
   const resolvedParams = use(params);
   const { cart, addToCart, updateQuantity, getTotalItems, getTotalPrice } =
     useCart();
-  const [activeCategory, setActiveCategory] = useState("starters");
+  const [activeCategory, setActiveCategory] = useState("");
   const [showInfo, setShowInfo] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [restaurant, setRestaurant] = useState<RestaurantData | null>(null);
+  const [menuData, setMenuData] = useState<MenuData>({});
+  const [categories, setCategories] = useState<
+    Array<{ id: string; name: string; items: MenuItem[] }>
+  >([]);
 
-  const categories = [
-    { id: "starters", name: "Starters", items: mockMenu.starters },
-    { id: "mains", name: "Mains", items: mockMenu.mains },
-    { id: "drinks", name: "Drinks", items: mockMenu.drinks },
-  ];
+  // Load table and menu data
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Get table info
+        const tableResult = await getTableInfo(resolvedParams.tableId);
+        if (!tableResult.success) {
+          setError(tableResult.error || "Table not found");
+          return;
+        }
+
+        const tableData = tableResult.data;
+        const restaurantData = tableData.restaurants as RestaurantData;
+        setRestaurant(restaurantData);
+
+        // Get menu data
+        const menuResult = await getRestaurantMenu(restaurantData.id);
+        if (!menuResult.success) {
+          setError(menuResult.error || "Failed to load menu");
+          return;
+        }
+
+        const menu = menuResult.data;
+        setMenuData(menu);
+
+        // Create categories
+        const categoryList = Object.entries(menu).map(
+          ([categoryName, items]) => ({
+            id: categoryName.toLowerCase(),
+            name: categoryName,
+            items: items as MenuItem[],
+          })
+        );
+
+        setCategories(categoryList);
+
+        // Set first category as active
+        if (categoryList.length > 0) {
+          setActiveCategory(categoryList[0].id);
+        }
+      } catch (err) {
+        console.error("Error loading data:", err);
+        setError("Failed to load menu data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [resolvedParams.tableId]);
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-green-600" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            Loading Menu
+          </h2>
+          <p className="text-gray-600">
+            Please wait while we load your table's menu...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl">⚠️</span>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            Error Loading Menu
+          </h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()}>Try Again</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show empty menu state
+  if (categories.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl">🍽️</span>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            Menu Not Available
+          </h2>
+          <p className="text-gray-600 mb-4">
+            This restaurant hasn't set up their menu yet. Please check back
+            later or contact the restaurant directly.
+          </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+            <MapPin className="w-4 h-4" />
+            <span>Table {resolvedParams.tableId}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white pb-32">
@@ -157,8 +176,8 @@ export default function MenuPage({
                 className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg ring-1 ring-black/5"
               >
                 <img
-                  src={mockRestaurant.logo || "/placeholder.svg"}
-                  alt={mockRestaurant.name}
+                  src={restaurant?.logo_url || "/placeholder.svg"}
+                  alt={restaurant?.name || "Restaurant"}
                   className="w-full h-full object-cover"
                   loading="eager"
                 />
@@ -180,7 +199,7 @@ export default function MenuPage({
                   animate={{ opacity: 1 }}
                   className="text-2xl font-bold text-gray-900 leading-tight"
                 >
-                  {mockRestaurant.name}
+                  {restaurant?.name || "Restaurant"}
                 </motion.h1>
                 <Button
                   variant="ghost"
@@ -198,19 +217,13 @@ export default function MenuPage({
                 </Button>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 mb-2">
-                <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-full">
-                  <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                  <span className="font-medium">{mockRestaurant.rating}</span>
-                  <span className="text-gray-400">
-                    ({mockRestaurant.reviews})
+              {restaurant?.cuisine && (
+                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 mb-2">
+                  <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
+                    {restaurant.cuisine}
                   </span>
                 </div>
-                <span className="text-gray-300">•</span>
-                <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
-                  {mockRestaurant.cuisine}
-                </span>
-              </div>
+              )}
 
               <AnimatePresence>
                 {showInfo && (
@@ -223,22 +236,26 @@ export default function MenuPage({
                   >
                     <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-sm">
                       <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-white/80 p-2 rounded-xl shadow-sm">
-                            <MapPin className="w-5 h-5 text-green-600" />
-                        </div>
-                          <span className="text-sm text-gray-700 font-medium">
-                          {mockRestaurant.address}
-                        </span>
-                      </div>
-                        <div className="flex items-center gap-3">
-                          <div className="bg-white/80 p-2 rounded-xl shadow-sm">
-                            <Clock className="w-5 h-5 text-green-600" />
+                        {restaurant?.address && (
+                          <div className="flex items-center gap-3">
+                            <div className="bg-white/80 p-2 rounded-xl shadow-sm">
+                              <MapPin className="w-5 h-5 text-green-600" />
+                            </div>
+                            <span className="text-sm text-gray-700 font-medium">
+                              {restaurant.address}
+                            </span>
                           </div>
-                          <span className="text-sm text-gray-700 font-medium">
-                            {mockRestaurant.openingHours}
-                          </span>
-                        </div>
+                        )}
+                        {restaurant?.opening_hours && (
+                          <div className="flex items-center gap-3">
+                            <div className="bg-white/80 p-2 rounded-xl shadow-sm">
+                              <Clock className="w-5 h-5 text-green-600" />
+                            </div>
+                            <span className="text-sm text-gray-700 font-medium">
+                              {restaurant.opening_hours}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -250,7 +267,7 @@ export default function MenuPage({
                   variant="outline"
                   className="text-sm border-green-200 text-green-700 bg-green-50 px-3 py-1 rounded-full font-medium"
                 >
-                  Table {resolvedParams.tableId}
+                  Table {tableData?.number || resolvedParams.tableId}
                 </Badge>
                 <Badge
                   variant="outline"
@@ -321,12 +338,33 @@ export default function MenuPage({
             transition={{ duration: 0.3 }}
             className="space-y-6"
           >
-            {categories
-              .find((cat) => cat.id === activeCategory)
-              ?.items.map((item, index) => (
+            {(() => {
+              const activeCategoryData = categories.find(
+                (cat) => cat.id === activeCategory
+              );
+              if (
+                !activeCategoryData ||
+                activeCategoryData.items.length === 0
+              ) {
+                return (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="text-2xl">🍽️</span>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      No items in {activeCategoryData?.name || "this category"}
+                    </h3>
+                    <p className="text-gray-600">
+                      Check back later for new menu items.
+                    </p>
+                  </div>
+                );
+              }
+
+              return activeCategoryData.items.map((item, index) => (
                 <MenuItemCard
                   key={item.id}
-                  item={item as MenuItem}
+                  item={item}
                   onAddToCart={addToCart}
                   cartQuantity={
                     cart.find((cartItem) => cartItem.id === item.id)
@@ -335,7 +373,8 @@ export default function MenuPage({
                   onUpdateQuantity={updateQuantity}
                   index={index}
                 />
-              ))}
+              ));
+            })()}
           </motion.div>
         </AnimatePresence>
       </div>

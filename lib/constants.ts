@@ -46,3 +46,16 @@ export const PAYMENT_METHODS = {
   cash: "Cash",
   other: "Other",
 } as const;
+
+// Domain configuration
+export const DOMAIN_CONFIG = {
+  PRODUCTION: "https://dineeasy.ch",
+  DEVELOPMENT: "http://localhost:3000",
+  CURRENT: process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.ch",
+} as const;
+
+// QR code configuration
+export const QR_CONFIG = {
+  BASE_URL: DOMAIN_CONFIG.CURRENT,
+  PATH_PREFIX: "/qr",
+} as const;

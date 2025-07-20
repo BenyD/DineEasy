@@ -83,7 +83,7 @@ function validateImageFile(file: File, type: UploadType): string | null {
   return null; // No error
 }
 
-// Helper function to get current restaurant ID
+// Helper function to get current restaurant ID (supports both owners and staff)
 async function getCurrentRestaurantId(
   supabase: ReturnType<typeof createClient>
 ): Promise<string> {
@@ -96,17 +96,32 @@ async function getCurrentRestaurantId(
     throw new Error("Not authenticated");
   }
 
-  const { data: restaurant, error: restaurantError } = await supabase
+  // First, try to find restaurant where user is the owner
+  const { data: ownedRestaurant, error: ownedError } = await supabase
     .from("restaurants")
     .select("id")
     .eq("owner_id", user.id)
     .single();
 
-  if (restaurantError || !restaurant) {
-    throw new Error("Restaurant not found");
+  if (ownedRestaurant) {
+    return ownedRestaurant.id;
   }
 
-  return restaurant.id;
+  // If not an owner, check if user is staff with menu.manage permissions
+  const { data: staffRestaurant, error: staffError } = await supabase
+    .from("staff")
+    .select("restaurant_id")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .contains("permissions", ["menu.manage"])
+    .single();
+
+  if (staffRestaurant) {
+    return staffRestaurant.restaurant_id;
+  }
+
+  // If neither owner nor staff with permissions, throw error
+  throw new Error("Restaurant not found or insufficient permissions");
 }
 
 // Main upload function
@@ -286,8 +301,12 @@ export async function uploadImage(
         revalidatePath("/dashboard/settings");
         revalidatePath("/dashboard");
         break;
+      // Note: menu-item uploads don't need revalidation because:
+      // 1. WebSocket handles real-time updates
+      // 2. Form is client-side and doesn't need server revalidation
+      // 3. Image URL is immediately available for form submission
       case "menu-item":
-        revalidatePath("/dashboard/menu");
+        // No revalidation needed - WebSocket will handle updates
         break;
     }
 
@@ -342,8 +361,11 @@ export async function deleteImage(imageUrl: string, type: UploadType) {
         revalidatePath("/dashboard/settings");
         revalidatePath("/dashboard");
         break;
+      // Note: menu-item deletions don't need revalidation because:
+      // 1. WebSocket handles real-time updates
+      // 2. Form is client-side and doesn't need server revalidation
       case "menu-item":
-        revalidatePath("/dashboard/menu");
+        // No revalidation needed - WebSocket will handle updates
         break;
     }
 

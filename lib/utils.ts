@@ -310,3 +310,104 @@ export function hasOnboardingProgress(): boolean {
   }
   return false;
 }
+
+/**
+ * localStorage utility functions for add menu item modal persistence
+ */
+
+export function saveMenuItemFormProgress(
+  formData: any,
+  activeTab: string,
+  isEditing: boolean = false
+) {
+  if (typeof window !== "undefined") {
+    try {
+      const dataToSave = {
+        ...formData,
+        image: null, // Don't save image URLs to localStorage
+        imagePreview: null,
+      };
+      localStorage.setItem("menu-item-form-data", JSON.stringify(dataToSave));
+      localStorage.setItem("menu-item-active-tab", activeTab);
+      localStorage.setItem("menu-item-is-editing", isEditing.toString());
+    } catch (error) {
+      console.error("Error saving menu item form progress:", error);
+    }
+  }
+}
+
+export function loadMenuItemFormProgress() {
+  if (typeof window !== "undefined") {
+    try {
+      const savedData = localStorage.getItem("menu-item-form-data");
+      const savedTab = localStorage.getItem("menu-item-active-tab");
+      const savedIsEditing = localStorage.getItem("menu-item-is-editing");
+
+      if (savedData && savedTab) {
+        return {
+          formData: JSON.parse(savedData),
+          activeTab: savedTab,
+          isEditing: savedIsEditing === "true",
+          hasResumed: true,
+        };
+      }
+    } catch (error) {
+      console.error("Error loading menu item form progress:", error);
+    }
+  }
+
+  return {
+    formData: null,
+    activeTab: "basic",
+    isEditing: false,
+    hasResumed: false,
+  };
+}
+
+export function clearMenuItemFormProgress() {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("menu-item-form-data");
+      localStorage.removeItem("menu-item-active-tab");
+      localStorage.removeItem("menu-item-is-editing");
+    } catch (error) {
+      console.error("Error clearing menu item form progress:", error);
+    }
+  }
+}
+
+export function hasMenuItemFormProgress(): boolean {
+  if (typeof window !== "undefined") {
+    const savedData = localStorage.getItem("menu-item-form-data");
+    const savedTab = localStorage.getItem("menu-item-active-tab");
+    return !!(savedData && savedTab && savedTab !== "basic");
+  }
+  return false;
+}
+
+// Debounce utility function
+export function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
+
+// Throttle utility function
+export function throttle<T extends (...args: any[]) => any>(
+  func: T,
+  limit: number
+): (...args: Parameters<T>) => void {
+  let inThrottle: boolean;
+  return (...args: Parameters<T>) => {
+    if (!inThrottle) {
+      func(...args);
+      inThrottle = true;
+      setTimeout(() => (inThrottle = false), limit);
+    }
+  };
+}

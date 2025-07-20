@@ -9,6 +9,7 @@ import {
   createMenuItem,
   updateMenuItem,
   deleteMenuItem,
+  deleteMultipleMenuItems,
   createCategory,
   updateCategory,
   deleteCategory,
@@ -59,6 +60,11 @@ interface MenuSettings {
   isLoading: boolean;
   error: string | null;
 
+  // Separate loading states for different operations
+  isMenuItemsLoading: boolean;
+  isCategoriesLoading: boolean;
+  isAllergensLoading: boolean;
+
   // Actions
   fetchMenuItems: () => Promise<void>;
   fetchCategories: () => Promise<void>;
@@ -68,6 +74,7 @@ interface MenuSettings {
   addMenuItem: (formData: FormData) => Promise<void>;
   updateMenuItem: (id: string, formData: FormData) => Promise<void>;
   removeMenuItem: (id: string) => Promise<void>;
+  removeMultipleMenuItems: (ids: string[]) => Promise<void>;
 
   // Categories
   addCategory: (formData: FormData) => Promise<void>;
@@ -91,9 +98,14 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
   isLoading: false,
   error: null,
 
+  // Separate loading states for different operations
+  isMenuItemsLoading: false,
+  isCategoriesLoading: false,
+  isAllergensLoading: false,
+
   // Fetch menu items
   fetchMenuItems: async () => {
-    set({ isLoading: true, error: null });
+    set({ isMenuItemsLoading: true, error: null });
 
     try {
       const result = await getMenuItems();
@@ -102,19 +114,19 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      set({ menuItems: result.data || [], isLoading: false });
+      set({ menuItems: result.data || [], isMenuItemsLoading: false });
     } catch (error: any) {
       console.error("Error fetching menu items:", error);
       set({
         error: error.message || "Failed to fetch menu items",
-        isLoading: false,
+        isMenuItemsLoading: false,
       });
     }
   },
 
   // Fetch categories
   fetchCategories: async () => {
-    set({ isLoading: true, error: null });
+    set({ isCategoriesLoading: true, error: null });
 
     try {
       const result = await getCategories();
@@ -123,19 +135,19 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      set({ categories: result.data || [], isLoading: false });
+      set({ categories: result.data || [], isCategoriesLoading: false });
     } catch (error: any) {
       console.error("Error fetching categories:", error);
       set({
         error: error.message || "Failed to fetch categories",
-        isLoading: false,
+        isCategoriesLoading: false,
       });
     }
   },
 
   // Fetch allergens
   fetchAllergens: async () => {
-    set({ isLoading: true, error: null });
+    set({ isAllergensLoading: true, error: null });
 
     try {
       const result = await getAllergens();
@@ -144,12 +156,12 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      set({ allergens: result.data || [], isLoading: false });
+      set({ allergens: result.data || [], isAllergensLoading: false });
     } catch (error: any) {
       console.error("Error fetching allergens:", error);
       set({
         error: error.message || "Failed to fetch allergens",
-        isLoading: false,
+        isAllergensLoading: false,
       });
     }
   },
@@ -165,9 +177,8 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      // Refresh menu items
-      await get().fetchMenuItems();
-
+      // WebSocket will handle the real-time update, so we don't need to refresh
+      // This prevents conflicts with WebSocket updates
       toast.success("Menu item added successfully!");
       set({ isLoading: false });
     } catch (error: any) {
@@ -191,9 +202,8 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      // Refresh menu items
-      await get().fetchMenuItems();
-
+      // WebSocket will handle the real-time update, so we don't need to refresh
+      // This prevents conflicts with WebSocket updates
       toast.success("Menu item updated successfully!");
       set({ isLoading: false });
     } catch (error: any) {
@@ -217,13 +227,10 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      // Remove from local state
-      set((state) => ({
-        menuItems: state.menuItems.filter((item) => item.id !== id),
-        isLoading: false,
-      }));
-
+      // WebSocket will handle the real-time update, so we don't need to manually update state
+      // This prevents conflicts with WebSocket updates
       toast.success("Menu item deleted successfully!");
+      set({ isLoading: false });
     } catch (error: any) {
       console.error("Error deleting menu item:", error);
       set({
@@ -234,9 +241,36 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
     }
   },
 
+  // Remove multiple menu items
+  removeMultipleMenuItems: async (ids: string[]) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const result = await deleteMultipleMenuItems(ids);
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // WebSocket will handle the real-time update, so we don't need to manually update state
+      // This prevents conflicts with WebSocket updates
+      toast.success(
+        `${result.deletedCount || ids.length} menu items deleted successfully!`
+      );
+      set({ isLoading: false });
+    } catch (error: any) {
+      console.error("Error deleting multiple menu items:", error);
+      set({
+        error: error.message || "Failed to delete menu items",
+        isLoading: false,
+      });
+      toast.error(error.message || "Failed to delete menu items");
+    }
+  },
+
   // Add category
   addCategory: async (formData: FormData) => {
-    set({ isLoading: true, error: null });
+    set({ isCategoriesLoading: true, error: null });
 
     try {
       const result = await createCategory(formData);
@@ -245,24 +279,15 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      // Optimistically add to local state instead of full refresh
-      if (result.data) {
-        set((state) => ({
-          categories: [...state.categories, result.data],
-          isLoading: false,
-        }));
-      } else {
-        // Fallback to refresh if no data returned
-        await get().fetchCategories();
-        set({ isLoading: false });
-      }
-
+      // WebSocket will handle the real-time update, so we don't need to refresh
+      // This prevents conflicts with WebSocket updates
       toast.success("Category added successfully!");
+      set({ isCategoriesLoading: false });
     } catch (error: any) {
       console.error("Error adding category:", error);
       set({
         error: error.message || "Failed to add category",
-        isLoading: false,
+        isCategoriesLoading: false,
       });
       toast.error(error.message || "Failed to add category");
     }
@@ -279,9 +304,8 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      // Refresh categories
-      await get().fetchCategories();
-
+      // WebSocket will handle the real-time update, so we don't need to refresh
+      // This prevents conflicts with WebSocket updates
       toast.success("Category updated successfully!");
       set({ isLoading: false });
     } catch (error: any) {
@@ -305,13 +329,10 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      // Remove from local state
-      set((state) => ({
-        categories: state.categories.filter((category) => category.id !== id),
-        isLoading: false,
-      }));
-
+      // WebSocket will handle the real-time update, so we don't need to manually update state
+      // This prevents conflicts with WebSocket updates
       toast.success("Category deleted successfully!");
+      set({ isLoading: false });
     } catch (error: any) {
       console.error("Error deleting category:", error);
       set({
@@ -324,7 +345,7 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
 
   // Add allergen
   addAllergen: async (formData: FormData) => {
-    set({ isLoading: true, error: null });
+    set({ isAllergensLoading: true, error: null });
 
     try {
       const result = await createAllergen(formData);
@@ -333,24 +354,15 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      // Optimistically add to local state instead of full refresh
-      if (result.data) {
-        set((state) => ({
-          allergens: [...state.allergens, result.data],
-          isLoading: false,
-        }));
-      } else {
-        // Fallback to refresh if no data returned
-        await get().fetchAllergens();
-        set({ isLoading: false });
-      }
-
+      // WebSocket will handle the real-time update, so we don't need to refresh
+      // This prevents conflicts with WebSocket updates
       toast.success("Allergen added successfully!");
+      set({ isAllergensLoading: false });
     } catch (error: any) {
       console.error("Error adding allergen:", error);
       set({
         error: error.message || "Failed to add allergen",
-        isLoading: false,
+        isAllergensLoading: false,
       });
       toast.error(error.message || "Failed to add allergen");
     }
@@ -367,9 +379,8 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      // Refresh allergens
-      await get().fetchAllergens();
-
+      // WebSocket will handle the real-time update, so we don't need to refresh
+      // This prevents conflicts with WebSocket updates
       toast.success("Allergen updated successfully!");
       set({ isLoading: false });
     } catch (error: any) {
@@ -393,13 +404,10 @@ export const useMenuSettings = create<MenuSettings>((set, get) => ({
         throw new Error(result.error);
       }
 
-      // Remove from local state
-      set((state) => ({
-        allergens: state.allergens.filter((allergen) => allergen.id !== id),
-        isLoading: false,
-      }));
-
+      // WebSocket will handle the real-time update, so we don't need to manually update state
+      // This prevents conflicts with WebSocket updates
       toast.success("Allergen deleted successfully!");
+      set({ isLoading: false });
     } catch (error: any) {
       console.error("Error deleting allergen:", error);
       set({
