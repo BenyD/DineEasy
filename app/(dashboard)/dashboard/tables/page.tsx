@@ -29,6 +29,10 @@ import {
   BarChart3,
   Copy,
   ExternalLink,
+  Settings,
+  AlertTriangle,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -76,33 +80,35 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  getTables,
   createTable,
   updateTable,
   deleteTable,
   updateTableStatus,
   bulkUpdateTableStatus,
-  getTableStats,
   bulkUpdateTableLayouts,
   generateTableQRCode,
   updateAllQRCodesForEnvironment,
 } from "@/lib/actions/tables";
-import { getUserRestaurants } from "@/lib/actions/restaurant";
 
 import type { Database } from "@/types/supabase";
 import TableLayoutEditor from "@/components/dashboard/tables/TableLayoutEditor";
 import BulkOperations from "@/components/dashboard/tables/BulkOperations";
 import { TableQRCode } from "@/components/dashboard/tables/TableQRCode";
-import { QRSetupModal } from "@/components/dashboard/tables/QRSetupModal";
-import { getTableWebSocket, disconnectTableWebSocket } from "@/lib/websocket";
+import { UnifiedQRSettingsModal } from "@/components/dashboard/tables/UnifiedQRSettingsModal";
+import { TablesErrorBoundary } from "@/components/dashboard/tables/TablesErrorBoundary";
 import {
   generateTableQRData,
   isQRCodeEnvironmentCorrect,
 } from "@/lib/utils/qr-code";
 import { QR_CONFIG } from "@/lib/constants";
+import { useQRSettings } from "@/lib/store/qr-settings";
+import { useTablesOptimized } from "@/hooks/useTablesOptimized";
+import { useTablesWebSocket } from "@/hooks/useTablesWebSocket";
+import { retryWithConditions } from "@/lib/utils/retry";
 
 type Table = Database["public"]["Tables"]["tables"]["Row"];
 type TableStatus = Database["public"]["Enums"]["table_status"];
@@ -173,7 +179,7 @@ const qrCodeHoverVariants = {
   },
 };
 
-export default function TablesPage() {
+function TablesPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingTable, setEditingTable] = useState<Table | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -183,201 +189,89 @@ export default function TablesPage() {
     "number" | "capacity" | "status" | "created_at"
   >("number");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  const [tables, setTables] = useState<Table[]>([]);
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(20);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [stats, setStats] = useState({
-    total: 0,
-    available: 0,
-    occupied: 0,
-    reserved: 0,
-    unavailable: 0,
-    totalCapacity: 0,
-  });
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedTables, setSelectedTables] = useState<string[]>([]);
-  const [bulkAction, setBulkAction] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"grid" | "layout">("grid");
   const [showLayoutEditor, setShowLayoutEditor] = useState(false);
-  const [showQRSetup, setShowQRSetup] = useState(false);
-  const [selectedTableForQR, setSelectedTableForQR] = useState<Table | null>(
-    null
-  );
-  const [restaurant, setRestaurant] = useState<any>(null);
-  const [isBulkMode, setIsBulkMode] = useState(false);
-  const [showBulkActions, setShowBulkActions] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "json">("csv");
-  const [importFile, setImportFile] = useState<File | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [showBulkOperations, setShowBulkOperations] = useState(false);
 
-  // Fetch tables and stats with error handling
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [tablesResult, statsResult, restaurantsResult] = await Promise.all([
-        getTables(),
-        getTableStats(),
-        getUserRestaurants(),
-      ]);
+  // Optimized state management
+  const {
+    tables,
+    stats,
+    restaurant,
+    loading,
+    refreshing,
+    error,
+    selectedTables,
+    fetchData,
+    refreshData,
+    addTable,
+    updateTable: updateTableOptimistic,
+    removeTable,
+    updateTableStatus: updateTableStatusOptimistic,
+    deleteTable: deleteTableOptimistic,
+    selectTable,
+    selectAllTables,
+    clearSelection,
+    selectedTablesArray,
+    tableCount,
+  } = useTablesOptimized();
 
-      if (tablesResult.success && tablesResult.data) {
-        setTables(tablesResult.data);
-      } else {
-        setError(tablesResult.error || "Failed to load tables");
-      }
+  // WebSocket real-time updates
+  const { isConnected, reconnectAttempts } = useTablesWebSocket({
+    onTableAdded: (table: Table) => addTable(table),
+    onTableUpdated: (table: Table, oldTable?: Table) =>
+      updateTableOptimistic(table),
+    onTableDeleted: (table: Table) => removeTable(table.id),
+  });
 
-      if (statsResult.success && statsResult.data) {
-        setStats(statsResult.data);
-      } else {
-        setError(statsResult.error || "Failed to load table statistics");
-      }
-
-      if (
-        restaurantsResult.restaurants &&
-        restaurantsResult.restaurants.length > 0
-      ) {
-        setRestaurant(restaurantsResult.restaurants[0]);
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      setError("Failed to load tables");
-      toast.error("Failed to load tables");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // QR Settings
+  const { openSettingsModal } = useQRSettings();
 
   // Search function without debounce to prevent random refreshes
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
   }, []);
 
-  // Refresh data optimized to prevent unnecessary re-renders
+  // Refresh data with retry logic
   const handleRefresh = useCallback(async () => {
     if (!loading && !refreshing) {
-      setRefreshing(true);
-      try {
-        await fetchData();
-        toast.success("Tables refreshed");
-      } catch (error) {
-        toast.error("Failed to refresh tables");
-      } finally {
-        setRefreshing(false);
+      const result = await retryWithConditions(refreshData, {
+        networkErrors: true,
+        serverErrors: true,
+        maxAttempts: 3,
+      });
+
+      if (!result.success) {
+        toast.error("Failed to refresh tables after multiple attempts");
       }
     }
-  }, [fetchData]); // Removed loading and refreshing from dependencies
+  }, [refreshData, loading, refreshing]);
 
-  // Load data on mount
+  // Load data on mount with retry logic
   useEffect(() => {
-    fetchData();
-  }, []);
+    const loadDataWithRetry = async () => {
+      const result = await retryWithConditions(fetchData, {
+        networkErrors: true,
+        serverErrors: true,
+        maxAttempts: 3,
+      });
 
-  // Auto-refresh disabled - only manual refresh allowed
-  // useEffect(() => {
-  //   const interval = setInterval(() => {
-  //     // Only auto-refresh if not loading, not refreshing, and no dialogs are open
-  //     if (
-  //       !loading &&
-  //       !refreshing &&
-  //       !isAddDialogOpen &&
-  //       !editingTable &&
-  //       !showLayoutEditor &&
-  //       !actionLoading // Don't refresh while any action is loading
-  //     ) {
-  //       fetchData();
-  //     }
-  //   }, 60000); // 60 seconds (increased from 30 to reduce frequency)
-
-  //   return () => clearInterval(interval);
-  // }, [
-  //   loading,
-  //   refreshing,
-  //   fetchData,
-  //   isAddDialogOpen,
-  //   editingTable,
-  //   showLayoutEditor,
-  //   actionLoading,
-  // ]);
-
-  // WebSocket integration for real-time updates (removed debounce to prevent random refreshes)
-  useEffect(() => {
-    const webSocket = getTableWebSocket();
-
-    // Subscribe to all table updates without debouncing
-    const unsubscribe = webSocket.subscribeToAll((payload: any) => {
-      const { eventType, newRecord, oldRecord } = payload;
-
-      // Only process updates if we have data
-      if (!newRecord && !oldRecord) return;
-
-      if (eventType === "INSERT" && newRecord) {
-        // New table added - only add if not already present
-        setTables((prev) => {
-          const exists = prev.some((table) => table.id === newRecord.id);
-          if (!exists) {
-            toast.success(`Table ${newRecord.number} added`);
-            return [...prev, newRecord];
-          }
-          return prev;
-        });
-      } else if (eventType === "UPDATE" && newRecord) {
-        // Table updated - only update if the record actually changed
-        setTables((prev) => {
-          const existingTable = prev.find((table) => table.id === newRecord.id);
-          if (
-            existingTable &&
-            JSON.stringify(existingTable) !== JSON.stringify(newRecord)
-          ) {
-            // Show toast for status changes
-            if (existingTable.status !== newRecord.status) {
-              toast.success(
-                `Table ${newRecord.number} status updated to ${newRecord.status}`
-              );
-            }
-            return prev.map((table) =>
-              table.id === newRecord.id ? newRecord : table
-            );
-          }
-          return prev;
-        });
-      } else if (eventType === "DELETE" && oldRecord) {
-        // Table deleted - only remove if it exists
-        setTables((prev) => {
-          const exists = prev.some((table) => table.id === oldRecord.id);
-          if (exists) {
-            toast.success(`Table ${oldRecord.number} deleted`);
-            return prev.filter((table) => table.id !== oldRecord.id);
-          }
-          return prev;
-        });
+      if (!result.success) {
+        toast.error("Failed to load tables after multiple attempts");
       }
-    });
-
-    // Update presence
-    webSocket.updatePresence({
-      user_id: "current_user",
-      page: "tables",
-      timestamp: new Date().toISOString(),
-    });
-
-    return () => {
-      unsubscribe();
     };
-  }, []);
 
-  // Cleanup WebSocket on component unmount
-  useEffect(() => {
-    return () => {
-      disconnectTableWebSocket();
-    };
-  }, []);
+    loadDataWithRetry();
+  }, [fetchData]);
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -415,27 +309,23 @@ export default function TablesPage() {
 
   // Bulk operations handlers
   const handleSelectAll = () => {
-    if (selectedTables.length === paginatedTables.length) {
-      setSelectedTables([]);
+    if (selectedTables.size === paginatedTables.length) {
+      clearSelection();
     } else {
-      setSelectedTables(paginatedTables.map((table) => table.id));
+      selectAllTables();
     }
   };
 
   const handleSelectTable = (tableId: string, selected: boolean) => {
-    if (selected) {
-      setSelectedTables((prev) => [...prev, tableId]);
-    } else {
-      setSelectedTables((prev) => prev.filter((id) => id !== tableId));
-    }
+    selectTable(tableId, selected);
   };
 
   const handleBulkDelete = async () => {
-    if (selectedTables.length === 0) return;
+    if (selectedTables.size === 0) return;
 
     try {
       const confirmed = window.confirm(
-        `Are you sure you want to delete ${selectedTables.length} table(s)? This action cannot be undone.`
+        `Are you sure you want to delete ${selectedTables.size} table(s)? This action cannot be undone.`
       );
 
       if (!confirmed) return;
@@ -448,25 +338,26 @@ export default function TablesPage() {
         }
       }
 
-      toast.success(`Successfully deleted ${selectedTables.length} table(s)`);
-      setSelectedTables([]);
-      setIsBulkMode(false);
-      setShowBulkActions(false);
+      toast.success(`Successfully deleted ${selectedTables.size} table(s)`);
+      clearSelection();
+      setShowBulkOperations(false);
     } catch (error) {
       toast.error("Failed to delete tables");
     }
   };
 
   const handleBulkStatusUpdate = async (status: TableStatus) => {
-    if (selectedTables.length === 0) return;
+    if (selectedTables.size === 0) return;
 
     try {
-      const result = await bulkUpdateTableStatus(selectedTables, status);
+      const result = await bulkUpdateTableStatus(
+        Array.from(selectedTables),
+        status
+      );
       if (result.success) {
-        toast.success(`Updated status for ${selectedTables.length} table(s)`);
-        setSelectedTables([]);
-        setIsBulkMode(false);
-        setShowBulkActions(false);
+        toast.success(`Updated status for ${selectedTables.size} table(s)`);
+        clearSelection();
+        setShowBulkOperations(false);
       } else {
         toast.error(result.error || "Failed to update table status");
       }
@@ -476,13 +367,11 @@ export default function TablesPage() {
   };
 
   const handleBulkExport = async (format: "csv" | "json") => {
-    if (selectedTables.length === 0) return;
+    if (selectedTables.size === 0) return;
 
     try {
       setIsExporting(true);
-      const selectedTableData = tables.filter((t) =>
-        selectedTables.includes(t.id)
-      );
+      const selectedTableData = tables.filter((t) => selectedTables.has(t.id));
       let content = "";
 
       if (format === "csv") {
@@ -522,7 +411,7 @@ export default function TablesPage() {
       document.body.removeChild(a);
 
       toast.success(
-        `Exported ${selectedTables.length} table(s) as ${format.toUpperCase()}`
+        `Exported ${selectedTables.size} table(s) as ${format.toUpperCase()}`
       );
     } catch (error) {
       toast.error("Failed to export tables");
@@ -532,16 +421,94 @@ export default function TablesPage() {
   };
 
   const handleBulkQRDownload = async () => {
-    if (selectedTables.length === 0) return;
+    if (selectedTables.size === 0) return;
 
     try {
-      // Open QR setup modal for the first table
-      const firstTable = tables.find((t) => t.id === selectedTables[0]);
-      if (firstTable) {
-        setSelectedTableForQR(firstTable);
-        setShowQRSetup(true);
+      // Refresh QR codes for selected tables
+      const tableIds = Array.from(selectedTables);
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const tableId of tableIds) {
+        try {
+          const result = await generateTableQRCode(tableId);
+          if (result.success) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(
+          `Refreshed QR codes for ${successCount} tables${errorCount > 0 ? ` (${errorCount} failed)` : ""}`
+        );
+        await fetchData();
+      } else {
+        toast.error("Failed to refresh QR codes");
       }
     } catch (error) {
+      toast.error("Failed to refresh QR codes");
+    }
+  };
+
+  const handleBulkDownloadQR = async () => {
+    if (selectedTables.size === 0) return;
+
+    try {
+      const selectedTableData = tables.filter((table) =>
+        selectedTables.has(table.id)
+      );
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const table of selectedTableData) {
+        try {
+          const qrUrl =
+            table.qr_code ||
+            `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${table.id}`;
+
+          // Get QR settings from store
+          const { getQRCodeOptions, settings } = useQRSettings();
+          const qrOptions = getQRCodeOptions();
+
+          // Generate QR code as data URL
+          const QRCode = (await import("qrcode")).default;
+          const qrDataUrl = await QRCode.toDataURL(qrUrl, {
+            ...qrOptions,
+            width: settings.defaultExportSize,
+          });
+
+          // Create download link
+          const link = document.createElement("a");
+          link.href = qrDataUrl;
+          link.download = `table-${table.number}-qr.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          successCount++;
+        } catch (error) {
+          console.error(
+            `Error downloading QR code for table ${table.number}:`,
+            error
+          );
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(
+          `Downloaded QR codes for ${successCount} tables${errorCount > 0 ? ` (${errorCount} failed)` : ""}`
+        );
+      } else {
+        toast.error("Failed to download QR codes");
+      }
+    } catch (error) {
+      console.error("Error in bulk download:", error);
       toast.error("Failed to download QR codes");
     }
   };
@@ -564,28 +531,27 @@ export default function TablesPage() {
   // Keyboard shortcuts for bulk operations
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!isBulkMode) return;
+      if (!showBulkOperations) return;
 
-      if (event.key === "Delete" && selectedTables.length > 0) {
+      if (event.key === "Delete" && selectedTables.size > 0) {
         event.preventDefault();
         handleBulkDelete();
       } else if (event.ctrlKey && event.key === "a") {
         event.preventDefault();
         handleSelectAll();
       } else if (event.key === "Escape") {
-        setIsBulkMode(false);
-        setSelectedTables([]);
-        setShowBulkActions(false);
+        setShowBulkOperations(false);
+        clearSelection();
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isBulkMode, selectedTables]);
+  }, [showBulkOperations, selectedTables]);
 
   // Update bulk actions visibility
   useEffect(() => {
-    setShowBulkActions(selectedTables.length > 0);
+    setShowBulkOperations(selectedTables.size > 0);
   }, [selectedTables]);
 
   // Memoized filtered and sorted tables
@@ -897,25 +863,44 @@ export default function TablesPage() {
             </motion.div>
           </Button>
 
+          {/* QR Settings Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openSettingsModal}
+            asChild
+          >
+            <motion.div
+              variants={buttonHoverVariants}
+              whileHover="hover"
+              whileTap="tap"
+              className="flex items-center"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              QR Settings
+            </motion.div>
+          </Button>
+
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="outline"
-                  onClick={() => setIsBulkMode(!isBulkMode)}
+                  onClick={() => setShowBulkOperations(!showBulkOperations)}
                   className={cn(
                     "transition-all",
-                    isBulkMode && "bg-blue-50 border-blue-200 text-blue-700",
-                    isBulkMode &&
-                      selectedTables.length === 0 &&
+                    showBulkOperations &&
+                      "bg-blue-50 border-blue-200 text-blue-700",
+                    showBulkOperations &&
+                      selectedTables.size === 0 &&
                       "bg-yellow-50 border-yellow-200 text-yellow-700"
                   )}
                 >
-                  {isBulkMode ? (
+                  {showBulkOperations ? (
                     <>
                       <CheckSquare className="w-4 h-4 mr-2" />
-                      {selectedTables.length > 0
-                        ? `Bulk Mode (${selectedTables.length})`
+                      {selectedTables.size > 0
+                        ? `Bulk Mode (${selectedTables.size})`
                         : "Bulk Mode - Select Items"}
                     </>
                   ) : (
@@ -932,7 +917,7 @@ export default function TablesPage() {
                   <p className="text-xs text-muted-foreground">
                     Select multiple tables to perform bulk actions
                   </p>
-                  {isBulkMode && selectedTables.length > 0 && (
+                  {showBulkOperations && selectedTables.size > 0 && (
                     <div className="text-xs text-muted-foreground mt-2 space-y-1">
                       <p>
                         <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">
@@ -1023,8 +1008,7 @@ export default function TablesPage() {
                     onClick={() => {
                       // Open QR setup for the first table if available
                       if (tables.length > 0) {
-                        setSelectedTableForQR(tables[0]);
-                        setShowQRSetup(true);
+                        openSettingsModal();
                       } else {
                         toast.error("No tables available for QR setup");
                       }
@@ -1071,6 +1055,34 @@ export default function TablesPage() {
           </Dialog>
         </div>
       </motion.div>
+
+      {/* Connection Status */}
+      {!isConnected && (
+        <motion.div variants={itemVariants}>
+          <Alert variant="destructive">
+            <WifiOff className="h-4 w-4" />
+            <AlertTitle>Connection Lost</AlertTitle>
+            <AlertDescription>
+              Real-time updates are temporarily unavailable.
+              {reconnectAttempts > 0 &&
+                ` Attempting to reconnect... (${reconnectAttempts}/5)`}
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
+
+      {/* Connection Status - Connected */}
+      {isConnected && reconnectAttempts > 0 && (
+        <motion.div variants={itemVariants}>
+          <Alert>
+            <Wifi className="h-4 w-4" />
+            <AlertTitle>Connection Restored</AlertTitle>
+            <AlertDescription>
+              Real-time updates are now active.
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
 
       {/* Stats Cards */}
       <motion.div className="grid gap-4 md:grid-cols-4" variants={itemVariants}>
@@ -1124,7 +1136,7 @@ export default function TablesPage() {
       </motion.div>
 
       {/* Bulk Actions */}
-      {showBulkActions && (
+      {showBulkOperations && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1135,8 +1147,8 @@ export default function TablesPage() {
             <div className="flex items-center gap-2">
               <CheckSquare className="w-5 h-5 text-blue-600" />
               <span className="font-medium text-sm">
-                {selectedTables.length} table
-                {selectedTables.length !== 1 ? "s" : ""} selected
+                {selectedTables.size} table
+                {selectedTables.size !== 1 ? "s" : ""} selected
               </span>
             </div>
             <div className="flex gap-2">
@@ -1204,9 +1216,19 @@ export default function TablesPage() {
                 variant="outline"
                 size="sm"
                 onClick={handleBulkQRDownload}
-                disabled={selectedTables.length === 0}
+                disabled={selectedTables.size === 0}
               >
-                <QrCode className="w-4 h-4 mr-2" />
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Regenerate QR
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkDownloadQR}
+                disabled={selectedTables.size === 0}
+              >
+                <Download className="w-4 h-4 mr-2" />
                 Download QR
               </Button>
 
@@ -1214,7 +1236,7 @@ export default function TablesPage() {
                 variant="destructive"
                 size="sm"
                 onClick={handleBulkDelete}
-                disabled={selectedTables.length === 0}
+                disabled={selectedTables.size === 0}
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Delete Selected
@@ -1321,14 +1343,14 @@ export default function TablesPage() {
                 className={cn(
                   "group relative overflow-hidden transition-all duration-300 hover:shadow-xl",
                   "bg-gradient-to-br from-white to-gray-50/50 border border-gray-200/60",
-                  isBulkMode && "ring-2 ring-blue-200",
-                  selectedTables.includes(table.id) &&
+                  showBulkOperations && "ring-2 ring-blue-200",
+                  selectedTables.has(table.id) &&
                     "ring-2 ring-blue-500 bg-blue-50/80",
                   "hover:border-gray-300 hover:scale-[1.02]"
                 )}
               >
                 {/* Bulk Selection Checkbox */}
-                {isBulkMode && (
+                {showBulkOperations && (
                   <motion.div
                     className="absolute top-3 left-3 z-20"
                     initial={{ scale: 0, opacity: 0 }}
@@ -1336,7 +1358,7 @@ export default function TablesPage() {
                     transition={{ type: "spring", stiffness: 300 }}
                   >
                     <Checkbox
-                      checked={selectedTables.includes(table.id)}
+                      checked={selectedTables.has(table.id)}
                       onCheckedChange={(checked) => {
                         handleSelectTable(table.id, !!checked);
                       }}
@@ -1520,20 +1542,20 @@ export default function TablesPage() {
                           </p>
                         </div>
 
-                        <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
-                          <div className="flex items-center gap-1.5">
+                        <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <div className="w-2 h-2 bg-green-500 rounded-full" />
-                            <span className="font-medium">Ready to scan</span>
+                            <span className="font-medium">Ready</span>
                           </div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <Users className="w-3 h-3" />
                             <span className="font-medium">
-                              {table.capacity} seats
+                              {table.capacity}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <div className="w-3 h-3 bg-blue-500 rounded-sm" />
-                            <span className="font-medium">HD Quality</span>
+                            <span className="font-medium">HD</span>
                           </div>
                         </div>
                       </div>
@@ -1545,7 +1567,7 @@ export default function TablesPage() {
                 <div className="px-6 pb-6">
                   <div className="space-y-3">
                     {/* Primary Actions */}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <Dialog
                         open={editingTable?.id === table.id}
                         onOpenChange={(open) => !open && setEditingTable(null)}
@@ -1554,7 +1576,7 @@ export default function TablesPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-10 bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-800 transition-all duration-200"
+                            className="h-10 bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-800 transition-all duration-200 flex items-center justify-center"
                             onClick={() => setEditingTable(table)}
                           >
                             <Edit className="w-4 h-4 mr-2" />
@@ -1572,18 +1594,64 @@ export default function TablesPage() {
                         </DialogContent>
                       </Dialog>
 
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-10 bg-white hover:bg-blue-50 border-gray-200 hover:border-blue-300 text-blue-600 hover:text-blue-700 transition-all duration-200"
-                        onClick={() => {
-                          setSelectedTableForQR(table);
-                          setShowQRSetup(true);
-                        }}
-                      >
-                        <QrCode className="w-4 h-4 mr-2" />
-                        QR Setup
-                      </Button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="col-span-2 h-10 bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-800 transition-all duration-200 flex items-center justify-center"
+                              onClick={async () => {
+                                try {
+                                  const qrUrl =
+                                    table.qr_code ||
+                                    `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${table.id}`;
+
+                                  // Get QR settings from store
+                                  const { getQRCodeOptions, settings } =
+                                    useQRSettings();
+                                  const qrOptions = getQRCodeOptions();
+
+                                  // Generate QR code as data URL
+                                  const QRCode = (await import("qrcode"))
+                                    .default;
+                                  const qrDataUrl = await QRCode.toDataURL(
+                                    qrUrl,
+                                    {
+                                      ...qrOptions,
+                                      width: settings.defaultExportSize,
+                                    }
+                                  );
+
+                                  // Create download link
+                                  const link = document.createElement("a");
+                                  link.href = qrDataUrl;
+                                  link.download = `table-${table.number}-qr.png`;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+
+                                  toast.success(
+                                    "QR code downloaded successfully"
+                                  );
+                                } catch (error) {
+                                  console.error(
+                                    "Error downloading QR code:",
+                                    error
+                                  );
+                                  toast.error("Failed to download QR code");
+                                }
+                              }}
+                            >
+                              <Download className="w-4 h-4 mr-2" />
+                              Download QR
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Download QR code for Table {table.number}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
 
                     {/* Secondary Actions */}
@@ -1604,13 +1672,79 @@ export default function TablesPage() {
                             Quick Actions
                           </div>
                           <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedTableForQR(table);
-                              setShowQRSetup(true);
+                            onClick={async () => {
+                              try {
+                                const result = await generateTableQRCode(
+                                  table.id
+                                );
+                                if (result.success) {
+                                  toast.success(
+                                    "QR code regenerated successfully"
+                                  );
+                                  await fetchData();
+                                } else {
+                                  toast.error(
+                                    result.error ||
+                                      "Failed to regenerate QR code"
+                                  );
+                                }
+                              } catch (error) {
+                                console.error(
+                                  "Error regenerating QR code:",
+                                  error
+                                );
+                                toast.error("Failed to regenerate QR code");
+                              }
                             }}
                             className="flex items-center gap-2"
                           >
-                            <QrCode className="w-4 h-4" />
+                            <RefreshCw className="w-4 h-4" />
+                            Regenerate QR Code
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={async () => {
+                              try {
+                                const qrUrl =
+                                  table.qr_code ||
+                                  `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${table.id}`;
+
+                                // Get QR settings from store
+                                const { getQRCodeOptions, settings } =
+                                  useQRSettings();
+                                const qrOptions = getQRCodeOptions();
+
+                                // Generate QR code as data URL
+                                const QRCode = (await import("qrcode")).default;
+                                const qrDataUrl = await QRCode.toDataURL(
+                                  qrUrl,
+                                  {
+                                    ...qrOptions,
+                                    width: settings.defaultExportSize,
+                                  }
+                                );
+
+                                // Create download link
+                                const link = document.createElement("a");
+                                link.href = qrDataUrl;
+                                link.download = `table-${table.number}-qr.png`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+
+                                toast.success(
+                                  "QR code downloaded successfully"
+                                );
+                              } catch (error) {
+                                console.error(
+                                  "Error downloading QR code:",
+                                  error
+                                );
+                                toast.error("Failed to download QR code");
+                              }
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Download className="w-4 h-4" />
                             Download QR Code
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -1827,16 +1961,30 @@ export default function TablesPage() {
         </motion.div>
       )}
 
-      {/* Table Layout Editor */}
+      {/* Layout Editor */}
       {showLayoutEditor && (
         <TableLayoutEditor
           tables={tables}
           onSave={async (positions) => {
-            const result = await bulkUpdateTableLayouts(positions);
-            if (result.success) {
-              // Don't call fetchData() - let WebSocket handle the update
-            } else {
-              throw new Error(result.error);
+            try {
+              const layoutData = positions.map((pos) => ({
+                table_id: pos.id,
+                x: pos.x,
+                y: pos.y,
+                rotation: pos.rotation,
+                width: pos.width,
+                height: pos.height,
+              }));
+              const result = await bulkUpdateTableLayouts(layoutData);
+              if (result.success) {
+                toast.success("Table layout updated successfully");
+                await fetchData();
+              } else {
+                toast.error(result.error || "Failed to update layout");
+              }
+            } catch (error) {
+              console.error("Error updating layout:", error);
+              toast.error("Failed to update layout");
             }
           }}
           onClose={() => setShowLayoutEditor(false)}
@@ -1844,33 +1992,8 @@ export default function TablesPage() {
         />
       )}
 
-      {/* QR Setup Modal */}
-      {showQRSetup && selectedTableForQR && (
-        <QRSetupModal
-          isOpen={showQRSetup}
-          onClose={() => {
-            setShowQRSetup(false);
-            setSelectedTableForQR(null);
-          }}
-          table={selectedTableForQR}
-          onQRCodeUpdate={async () => {
-            try {
-              // Only update when user explicitly saves
-              const result = await generateTableQRCode(selectedTableForQR.id);
-              if (result.success) {
-                toast.success("QR code updated successfully");
-                // Refresh the tables data
-                await fetchData();
-              } else {
-                toast.error(result.error || "Failed to update QR code");
-              }
-            } catch (error) {
-              console.error("Error updating QR code:", error);
-              toast.error("Failed to update QR code");
-            }
-          }}
-        />
-      )}
+      {/* Unified QR Settings Modal */}
+      <UnifiedQRSettingsModal />
 
       {/* Export Dialog */}
       <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
@@ -2047,7 +2170,12 @@ export default function TablesPage() {
               <Input
                 type="file"
                 accept=".csv,.json"
-                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setImportFile(file);
+                  }
+                }}
                 className="cursor-pointer"
               />
             </div>
@@ -2139,5 +2267,14 @@ export default function TablesPage() {
         </DialogContent>
       </Dialog>
     </motion.div>
+  );
+}
+
+// Wrap with error boundary and add connection status
+export default function TablesPageWithErrorBoundary() {
+  return (
+    <TablesErrorBoundary>
+      <TablesPage />
+    </TablesErrorBoundary>
   );
 }

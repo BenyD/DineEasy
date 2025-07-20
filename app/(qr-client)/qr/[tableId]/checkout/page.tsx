@@ -2,7 +2,15 @@
 
 import { use, useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, CreditCard, Banknote, Check, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CreditCard,
+  Banknote,
+  Check,
+  Loader2,
+  Shield,
+  Lock,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,18 +24,13 @@ import {
   createQRPaymentIntent,
   type QRPaymentData,
 } from "@/lib/actions/qr-payments";
-import { loadStripe } from "@stripe/stripe-js";
-
-// Initialize Stripe
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-);
+import { getTableInfo } from "@/lib/actions/qr-client";
 
 const paymentMethods = [
   {
     id: "stripe",
     name: "Credit Card",
-    description: "Pay with Visa, Mastercard, or American Express",
+    description: "Secure payment with Visa, Mastercard, or American Express",
     icon: CreditCard,
     color: "blue",
   },
@@ -39,6 +42,21 @@ const paymentMethods = [
     color: "green",
   },
 ];
+
+interface RestaurantData {
+  id: string;
+  name: string;
+  logo_url?: string;
+  address?: string;
+  currency?: string;
+}
+
+interface TableData {
+  id: string;
+  number: string;
+  capacity: number;
+  restaurants: RestaurantData;
+}
 
 export default function CheckoutPage({
   params,
@@ -53,18 +71,40 @@ export default function CheckoutPage({
   const [tip, setTip] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
+  const [restaurant, setRestaurant] = useState<RestaurantData | null>(null);
+  const [tableData, setTableData] = useState<TableData | null>(null);
 
   const subtotal = getTotalPrice();
   const tax = subtotal * 0.077;
   const total = subtotal + tax + tip;
 
-  // Get restaurant ID from URL or localStorage
+  // Load restaurant and table data
   useEffect(() => {
-    const storedRestaurantId = localStorage.getItem("restaurantId");
-    if (storedRestaurantId) {
-      setRestaurantId(storedRestaurantId);
-    }
-  }, []);
+    const loadData = async () => {
+      try {
+        // Get table info
+        const tableResult = await getTableInfo(resolvedParams.tableId);
+        if (tableResult.success) {
+          const tableData = tableResult.data as TableData;
+          const restaurantData = tableData.restaurants as RestaurantData;
+
+          setTableData(tableData);
+          setRestaurant(restaurantData);
+          setRestaurantId(restaurantData.id);
+        }
+
+        // Get stored restaurant ID as fallback
+        const storedRestaurantId = localStorage.getItem("restaurantId");
+        if (storedRestaurantId && !restaurantId) {
+          setRestaurantId(storedRestaurantId);
+        }
+      } catch (error) {
+        console.error("Error loading restaurant data:", error);
+      }
+    };
+
+    loadData();
+  }, [resolvedParams.tableId, restaurantId]);
 
   const handleConfirmOrder = async () => {
     if (!selectedPayment || !restaurantId) {
@@ -81,7 +121,7 @@ export default function CheckoutPage({
 
     try {
       if (selectedPayment === "stripe") {
-        // Create real Stripe payment
+        // Create server-side Stripe payment intent
         const paymentData: QRPaymentData = {
           tableId: resolvedParams.tableId,
           restaurantId: restaurantId,
@@ -105,22 +145,11 @@ export default function CheckoutPage({
         }
 
         if (result.clientSecret) {
-          // Redirect to Stripe payment
-          const stripe = await stripePromise;
-          if (!stripe) {
-            throw new Error("Stripe failed to load");
-          }
-
-          const { error } = await stripe.confirmPayment({
-            clientSecret: result.clientSecret,
-            confirmParams: {
-              return_url: `${window.location.origin}/qr/${resolvedParams.tableId}/confirmation?order_id=${result.orderId}`,
-            },
-          });
-
-          if (error) {
-            throw new Error(error.message);
-          }
+          // Redirect to a payment confirmation page that handles the payment
+          // This follows the server-side pattern used in your codebase
+          router.push(
+            `/qr/${resolvedParams.tableId}/payment-confirmation?client_secret=${result.clientSecret}&order_id=${result.orderId}`
+          );
         }
       } else if (selectedPayment === "cash") {
         // Handle cash payment
@@ -135,6 +164,7 @@ export default function CheckoutPage({
             total,
             tip,
             tableId: resolvedParams.tableId,
+            restaurantId: restaurantId,
           })
         );
 
@@ -192,18 +222,49 @@ export default function CheckoutPage({
           <div className="flex-1">
             <h1 className="text-lg font-bold">Payment</h1>
             <p className="text-sm text-gray-500">
-              Table {resolvedParams.tableId} • Final step
+              {restaurant?.name || "Restaurant"} • Table{" "}
+              {tableData?.number || resolvedParams.tableId}
             </p>
           </div>
         </div>
       </div>
 
       <div className="px-4 py-6 pb-32 space-y-6">
+        {/* Restaurant Info */}
+        {restaurant && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-4 border border-green-200"
+          >
+            <div className="flex items-center gap-3">
+              {restaurant.logo_url && (
+                <img
+                  src={restaurant.logo_url}
+                  alt={restaurant.name}
+                  className="w-12 h-12 rounded-xl object-cover"
+                />
+              )}
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-900">{restaurant.name}</h3>
+                {restaurant.address && (
+                  <p className="text-sm text-gray-600">{restaurant.address}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-green-600">
+                <Shield className="w-4 h-4" />
+                <span className="text-xs font-medium">Secure Payment</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Enhanced Order Summary */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
           className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
         >
           <h3 className="font-bold text-gray-900 mb-4 text-lg">
@@ -216,14 +277,11 @@ export default function CheckoutPage({
                   <span className="text-gray-900 font-medium">
                     {item.quantity}x {item.name}
                   </span>
-                  {item.tags?.includes("Popular") && (
-                    <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">
-                      Popular
-                    </span>
-                  )}
+                  {/* Popular tag removed - not available in MenuItem type */}
                 </div>
                 <span className="text-gray-900 font-medium">
-                  CHF {(item.price * item.quantity).toFixed(2)}
+                  {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
+                  {(item.price * item.quantity).toFixed(2)}
                 </span>
               </div>
             ))}
@@ -231,13 +289,14 @@ export default function CheckoutPage({
             <div className="flex justify-between text-base">
               <span className="text-gray-600">Subtotal</span>
               <span className="text-gray-900 font-medium">
-                CHF {subtotal.toFixed(2)}
+                {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
+                {subtotal.toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between text-base">
               <span className="text-gray-600">Tax (7.7%)</span>
               <span className="text-gray-900 font-medium">
-                CHF {tax.toFixed(2)}
+                {restaurant?.currency?.toUpperCase() || "CHF"} {tax.toFixed(2)}
               </span>
             </div>
           </div>
@@ -247,18 +306,18 @@ export default function CheckoutPage({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
           className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
         >
           <h3 className="font-bold text-gray-900 mb-4 text-lg">Add a Tip</h3>
-          <TipSelector value={tip} onChange={setTip} />
+          <TipSelector subtotal={subtotal} onTipChange={setTip} />
         </motion.div>
 
         {/* Payment Methods */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.2 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
           className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
         >
           <h3 className="font-bold text-gray-900 mb-4 text-lg">
@@ -315,7 +374,7 @@ export default function CheckoutPage({
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.3 }}
+            transition={{ duration: 0.4, delay: 0.4 }}
             className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
           >
             <Label htmlFor="email" className="text-gray-700 font-medium mb-2">
@@ -329,8 +388,28 @@ export default function CheckoutPage({
               placeholder="your@email.com"
               className="h-12 text-lg border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-xl"
             />
+            <p className="text-xs text-gray-500 mt-2">
+              We'll send your receipt and order confirmation to this email
+            </p>
           </motion.div>
         )}
+
+        {/* Security Notice */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+          className="bg-blue-50 border border-blue-200 rounded-2xl p-4"
+        >
+          <div className="flex items-center gap-2 text-blue-700">
+            <Lock className="w-4 h-4" />
+            <span className="text-sm font-medium">Secure Payment</span>
+          </div>
+          <p className="text-xs text-blue-600 mt-1">
+            Your payment is processed securely by Stripe. Your card details are
+            never stored on our servers.
+          </p>
+        </motion.div>
       </div>
 
       {/* Enhanced Proceed Button */}
@@ -347,7 +426,7 @@ export default function CheckoutPage({
               Processing...
             </>
           ) : (
-            `Pay CHF ${total.toFixed(2)}`
+            `Pay ${restaurant?.currency?.toUpperCase() || "CHF"} ${total.toFixed(2)}`
           )}
         </Button>
       </div>

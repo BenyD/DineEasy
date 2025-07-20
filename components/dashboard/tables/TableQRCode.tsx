@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, QrCode, Copy, Check } from "lucide-react";
+import { Download, QrCode, Copy, Check, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -12,12 +12,14 @@ import {
   downloadQRCodeSVG,
   type TableQRData,
 } from "@/lib/utils/qr-code";
+import { useQRSettings } from "@/lib/store/qr-settings";
 
 interface TableQRCodeProps {
   tableData: TableQRData;
   size?: "sm" | "md" | "lg" | "xl";
   showActions?: boolean;
   className?: string;
+  onRegenerate?: () => void;
 }
 
 export function TableQRCode({
@@ -25,7 +27,9 @@ export function TableQRCode({
   size = "md",
   showActions = true,
   className = "",
+  onRegenerate,
 }: TableQRCodeProps) {
+  const { getQRCodeOptions, settings } = useQRSettings();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [isVisible, setIsVisible] = useState(true);
@@ -41,17 +45,18 @@ export function TableQRCode({
 
   const config = sizeConfig[size];
 
-  // Generate QR code on mount
+  // Generate QR code on mount and when settings change
   useEffect(() => {
     generateQRCode();
-  }, [tableData]);
+  }, [tableData, settings]);
 
   const generateQRCode = async () => {
     try {
       setIsLoading(true);
+      const qrOptions = getQRCodeOptions();
       const qrDataUrl = await generateStyledTableQR(tableData, {
+        ...qrOptions,
         width: config.qrSize,
-        margin: 2,
       });
       setQrCodeDataUrl(qrDataUrl);
     } catch (error) {
@@ -64,6 +69,7 @@ export function TableQRCode({
 
   const handleDownloadPNG = async () => {
     try {
+      const qrOptions = getQRCodeOptions();
       await downloadQRCode(
         JSON.stringify({
           tableId: tableData.tableId,
@@ -72,7 +78,10 @@ export function TableQRCode({
           url: tableData.qrUrl,
         }),
         `table-${tableData.tableNumber}-qr`,
-        { width: 512, margin: 4 }
+        {
+          ...qrOptions,
+          width: settings.defaultExportSize,
+        }
       );
       toast.success("QR code downloaded as PNG");
     } catch (error) {
@@ -82,6 +91,7 @@ export function TableQRCode({
 
   const handleDownloadSVG = async () => {
     try {
+      const qrOptions = getQRCodeOptions();
       await downloadQRCodeSVG(
         JSON.stringify({
           tableId: tableData.tableId,
@@ -90,7 +100,10 @@ export function TableQRCode({
           url: tableData.qrUrl,
         }),
         `table-${tableData.tableNumber}-qr`,
-        { width: 512, margin: 4 }
+        {
+          ...qrOptions,
+          width: settings.defaultExportSize,
+        }
       );
       toast.success("QR code downloaded as SVG");
     } catch (error) {
@@ -111,6 +124,9 @@ export function TableQRCode({
 
   const handleRegenerate = () => {
     generateQRCode();
+    if (onRegenerate) {
+      onRegenerate();
+    }
     toast.success("QR code regenerated");
   };
 
@@ -219,16 +235,18 @@ export function TableQRCode({
             className="w-full text-xs"
             disabled={isLoading}
           >
-            <QrCode className="w-3 h-3 mr-1" />
+            <RefreshCw className="w-3 h-3 mr-1" />
             Regenerate
           </Button>
         </motion.div>
       )}
 
       {/* URL Display */}
-      <div className="mt-2">
-        <p className="text-xs text-gray-500 break-all">{tableData.qrUrl}</p>
-      </div>
+      {settings.showQRCodeInfo && (
+        <div className="mt-2">
+          <p className="text-xs text-gray-500 break-all">{tableData.qrUrl}</p>
+        </div>
+      )}
     </div>
   );
 }

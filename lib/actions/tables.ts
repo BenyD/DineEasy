@@ -100,6 +100,7 @@ export async function createTable(formData: FormData) {
         capacity,
         status: "available" as TableStatus,
         is_active: true,
+        // QR code will be set by database trigger, but we'll ensure it's correct
       })
       .select()
       .single();
@@ -109,10 +110,10 @@ export async function createTable(formData: FormData) {
       return { error: error.message };
     }
 
-    // Generate QR code URL with the actual table ID
+    // Generate QR code URL with the actual table ID and ensure it's set correctly
     const qrCodeUrl = generateTableQRUrl(table.id, restaurantId);
 
-    // Update table with QR code URL
+    // Update table with QR code URL only if it's not already set correctly
     const { data: updatedTable, error: updateError } = await supabase
       .from("tables")
       .update({
@@ -120,12 +121,14 @@ export async function createTable(formData: FormData) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", table.id)
+      .eq("qr_code", qrCodeUrl) // Only update if QR code is different
       .select()
       .single();
 
-    if (updateError) {
+    if (updateError && updateError.code !== "PGRST116") {
+      // PGRST116 = no rows affected
       console.error("Error updating table with QR code:", updateError);
-      return { error: updateError.message };
+      // Don't fail the operation if QR code update fails
     }
 
     // Log activity
@@ -135,11 +138,11 @@ export async function createTable(formData: FormData) {
       type: "table",
       action: "created",
       description: `Created table ${number} with capacity ${capacity}`,
-      metadata: { table_id: updatedTable.id, table_number: number, capacity },
+      metadata: { table_id: table.id, table_number: number, capacity },
     });
 
     revalidatePath("/dashboard/tables");
-    return { success: true, data: updatedTable };
+    return { success: true, data: updatedTable || table };
   } catch (error: any) {
     console.error("Error in createTable:", error);
     return { error: error.message || "Failed to create table" };
@@ -349,7 +352,7 @@ export async function updateTableStatus(id: string, status: TableStatus) {
   }
 }
 
-// Generate QR code for a table
+// Generate a new QR code for a specific table (manual regeneration)
 export async function generateTableQRCode(id: string) {
   const supabase = createClient();
 
@@ -372,6 +375,16 @@ export async function generateTableQRCode(id: string) {
     // Generate new QR code URL with the actual table ID
     const qrCodeUrl = generateTableQRUrl(table.id, restaurantId);
 
+    // Check if QR code is already correct
+    if (table.qr_code === qrCodeUrl) {
+      return {
+        success: true,
+        data: table,
+        message: "QR code is already up to date",
+        unchanged: true,
+      };
+    }
+
     // Update table with new QR code
     const { data: updatedTable, error } = await supabase
       .from("tables")
@@ -389,18 +402,27 @@ export async function generateTableQRCode(id: string) {
       return { error: error.message };
     }
 
-    // Log activity
+    // Log activity for manual QR code regeneration
     await supabase.from("activity_logs").insert({
       restaurant_id: restaurantId,
       user_id: (await supabase.auth.getUser()).data.user?.id,
       type: "table",
-      action: "qr_generated",
-      description: `Generated new QR code for table ${table.number}`,
-      metadata: { table_id: id, table_number: table.number },
+      action: "qr_regenerated",
+      description: `Manually regenerated QR code for table ${table.number}`,
+      metadata: {
+        table_id: id,
+        table_number: table.number,
+        old_qr_code: table.qr_code,
+        new_qr_code: qrCodeUrl,
+      },
     });
 
     revalidatePath("/dashboard/tables");
-    return { success: true, data: updatedTable };
+    return {
+      success: true,
+      data: updatedTable,
+      message: "QR code regenerated successfully",
+    };
   } catch (error: any) {
     console.error("Error in generateTableQRCode:", error);
     return { error: error.message || "Failed to generate QR code" };
@@ -739,7 +761,7 @@ export async function bulkUpdateTableLayouts(layoutData: any[]) {
   }
 }
 
-// Update all QR codes for the current environment
+// Update all QR codes for the current environment (only if they need updating)
 export async function updateAllQRCodesForEnvironment() {
   const supabase = createClient();
 
@@ -749,7 +771,7 @@ export async function updateAllQRCodesForEnvironment() {
     // Get all tables for the restaurant
     const { data: tables, error: fetchError } = await supabase
       .from("tables")
-      .select("id, number")
+      .select("id, number, qr_code")
       .eq("restaurant_id", restaurantId)
       .eq("is_active", true);
 
@@ -762,8 +784,22 @@ export async function updateAllQRCodesForEnvironment() {
       return { success: true, message: "No tables found to update" };
     }
 
-    // Update each table's QR code
-    const updatePromises = tables.map(async (table) => {
+    // Check which tables need QR code updates
+    const tablesNeedingUpdate = tables.filter((table) => {
+      const expectedQrCode = generateTableQRUrl(table.id, restaurantId);
+      return !table.qr_code || table.qr_code !== expectedQrCode;
+    });
+
+    if (tablesNeedingUpdate.length === 0) {
+      return {
+        success: true,
+        message: "All QR codes are already up to date",
+        details: { updated: 0, skipped: tables.length, total: tables.length },
+      };
+    }
+
+    // Update only tables that need QR code updates
+    const updatePromises = tablesNeedingUpdate.map(async (table) => {
       const qrCodeUrl = generateTableQRUrl(table.id, restaurantId);
 
       const { error: updateError } = await supabase
@@ -783,41 +819,157 @@ export async function updateAllQRCodesForEnvironment() {
         return {
           success: false,
           tableId: table.id,
+          tableNumber: table.number,
           error: updateError.message,
         };
       }
 
-      return { success: true, tableId: table.id };
+      return {
+        success: true,
+        tableId: table.id,
+        tableNumber: table.number,
+      };
     });
 
     const results = await Promise.all(updatePromises);
     const successful = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;
+    const skipped = tables.length - tablesNeedingUpdate.length;
 
-    // Log activity
-    await supabase.from("activity_logs").insert({
-      restaurant_id: restaurantId,
-      user_id: (await supabase.auth.getUser()).data.user?.id,
-      type: "table",
-      action: "qr_codes_updated",
-      description: `Updated QR codes for ${successful} tables (${failed} failed)`,
-      metadata: {
-        total_tables: tables.length,
-        successful_updates: successful,
-        failed_updates: failed,
-        environment: process.env.NODE_ENV || "development",
-      },
-    });
+    // Log activity only if there were actual updates
+    if (successful > 0 || failed > 0) {
+      await supabase.from("activity_logs").insert({
+        restaurant_id: restaurantId,
+        user_id: (await supabase.auth.getUser()).data.user?.id,
+        type: "table",
+        action: "qr_codes_updated",
+        description: `Updated QR codes for ${successful} tables (${failed} failed, ${skipped} skipped)`,
+        metadata: {
+          total_tables: tables.length,
+          updated_tables: successful,
+          failed_updates: failed,
+          skipped_tables: skipped,
+          environment: process.env.NODE_ENV || "development",
+        },
+      });
+    }
 
     revalidatePath("/dashboard/tables");
 
     return {
       success: true,
-      message: `Updated QR codes for ${successful} tables`,
-      details: { successful, failed, total: tables.length },
+      message: `Updated QR codes for ${successful} tables (${skipped} already up to date)`,
+      details: {
+        updated: successful,
+        failed,
+        skipped,
+        total: tables.length,
+      },
     };
   } catch (error: any) {
     console.error("Error in updateAllQRCodesForEnvironment:", error);
     return { error: error.message || "Failed to update QR codes" };
+  }
+}
+
+// Check QR code status for a table (without updating)
+export async function checkTableQRCodeStatus(tableId: string) {
+  const supabase = createClient();
+
+  try {
+    const restaurantId = await getCurrentRestaurantId();
+
+    // Get table details
+    const { data: table, error: fetchError } = await supabase
+      .from("tables")
+      .select("id, number, qr_code")
+      .eq("id", tableId)
+      .eq("restaurant_id", restaurantId)
+      .eq("is_active", true)
+      .single();
+
+    if (fetchError || !table) {
+      return { error: "Table not found" };
+    }
+
+    // Generate expected QR code URL
+    const expectedQrCode = generateTableQRUrl(table.id, restaurantId);
+    const needsUpdate = !table.qr_code || table.qr_code !== expectedQrCode;
+
+    return {
+      success: true,
+      data: {
+        tableId: table.id,
+        tableNumber: table.number,
+        currentQrCode: table.qr_code,
+        expectedQrCode: expectedQrCode,
+        needsUpdate: needsUpdate,
+        isCorrect: !needsUpdate,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error in checkTableQRCodeStatus:", error);
+    return { error: error.message || "Failed to check QR code status" };
+  }
+}
+
+// Check QR code status for all tables (without updating)
+export async function checkAllTableQRCodes() {
+  const supabase = createClient();
+
+  try {
+    const restaurantId = await getCurrentRestaurantId();
+
+    // Get all tables for the restaurant
+    const { data: tables, error: fetchError } = await supabase
+      .from("tables")
+      .select("id, number, qr_code")
+      .eq("restaurant_id", restaurantId)
+      .eq("is_active", true);
+
+    if (fetchError) {
+      console.error("Error fetching tables:", fetchError);
+      return { error: "Failed to fetch tables" };
+    }
+
+    if (!tables || tables.length === 0) {
+      return { success: true, data: [], message: "No tables found" };
+    }
+
+    // Check each table's QR code status
+    const qrCodeStatuses = tables.map((table) => {
+      const expectedQrCode = generateTableQRUrl(table.id, restaurantId);
+      const needsUpdate = !table.qr_code || table.qr_code !== expectedQrCode;
+
+      return {
+        tableId: table.id,
+        tableNumber: table.number,
+        currentQrCode: table.qr_code,
+        expectedQrCode: expectedQrCode,
+        needsUpdate: needsUpdate,
+        isCorrect: !needsUpdate,
+      };
+    });
+
+    const correctQrCodes = qrCodeStatuses.filter(
+      (status) => status.isCorrect
+    ).length;
+    const incorrectQrCodes = qrCodeStatuses.filter(
+      (status) => !status.isCorrect
+    ).length;
+
+    return {
+      success: true,
+      data: qrCodeStatuses,
+      summary: {
+        total: tables.length,
+        correct: correctQrCodes,
+        incorrect: incorrectQrCodes,
+        allCorrect: incorrectQrCodes === 0,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error in checkAllTableQRCodes:", error);
+    return { error: error.message || "Failed to check QR codes" };
   }
 }

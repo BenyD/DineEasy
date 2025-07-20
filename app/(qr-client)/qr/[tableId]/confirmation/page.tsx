@@ -2,11 +2,22 @@
 
 import { use, useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Check, Clock, Receipt, Star, Gift, Loader2 } from "lucide-react";
+import {
+  Check,
+  Clock,
+  Receipt,
+  Star,
+  Gift,
+  Loader2,
+  MapPin,
+  Phone,
+  Table as TableIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getQROrderDetails } from "@/lib/actions/qr-payments";
+import { getTableInfo } from "@/lib/actions/qr-client";
 import { Separator } from "@/components/ui/separator";
 
 interface OrderItem {
@@ -37,6 +48,23 @@ interface Order {
   };
 }
 
+interface RestaurantData {
+  id: string;
+  name: string;
+  logo_url?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  currency?: string;
+}
+
+interface TableData {
+  id: string;
+  number: string;
+  capacity: number;
+  restaurants: RestaurantData;
+}
+
 export default function ConfirmationPage({
   params,
   searchParams,
@@ -53,6 +81,8 @@ export default function ConfirmationPage({
   const resolvedParams = use(params);
   const resolvedSearchParams = use(searchParams);
   const [order, setOrder] = useState<Order | null>(null);
+  const [restaurant, setRestaurant] = useState<RestaurantData | null>(null);
+  const [tableData, setTableData] = useState<TableData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [estimatedTime] = useState(() => Math.floor(Math.random() * 20) + 15); // 15-35 minutes
 
@@ -72,6 +102,26 @@ export default function ConfirmationPage({
         return "Unknown";
     }
   };
+
+  // Load restaurant and table data
+  useEffect(() => {
+    const loadRestaurantData = async () => {
+      try {
+        const tableResult = await getTableInfo(resolvedParams.tableId);
+        if (tableResult.success) {
+          const tableData = tableResult.data as TableData;
+          const restaurantData = tableData.restaurants as RestaurantData;
+
+          setTableData(tableData);
+          setRestaurant(restaurantData);
+        }
+      } catch (error) {
+        console.error("Error loading restaurant data:", error);
+      }
+    };
+
+    loadRestaurantData();
+  }, [resolvedParams.tableId]);
 
   // Load order details if order_id is provided
   useEffect(() => {
@@ -123,9 +173,9 @@ export default function ConfirmationPage({
             })),
             restaurant: {
               id: "cash-restaurant",
-              name: "Restaurant",
-              address: "",
-              phone: "",
+              name: restaurant?.name || "Restaurant",
+              address: restaurant?.address || "",
+              phone: restaurant?.phone || "",
             },
           });
           // Clear the cash order data
@@ -136,7 +186,7 @@ export default function ConfirmationPage({
       }
       setIsLoading(false);
     }
-  }, [paymentMethod, orderId]);
+  }, [paymentMethod, orderId, restaurant]);
 
   if (isLoading) {
     return (
@@ -151,9 +201,9 @@ export default function ConfirmationPage({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
-      {/* Success Header */}
+      {/* Enhanced Success Header with Restaurant Info */}
       <div className="bg-white border-b border-gray-100">
-        <div className="px-4 py-8 text-center">
+        <div className="px-4 py-8">
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
@@ -162,22 +212,61 @@ export default function ConfirmationPage({
           >
             <Check className="w-8 h-8 text-green-600" />
           </motion.div>
+
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="text-2xl font-bold text-gray-900 mb-2"
+            className="text-2xl font-bold text-gray-900 mb-2 text-center"
           >
             {isSuccess ? "Payment Successful!" : "Order Confirmed!"}
           </motion.h1>
+
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="text-gray-600"
+            className="text-gray-600 text-center mb-6"
           >
-            Thank you for your order
+            Thank you for your order at {restaurant?.name || "our restaurant"}
           </motion.p>
+
+          {/* Restaurant Info Card */}
+          {restaurant && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-4 border border-green-200 max-w-sm mx-auto"
+            >
+              <div className="flex items-center gap-3">
+                {restaurant.logo_url && (
+                  <img
+                    src={restaurant.logo_url}
+                    alt={restaurant.name}
+                    className="w-12 h-12 rounded-xl object-cover"
+                  />
+                )}
+                <div className="flex-1">
+                  <h3 className="font-bold text-gray-900">{restaurant.name}</h3>
+                  <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                    <div className="flex items-center gap-1">
+                      <TableIcon className="w-3 h-3" />
+                      <span>
+                        Table {tableData?.number || resolvedParams.tableId}
+                      </span>
+                    </div>
+                    {restaurant.phone && (
+                      <div className="flex items-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        <span>{restaurant.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </div>
       </div>
 
@@ -187,7 +276,7 @@ export default function ConfirmationPage({
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
+            transition={{ delay: 0.6 }}
             className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
           >
             <div className="flex items-center gap-3 mb-4">
@@ -220,6 +309,12 @@ export default function ConfirmationPage({
                   {new Date(order.created_at).toLocaleDateString()}
                 </span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Time</span>
+                <span className="text-gray-900">
+                  {new Date(order.created_at).toLocaleTimeString()}
+                </span>
+              </div>
             </div>
           </motion.div>
         )}
@@ -229,7 +324,7 @@ export default function ConfirmationPage({
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
+            transition={{ delay: 0.7 }}
             className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
           >
             <h3 className="font-bold text-gray-900 mb-4 text-lg">Your Order</h3>
@@ -245,7 +340,8 @@ export default function ConfirmationPage({
                     </span>
                   </div>
                   <span className="text-gray-900 font-medium">
-                    CHF {(item.unit_price * item.quantity).toFixed(2)}
+                    {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
+                    {(item.unit_price * item.quantity).toFixed(2)}
                   </span>
                 </div>
               ))}
@@ -253,7 +349,7 @@ export default function ConfirmationPage({
               <div className="flex justify-between text-base">
                 <span className="text-gray-600">Subtotal</span>
                 <span className="text-gray-900 font-medium">
-                  CHF{" "}
+                  {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
                   {(
                     order.total_amount -
                     order.tax_amount -
@@ -264,21 +360,24 @@ export default function ConfirmationPage({
               <div className="flex justify-between text-base">
                 <span className="text-gray-600">Tax (7.7%)</span>
                 <span className="text-gray-900 font-medium">
-                  CHF {order.tax_amount.toFixed(2)}
+                  {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
+                  {order.tax_amount.toFixed(2)}
                 </span>
               </div>
               {order.tip_amount > 0 && (
                 <div className="flex justify-between text-base">
                   <span className="text-gray-600">Tip</span>
                   <span className="text-gray-900 font-medium">
-                    CHF {order.tip_amount.toFixed(2)}
+                    {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
+                    {order.tip_amount.toFixed(2)}
                   </span>
                 </div>
               )}
               <div className="flex justify-between text-xl font-bold">
                 <span>Total</span>
                 <span className="text-green-700">
-                  CHF {order.total_amount.toFixed(2)}
+                  {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
+                  {order.total_amount.toFixed(2)}
                 </span>
               </div>
             </div>
@@ -289,7 +388,7 @@ export default function ConfirmationPage({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
+          transition={{ delay: 0.8 }}
           className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
         >
           <div className="flex items-center gap-3 mb-4">
@@ -302,13 +401,52 @@ export default function ConfirmationPage({
               {estimatedTime} minutes
             </span>
           </p>
+          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-sm text-blue-700">
+              💡 <strong>Tip:</strong> You can track your order status in the
+              restaurant's kitchen display system.
+            </p>
+          </div>
         </motion.div>
+
+        {/* Restaurant Contact Info */}
+        {restaurant && (restaurant.address || restaurant.phone) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9 }}
+            className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
+          >
+            <h3 className="font-bold text-gray-900 mb-4 text-lg">Need Help?</h3>
+            <div className="space-y-3">
+              {restaurant.address && (
+                <div className="flex items-center gap-3">
+                  <MapPin className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm text-gray-600">
+                    {restaurant.address}
+                  </span>
+                </div>
+              )}
+              {restaurant.phone && (
+                <div className="flex items-center gap-3">
+                  <Phone className="w-4 h-4 text-gray-600" />
+                  <a
+                    href={`tel:${restaurant.phone}`}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    {restaurant.phone}
+                  </a>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
 
         {/* Feedback Prompt */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8 }}
+          transition={{ delay: 1.0 }}
           className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6"
         >
           <div className="flex items-center gap-3 mb-3">
@@ -336,7 +474,7 @@ export default function ConfirmationPage({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.9 }}
+          transition={{ delay: 1.1 }}
           className="space-y-3"
         >
           <Link href={`/qr/${resolvedParams.tableId}`}>

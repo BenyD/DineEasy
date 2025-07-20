@@ -1,13 +1,41 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Minus, Trash2, MessageSquare } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Minus,
+  Trash2,
+  MessageSquare,
+  Table as TableIcon,
+  Users,
+  MapPin,
+  Phone,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useCart } from "@/hooks/useCart";
+import { getTableInfo } from "@/lib/actions/qr-client";
 import Link from "next/link";
+
+interface RestaurantData {
+  id: string;
+  name: string;
+  logo_url?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  currency?: string;
+}
+
+interface TableData {
+  id: string;
+  number: string;
+  capacity: number;
+  restaurants: RestaurantData;
+}
 
 export default function CartPage({
   params,
@@ -18,10 +46,32 @@ export default function CartPage({
   const { cart, updateQuantity, removeFromCart, getTotalPrice, getTotalItems } =
     useCart();
   const [specialInstructions, setSpecialInstructions] = useState("");
+  const [restaurant, setRestaurant] = useState<RestaurantData | null>(null);
+  const [tableData, setTableData] = useState<TableData | null>(null);
 
   const subtotal = getTotalPrice();
   const tax = subtotal * 0.077; // 7.7% Swiss VAT
   const total = subtotal + tax;
+
+  // Load restaurant and table data
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const tableResult = await getTableInfo(resolvedParams.tableId);
+        if (tableResult.success) {
+          const tableData = tableResult.data as TableData;
+          const restaurantData = tableData.restaurants as RestaurantData;
+
+          setTableData(tableData);
+          setRestaurant(restaurantData);
+        }
+      } catch (error) {
+        console.error("Error loading restaurant data:", error);
+      }
+    };
+
+    loadData();
+  }, [resolvedParams.tableId]);
 
   if (cart.length === 0) {
     return (
@@ -37,7 +87,13 @@ export default function CartPage({
                 <ArrowLeft className="w-5 h-5" />
               </Button>
             </Link>
-            <h1 className="text-lg font-bold">Your Cart</h1>
+            <div className="flex-1">
+              <h1 className="text-lg font-bold">Your Cart</h1>
+              <p className="text-sm text-gray-500">
+                {restaurant?.name || "Restaurant"} • Table{" "}
+                {tableData?.number || resolvedParams.tableId}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -85,12 +141,48 @@ export default function CartPage({
           <div className="flex-1">
             <h1 className="text-lg font-bold">Your Cart</h1>
             <p className="text-sm text-gray-500">
-              Table {resolvedParams.tableId} • {cart.length}{" "}
+              {restaurant?.name || "Restaurant"} • Table{" "}
+              {tableData?.number || resolvedParams.tableId} • {cart.length}{" "}
               {cart.length === 1 ? "item" : "items"}
             </p>
           </div>
         </div>
       </div>
+
+      {/* Restaurant Info Card */}
+      {restaurant && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="mx-4 mt-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-4 border border-green-200"
+        >
+          <div className="flex items-center gap-3">
+            {restaurant.logo_url && (
+              <img
+                src={restaurant.logo_url}
+                alt={restaurant.name}
+                className="w-12 h-12 rounded-xl object-cover"
+              />
+            )}
+            <div className="flex-1">
+              <h3 className="font-bold text-gray-900">{restaurant.name}</h3>
+              <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                <div className="flex items-center gap-1">
+                  <TableIcon className="w-3 h-3" />
+                  <span>
+                    Table {tableData?.number || resolvedParams.tableId}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Users className="w-3 h-3" />
+                  <span>{tableData?.capacity || 4} seats</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Enhanced Cart Items */}
       <div className="px-4 py-6 space-y-4">
@@ -109,11 +201,7 @@ export default function CartPage({
                   alt={item.name}
                   className="w-20 h-20 rounded-xl object-cover bg-gray-100"
                 />
-                {item.tags?.includes("Popular") && (
-                  <div className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-medium">
-                    Popular
-                  </div>
-                )}
+                {/* Popular tag removed - not available in MenuItem type */}
               </div>
 
               <div className="flex-1 min-w-0">
@@ -123,14 +211,7 @@ export default function CartPage({
                       {item.name}
                     </h3>
                     <div className="flex gap-1 mt-1">
-                      {item.tags?.map((tag) => (
-                        <span
-                          key={tag}
-                          className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full"
-                        >
-                          {tag}
-                        </span>
-                      ))}
+                      {/* Tags removed - not available in MenuItem type */}
                     </div>
                   </div>
                   <Button
@@ -173,7 +254,8 @@ export default function CartPage({
                   </div>
 
                   <span className="font-bold text-gray-900 text-lg">
-                    CHF {(item.price * item.quantity).toFixed(2)}
+                    {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
+                    {(item.price * item.quantity).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -221,19 +303,23 @@ export default function CartPage({
                 Subtotal ({getTotalItems()} items)
               </span>
               <span className="text-gray-900 font-medium">
-                CHF {subtotal.toFixed(2)}
+                {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
+                {subtotal.toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Tax (7.7%)</span>
               <span className="text-gray-900 font-medium">
-                CHF {tax.toFixed(2)}
+                {restaurant?.currency?.toUpperCase() || "CHF"} {tax.toFixed(2)}
               </span>
             </div>
             <Separator className="my-3" />
             <div className="flex justify-between text-xl font-bold">
               <span>Total</span>
-              <span className="text-green-700">CHF {total.toFixed(2)}</span>
+              <span className="text-green-700">
+                {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
+                {total.toFixed(2)}
+              </span>
             </div>
           </div>
         </motion.div>
@@ -246,7 +332,8 @@ export default function CartPage({
             size="lg"
             className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-xl hover:shadow-2xl transition-all duration-200 h-16 rounded-2xl text-lg font-semibold"
           >
-            Proceed to Payment • CHF {total.toFixed(2)}
+            Proceed to Payment • {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
+            {total.toFixed(2)}
           </Button>
         </Link>
       </div>

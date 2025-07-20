@@ -25,15 +25,20 @@ export async function createQRPaymentIntent(paymentData: QRPaymentData) {
   const supabase = createClient();
 
   try {
-    // Get restaurant details
+    // Get restaurant details with Stripe Connect information
     const { data: restaurant, error: restaurantError } = await supabase
       .from("restaurants")
-      .select("id, name, stripe_account_id, currency")
+      .select("id, name, stripe_account_id, currency, stripe_connect_enabled")
       .eq("id", paymentData.restaurantId)
       .single();
 
     if (restaurantError || !restaurant) {
       return { error: "Restaurant not found" };
+    }
+
+    // Check if restaurant has Stripe Connect enabled
+    if (!restaurant.stripe_connect_enabled || !restaurant.stripe_account_id) {
+      return { error: "Restaurant payment processing is not available" };
     }
 
     // Create a unique order ID
@@ -49,6 +54,8 @@ export async function createQRPaymentIntent(paymentData: QRPaymentData) {
       tax_amount: paymentData.tax,
       tip_amount: paymentData.tip,
       notes: `QR Order - Table ${paymentData.tableId}`,
+      payment_method: "stripe",
+      customer_email: paymentData.email,
     });
 
     if (orderError) {
@@ -84,23 +91,19 @@ export async function createQRPaymentIntent(paymentData: QRPaymentData) {
         customerEmail: paymentData.email || "",
         customerName: paymentData.customerName || "",
         isQRPayment: "true",
+        restaurantName: restaurant.name,
       },
       automatic_payment_methods: {
         enabled: true,
       },
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/qr/${paymentData.tableId}/confirmation?order_id=${orderId}`,
-    };
-
-    // If restaurant has Stripe Connect account, set up transfer
-    if (restaurant.stripe_account_id) {
-      paymentIntentParams.transfer_data = {
+      // Set up transfer to restaurant's Stripe Connect account
+      transfer_data: {
         destination: restaurant.stripe_account_id,
-      };
-      // Calculate 2% platform fee (2% of total amount)
-      paymentIntentParams.application_fee_amount = Math.round(
-        paymentData.total * 0.02 * 100 // 2% of total, converted to cents
-      );
-    }
+      },
+      // Calculate platform fee (2% of total amount)
+      application_fee_amount: Math.round(paymentData.total * 0.02 * 100), // 2% of total, converted to cents
+    };
 
     // Create Stripe payment intent
     const paymentIntent =
@@ -193,4 +196,3 @@ export async function getQROrderDetails(orderId: string) {
     return { error: "Failed to fetch order details" };
   }
 }
- 

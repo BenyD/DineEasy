@@ -8,7 +8,15 @@ import { MenuItemCard } from "@/components/qr/MenuItemCard";
 import { CartButton } from "@/components/qr/CartButton";
 import { useCart } from "@/hooks/useCart";
 import { MenuItem } from "@/types";
-import { MapPin, Clock, Star, Info, Loader2 } from "lucide-react";
+import {
+  MapPin,
+  Clock,
+  Star,
+  Info,
+  Loader2,
+  Users,
+  Table as TableIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getTableInfo, getRestaurantMenu } from "@/lib/actions/qr-client";
 import { toast } from "sonner";
@@ -22,6 +30,18 @@ interface RestaurantData {
   cuisine?: string;
   opening_hours?: string;
   currency?: string;
+  phone?: string;
+  email?: string;
+  description?: string;
+}
+
+interface TableData {
+  id: string;
+  number: string;
+  capacity: number;
+  status: string;
+  restaurant_id: string;
+  restaurants: RestaurantData;
 }
 
 interface MenuData {
@@ -41,6 +61,7 @@ export default function MenuPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [restaurant, setRestaurant] = useState<RestaurantData | null>(null);
+  const [tableData, setTableData] = useState<TableData | null>(null);
   const [menuData, setMenuData] = useState<MenuData>({});
   const [categories, setCategories] = useState<
     Array<{ id: string; name: string; items: MenuItem[] }>
@@ -60,9 +81,14 @@ export default function MenuPage({
           return;
         }
 
-        const tableData = tableResult.data;
+        const tableData = tableResult.data as TableData;
         const restaurantData = tableData.restaurants as RestaurantData;
+
+        setTableData(tableData);
         setRestaurant(restaurantData);
+
+        // Store restaurant ID for checkout
+        localStorage.setItem("restaurantId", restaurantData.id);
 
         // Get menu data
         const menuResult = await getRestaurantMenu(restaurantData.id);
@@ -151,8 +177,8 @@ export default function MenuPage({
             later or contact the restaurant directly.
           </p>
           <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-            <MapPin className="w-4 h-4" />
-            <span>Table {resolvedParams.tableId}</span>
+            <TableIcon className="w-4 h-4" />
+            <span>Table {tableData?.number || resolvedParams.tableId}</span>
           </div>
         </div>
       </div>
@@ -256,6 +282,26 @@ export default function MenuPage({
                             </span>
                           </div>
                         )}
+                        {restaurant?.phone && (
+                          <div className="flex items-center gap-3">
+                            <div className="bg-white/80 p-2 rounded-xl shadow-sm">
+                              <span className="text-green-600 text-sm">📞</span>
+                            </div>
+                            <span className="text-sm text-gray-700 font-medium">
+                              {restaurant.phone}
+                            </span>
+                          </div>
+                        )}
+                        {restaurant?.email && (
+                          <div className="flex items-center gap-3">
+                            <div className="bg-white/80 p-2 rounded-xl shadow-sm">
+                              <span className="text-green-600 text-sm">✉️</span>
+                            </div>
+                            <span className="text-sm text-gray-700 font-medium">
+                              {restaurant.email}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -267,11 +313,19 @@ export default function MenuPage({
                   variant="outline"
                   className="text-sm border-green-200 text-green-700 bg-green-50 px-3 py-1 rounded-full font-medium"
                 >
+                  <TableIcon className="w-3 h-3 mr-1" />
                   Table {tableData?.number || resolvedParams.tableId}
                 </Badge>
                 <Badge
                   variant="outline"
                   className="text-sm border-blue-200 text-blue-700 bg-blue-50 px-3 py-1 rounded-full font-medium"
+                >
+                  <Users className="w-3 h-3 mr-1" />
+                  {tableData?.capacity || 4} seats
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="text-sm border-purple-200 text-purple-700 bg-purple-50 px-3 py-1 rounded-full font-medium"
                 >
                   Order in Progress
                 </Badge>

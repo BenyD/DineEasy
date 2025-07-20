@@ -19,6 +19,15 @@ export interface TableQRData {
   qrUrl: string;
 }
 
+export interface QRCodeValidationResult {
+  isValid: boolean;
+  isPersistent: boolean;
+  currentUrl: string;
+  expectedUrl: string;
+  needsUpdate: boolean;
+  errors: string[];
+}
+
 // Default QR code options
 const defaultOptions: QRCodeOptions = {
   width: 256,
@@ -107,6 +116,99 @@ export function generateTableQRData(
     restaurantName,
     qrUrl,
   };
+}
+
+/**
+ * Validate a QR code URL
+ */
+export function validateQRCodeUrl(
+  qrCodeUrl: string,
+  tableId: string,
+  restaurantId: string
+): QRCodeValidationResult {
+  const errors: string[] = [];
+  const expectedUrl = generateTableQRUrl(tableId, restaurantId);
+
+  // Check if URL is empty or null
+  if (!qrCodeUrl) {
+    errors.push("QR code URL is empty or null");
+    return {
+      isValid: false,
+      isPersistent: false,
+      currentUrl: qrCodeUrl || "",
+      expectedUrl,
+      needsUpdate: true,
+      errors,
+    };
+  }
+
+  // Check if URL matches expected format
+  const urlPattern = new RegExp(
+    `^${QR_CONFIG.BASE_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}${QR_CONFIG.PATH_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+  );
+
+  if (!urlPattern.test(qrCodeUrl)) {
+    errors.push("QR code URL format is invalid");
+  }
+
+  // Check if URL contains the correct table ID
+  if (!qrCodeUrl.includes(tableId)) {
+    errors.push("QR code URL does not contain the correct table ID");
+  }
+
+  // Check if URL matches expected URL exactly
+  const needsUpdate = qrCodeUrl !== expectedUrl;
+  if (needsUpdate) {
+    errors.push("QR code URL does not match expected URL");
+  }
+
+  // Check if URL is using the correct environment
+  const isCorrectEnvironment = qrCodeUrl.startsWith(QR_CONFIG.BASE_URL);
+  if (!isCorrectEnvironment) {
+    errors.push("QR code URL is not using the correct environment");
+  }
+
+  return {
+    isValid: errors.length === 0,
+    isPersistent: !needsUpdate,
+    currentUrl: qrCodeUrl,
+    expectedUrl,
+    needsUpdate,
+    errors,
+  };
+}
+
+/**
+ * Check if a QR code URL is using the correct environment
+ */
+export function isQRCodeEnvironmentCorrect(qrUrl: string): boolean {
+  if (!qrUrl) return false;
+
+  const currentBaseUrl = QR_CONFIG.BASE_URL;
+  const urlBase = qrUrl.split("/qr/")[0];
+
+  return urlBase === currentBaseUrl;
+}
+
+/**
+ * Get the correct QR code URL for the current environment
+ */
+export function getCorrectQRCodeUrl(tableId: string): string {
+  return `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${tableId}`;
+}
+
+/**
+ * Check if QR code needs to be regenerated
+ */
+export function shouldRegenerateQRCode(
+  currentQrCode: string,
+  tableId: string,
+  restaurantId: string
+): boolean {
+  if (!currentQrCode) return true;
+
+  const expectedQrCode = generateTableQRUrl(tableId, restaurantId);
+  return currentQrCode !== expectedQrCode;
 }
 
 /**
@@ -202,23 +304,4 @@ export async function generateBrandedQR(
   // For now, return a simple QR code
   // In a more advanced implementation, you could overlay the logo
   return generateStyledTableQR(tableData, options);
-}
-
-/**
- * Check if a QR code URL is using the correct environment
- */
-export function isQRCodeEnvironmentCorrect(qrUrl: string): boolean {
-  if (!qrUrl) return false;
-
-  const currentBaseUrl = QR_CONFIG.BASE_URL;
-  const urlBase = qrUrl.split("/qr/")[0];
-
-  return urlBase === currentBaseUrl;
-}
-
-/**
- * Get the correct QR code URL for the current environment
- */
-export function getCorrectQRCodeUrl(tableId: string): string {
-  return `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${tableId}`;
 }

@@ -24,7 +24,10 @@ export async function getTableInfo(tableId: string) {
           address,
           cuisine,
           opening_hours,
-          currency
+          currency,
+          phone,
+          email,
+          description
         )
       `
       )
