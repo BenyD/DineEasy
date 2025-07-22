@@ -95,7 +95,8 @@ export function generateTableQRUrl(
   tableId: string,
   restaurantId: string
 ): string {
-  return `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${tableId}`;
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.ch";
+  return `${baseUrl}/qr/${tableId}`;
 }
 
 /**
@@ -143,8 +144,9 @@ export function validateQRCodeUrl(
   }
 
   // Check if URL matches expected format
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.ch";
   const urlPattern = new RegExp(
-    `^${QR_CONFIG.BASE_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}${QR_CONFIG.PATH_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+    `^${baseUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/qr/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
   );
 
   if (!urlPattern.test(qrCodeUrl)) {
@@ -163,7 +165,7 @@ export function validateQRCodeUrl(
   }
 
   // Check if URL is using the correct environment
-  const isCorrectEnvironment = qrCodeUrl.startsWith(QR_CONFIG.BASE_URL);
+  const isCorrectEnvironment = qrCodeUrl.startsWith(baseUrl);
   if (!isCorrectEnvironment) {
     errors.push("QR code URL is not using the correct environment");
   }
@@ -194,7 +196,8 @@ export function isQRCodeEnvironmentCorrect(qrUrl: string): boolean {
  * Get the correct QR code URL for the current environment
  */
 export function getCorrectQRCodeUrl(tableId: string): string {
-  return `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${tableId}`;
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.ch";
+  return `${baseUrl}/qr/${tableId}`;
 }
 
 /**

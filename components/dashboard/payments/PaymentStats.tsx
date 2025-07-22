@@ -28,7 +28,7 @@ const PaymentStats = memo(
     stats,
     isLoading = false,
     onRefresh,
-    currency = "USD", // Default to USD
+    currency = "CHF", // Default to CHF
   }: PaymentStatsProps) => {
     // Validate and provide fallbacks for stats data
     const safeStats = useMemo(

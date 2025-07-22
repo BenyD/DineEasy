@@ -44,7 +44,7 @@ export default function SelectPlanPage() {
   const [annual, setAnnual] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("pro");
   const [selectedCurrency, setSelectedCurrency] =
-    useState<keyof typeof CURRENCIES>("USD");
+    useState<keyof typeof CURRENCIES>("CHF");
   const [isLoading, setIsLoading] = useState(false);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
 

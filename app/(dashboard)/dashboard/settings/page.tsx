@@ -45,13 +45,16 @@ import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 import { CURRENCIES, COUNTRY_OPTIONS, type Currency } from "@/lib/constants";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
-import { updateProfile, deleteAvatar } from "@/lib/actions/profile";
+import {
+  updateProfileWithLiveUpdate,
+  deleteAvatarWithLiveUpdate,
+} from "@/lib/actions/profile-client";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  updateRestaurantImages,
-  removeRestaurantImage,
-} from "@/lib/actions/restaurant";
+  updateRestaurantImagesWithLiveUpdate,
+  removeRestaurantImageWithLiveUpdate,
+} from "@/lib/actions/restaurant-client";
 
 const DAYS_OF_WEEK = [
   "monday",
@@ -274,7 +277,8 @@ export default function SettingsPage() {
           formData.append("cover", selectedCover);
         }
 
-        const imageResult = await updateRestaurantImages(formData);
+        const imageResult =
+          await updateRestaurantImagesWithLiveUpdate(formData);
 
         if (imageResult.error) {
           toast.error(imageResult.error);
@@ -413,7 +417,7 @@ export default function SettingsPage() {
         formData.append("avatar", selectedAvatar);
       }
 
-      const result = await updateProfile(formData);
+      const result = await updateProfileWithLiveUpdate(formData);
 
       if (result.error) {
         toast.error(result.error);
@@ -442,7 +446,7 @@ export default function SettingsPage() {
 
   const handleDeleteAvatar = async () => {
     try {
-      const result = await deleteAvatar();
+      const result = await deleteAvatarWithLiveUpdate();
 
       if (result.error) {
         toast.error(result.error);
@@ -516,7 +520,7 @@ export default function SettingsPage() {
 
   const handleRemoveLogo = async () => {
     try {
-      const result = await removeRestaurantImage("logo");
+      const result = await removeRestaurantImageWithLiveUpdate("logo");
 
       if (result.error) {
         toast.error(result.error);
@@ -537,7 +541,7 @@ export default function SettingsPage() {
 
   const handleRemoveCover = async () => {
     try {
-      const result = await removeRestaurantImage("cover");
+      const result = await removeRestaurantImageWithLiveUpdate("cover");
 
       if (result.error) {
         toast.error(result.error);

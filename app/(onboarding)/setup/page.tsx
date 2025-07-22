@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createRestaurant } from "@/lib/actions/restaurant";
+import { completeOnboarding } from "@/lib/actions/restaurant";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -863,7 +864,32 @@ export default function SetupPage() {
         return;
       }
 
-      console.log("✅ Restaurant created successfully!");
+      // NEW: Mark onboarding as complete
+      if (result.success) {
+        // Fetch the most recently created restaurant for the current user
+        const supabase = createClient();
+        const { data: restaurant } = await supabase
+          .from("restaurants")
+          .select("id")
+          .eq("email", formData.email)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (restaurant?.id) {
+          const onboardingResult = await completeOnboarding(restaurant.id);
+          if (onboardingResult?.error) {
+            toast.error(
+              "Failed to mark onboarding as complete: " + onboardingResult.error
+            );
+            return;
+          }
+        }
+      }
+
+      console.log(
+        "✅ Restaurant created and onboarding completed successfully!"
+      );
 
       // Clear localStorage when setup is completed successfully
       if (typeof window !== "undefined") {
@@ -875,12 +901,16 @@ export default function SetupPage() {
       router.push("/select-plan");
     } catch (error) {
       console.error("💥 Critical error in handleComplete:", error);
-      console.error("🔍 Error details:", {
-        name: error?.name,
-        message: error?.message,
-        stack: error?.stack,
-        cause: error?.cause,
-      });
+      if (error instanceof Error) {
+        console.error("🔍 Error details:", {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          cause: (error as any).cause,
+        });
+      } else {
+        console.error("🔍 Error details:", error);
+      }
 
       // Show more detailed error information
       let errorMessage = "Something went wrong. Please try again.";

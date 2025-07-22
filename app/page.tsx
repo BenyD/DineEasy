@@ -54,7 +54,7 @@ export default function LandingPage() {
     offers: {
       "@type": "Offer",
       price: "0",
-      priceCurrency: "USD",
+      priceCurrency: "CHF",
       description: "14-day free trial",
     },
     aggregateRating: {

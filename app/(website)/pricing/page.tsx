@@ -144,8 +144,8 @@ const FEATURE_COMPARISON = [
 
 export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
-  const [selectedCurrency, setSelectedCurrency] =
-    useState<keyof typeof CURRENCIES>("USD");
+  // Remove currency selection and force CHF
+  const selectedCurrency = "CHF";
 
   const plans = [
     {
@@ -187,7 +187,8 @@ export default function PricingPage() {
       icon: Building2,
       emoji: "🏢",
       color: "green",
-      description: "Enterprise-grade solution for high-volume restaurants with unlimited features",
+      description:
+        "Enterprise-grade solution for high-volume restaurants with unlimited features",
       bestFor: "High-volume restaurants",
       features: [
         ...PRICING.elite.features.map(
@@ -214,8 +215,7 @@ export default function PricingPage() {
     },
     {
       question: "Do you offer annual discounts?",
-      answer:
-        `Yes — save 20% when paying yearly. (Starter: ${formatPrice(getPrice("starter", selectedCurrency, "yearly"), selectedCurrency)}/yr, Pro: ${formatPrice(getPrice("pro", selectedCurrency, "yearly"), selectedCurrency)}/yr, Elite: ${formatPrice(getPrice("elite", selectedCurrency, "yearly"), selectedCurrency)}/yr)`,
+      answer: `Yes — save 20% when paying yearly. (Starter: ${formatPrice(getPrice("starter", selectedCurrency, "yearly"), selectedCurrency)}/yr, Pro: ${formatPrice(getPrice("pro", selectedCurrency, "yearly"), selectedCurrency)}/yr, Elite: ${formatPrice(getPrice("elite", selectedCurrency, "yearly"), selectedCurrency)}/yr)`,
     },
     {
       question: "Is support included for all plans?",
@@ -272,7 +272,8 @@ export default function PricingPage() {
           className="absolute right-0 bottom-0 -z-10 opacity-30"
         />
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          {/* Currency Selector */}
+          {/* Remove currency selection and force CHF */}
+          {/*
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -305,6 +306,7 @@ export default function PricingPage() {
               </SelectContent>
             </Select>
           </motion.div>
+          */}
 
           {/* Billing Toggle */}
           <motion.div

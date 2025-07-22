@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 
 interface SidebarData {
   restaurant: {
@@ -28,9 +29,24 @@ export function useSidebarData(): SidebarData {
     error: null,
   });
 
+  // Get restaurant data from the store
+  const {
+    restaurant: storeRestaurant,
+    isLoading: storeLoading,
+    error: storeError,
+  } = useRestaurantSettings();
+
+  // Add a refresh trigger
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const refreshUserData = () => {
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
   useEffect(() => {
-    async function fetchSidebarData() {
+    async function fetchUserData() {
       try {
+        console.log("👤 Fetching sidebar user data...");
         const supabase = createClient();
 
         // Get current user
@@ -40,29 +56,6 @@ export function useSidebarData(): SidebarData {
         } = await supabase.auth.getUser();
         if (userError || !user) {
           throw new Error("Not authenticated");
-        }
-
-        // Fetch restaurant data with subscription info
-        const { data: restaurant, error: restaurantError } = await supabase
-          .from("restaurants")
-          .select(
-            `
-            name,
-            logo_url,
-            type,
-            opening_hours,
-            is_open,
-            subscriptions (
-              plan,
-              status
-            )
-          `
-          )
-          .eq("owner_id", user.id)
-          .single();
-
-        if (restaurantError) {
-          throw restaurantError;
         }
 
         // Fetch user profile
@@ -76,45 +69,58 @@ export function useSidebarData(): SidebarData {
           console.warn("Profile not found:", profileError);
         }
 
-        // Fetch staff role
-        const { data: staff, error: staffError } = await supabase
-          .from("staff")
-          .select("role")
-          .eq("user_id", user.id)
-          .eq("restaurant_id", restaurant.id)
-          .single();
+        // Fetch staff role if restaurant exists
+        let staffRole = "owner"; // default role
+        if (storeRestaurant) {
+          const { data: staff, error: staffError } = await supabase
+            .from("staff")
+            .select("role")
+            .eq("user_id", user.id)
+            .eq("restaurant_id", storeRestaurant.id)
+            .single();
 
-        if (staffError) {
-          console.warn("Staff record not found:", staffError);
+          if (!staffError && staff) {
+            staffRole = staff.role;
+          }
         }
 
         // Determine restaurant status based on manual override and opening hours
-        const manualStatus = restaurant.is_open;
-        const autoStatus = determineRestaurantStatus(restaurant.opening_hours);
+        const manualStatus = storeRestaurant?.is_open;
+        const autoStatus = storeRestaurant?.opening_hours
+          ? determineRestaurantStatus(storeRestaurant.opening_hours)
+          : false;
         const isOpen = manualStatus !== null ? manualStatus : autoStatus;
 
         // Get subscription plan
         const subscriptionPlan =
-          restaurant.subscriptions?.[0]?.plan || "Starter";
+          storeRestaurant?.subscriptions?.[0]?.plan || "Starter";
+
+        console.log("✅ Sidebar data fetched successfully:", {
+          restaurant: storeRestaurant?.name,
+          user: profile?.full_name || user.email,
+          role: staffRole,
+        });
 
         setData({
-          restaurant: {
-            name: restaurant.name,
-            logo_url: restaurant.logo_url,
-            status: isOpen ? "open" : "closed",
-            subscription_plan: subscriptionPlan,
-            type: restaurant.type,
-          },
+          restaurant: storeRestaurant
+            ? {
+                name: storeRestaurant.name,
+                logo_url: storeRestaurant.logo_url,
+                status: isOpen ? "open" : "closed",
+                subscription_plan: subscriptionPlan,
+                type: storeRestaurant.type,
+              }
+            : null,
           user: {
-            name: profile?.full_name || user.email?.split("@")[0] || "User",
-            avatar_url: profile?.avatar_url,
-            role: staff?.role || "Restaurant Owner",
+            name: profile?.full_name || user.email || "User",
+            avatar_url: profile?.avatar_url || null,
+            role: staffRole,
           },
-          isLoading: false,
-          error: null,
+          isLoading: false, // We have the data now, so loading is complete
+          error: storeError,
         });
       } catch (error: any) {
-        console.error("Error fetching sidebar data:", error);
+        console.error("❌ Error fetching sidebar data:", error);
         setData({
           restaurant: null,
           user: null,
@@ -124,10 +130,41 @@ export function useSidebarData(): SidebarData {
       }
     }
 
-    fetchSidebarData();
-  }, []);
+    // Handle different states of the store
+    if (storeLoading) {
+      console.log("⏳ Store is loading, showing loading state...");
+      // Store is still loading, show loading state
+      setData((prev) => ({
+        ...prev,
+        isLoading: true,
+        error: null,
+      }));
+    } else if (storeError && !storeRestaurant) {
+      console.error("❌ Store has error and no restaurant data:", storeError);
+      // Store has an error and no restaurant data, show error state
+      setData((prev) => ({
+        ...prev,
+        isLoading: false,
+        error: storeError,
+      }));
+    } else if (!storeRestaurant) {
+      console.log(
+        "⏳ Store loaded but no restaurant data yet, showing loading state..."
+      );
+      // Store is done loading but no restaurant data yet, show loading state
+      setData((prev) => ({
+        ...prev,
+        isLoading: true,
+        error: null,
+      }));
+    } else {
+      console.log("🔄 Store ready with restaurant data, fetching user data...");
+      // Store is ready with restaurant data, fetch user data
+      fetchUserData();
+    }
+  }, [storeRestaurant, storeLoading, storeError, refreshTrigger]);
 
-  return data;
+  return { ...data, refreshUserData };
 }
 
 // Helper function to determine if restaurant is open based on opening hours

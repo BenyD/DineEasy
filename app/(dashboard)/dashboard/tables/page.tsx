@@ -227,10 +227,18 @@ function TablesPage() {
 
   // WebSocket real-time updates
   const { isConnected, reconnectAttempts } = useTablesWebSocket({
-    onTableAdded: (table: Table) => addTable(table),
-    onTableUpdated: (table: Table, oldTable?: Table) =>
-      updateTableOptimistic(table),
-    onTableDeleted: (table: Table) => removeTable(table.id),
+    onTableAdded: (table: Table) => {
+      console.log("WebSocket: Table added", table);
+      addTable(table);
+    },
+    onTableUpdated: (table: Table, oldTable?: Table) => {
+      console.log("WebSocket: Table updated", table, oldTable);
+      updateTableOptimistic(table);
+    },
+    onTableDeleted: (table: Table) => {
+      console.log("WebSocket: Table deleted", table);
+      removeTable(table.id);
+    },
   });
 
   // QR Settings
@@ -641,8 +649,26 @@ function TablesPage() {
           toast.success(
             table ? "Table updated successfully" : "Table created successfully"
           );
-          // Don't call fetchData() - let WebSocket handle the update
+          
+          // Close the dialog first
           onClose();
+          
+          // For new table creation, add a fallback refresh mechanism
+          if (!table && result.data) {
+            const newTableId = result.data.id;
+            const newTableNumber = result.data.number;
+            
+            // Check if the table appears in the list after a short delay
+            setTimeout(() => {
+              const tableExists = tables.some(t => t.id === newTableId);
+              if (!tableExists) {
+                console.log("Table not found in list, refreshing data...");
+                fetchData();
+              } else {
+                console.log("Table found in list via WebSocket");
+              }
+            }, 500); // Wait 500ms for WebSocket to update
+          }
         } else {
           toast.error(result.error || "Failed to save table");
         }
@@ -841,6 +867,43 @@ function TablesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* WebSocket Connection Status */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border">
+                  {isConnected ? (
+                    <>
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      <span className="text-green-700">Live</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-2 h-2 bg-red-500 rounded-full" />
+                      <span className="text-red-700">Offline</span>
+                    </>
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="space-y-1">
+                  <p className="font-medium">Real-time Updates</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isConnected 
+                      ? "Connected - Tables will update automatically" 
+                      : "Disconnected - Manual refresh required"
+                    }
+                  </p>
+                  {reconnectAttempts > 0 && (
+                    <p className="text-xs text-orange-600">
+                      Reconnection attempts: {reconnectAttempts}
+                    </p>
+                  )}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
           <Button
             variant="outline"
             size="sm"

@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { BreadcrumbHeader } from "@/components/dashboard/breadcrumb-header";
 import DashboardLayoutClient from "@/components/dashboard/dashboard-layout-client";
+import { RestaurantStoreInitializer } from "@/components/dashboard/restaurant-store-initializer";
 
 export default async function DashboardLayout({
   children,
@@ -44,6 +45,7 @@ export default async function DashboardLayout({
 
   return (
     <SidebarProvider defaultOpen>
+      <RestaurantStoreInitializer />
       <DashboardLayoutClient />
       <div className="flex h-screen w-full overflow-hidden bg-background">
         <AppSidebar />

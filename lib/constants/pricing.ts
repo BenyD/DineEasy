@@ -361,7 +361,16 @@ export function getPrice(
   currency: Currency,
   interval: "monthly" | "yearly"
 ): number {
-  return PRICING[plan].price[currency][interval];
+  if (currency !== "CHF") {
+    console.warn(`Only CHF pricing is supported. Requested: ${currency}`);
+    return 0;
+  }
+  const planPricing = PRICING[plan].price[currency];
+  if (!planPricing) {
+    console.warn(`No pricing found for plan ${plan} and currency ${currency}`);
+    return 0;
+  }
+  return planPricing[interval];
 }
 
 // Helper function to get Stripe price ID for a specific plan, currency, and interval
@@ -370,7 +379,18 @@ export function getStripePriceId(
   currency: Currency,
   interval: "monthly" | "yearly"
 ): string {
-  return PRICING[plan].stripe_price_id[currency][interval];
+  if (currency !== "CHF") {
+    console.warn(`Only CHF pricing is supported. Requested: ${currency}`);
+    return "";
+  }
+  const planPricing = PRICING[plan].stripe_price_id[currency];
+  if (!planPricing) {
+    console.warn(
+      `No Stripe price ID found for plan ${plan} and currency ${currency}`
+    );
+    return "";
+  }
+  return planPricing[interval];
 }
 
 // Helper function to format price with currency symbol

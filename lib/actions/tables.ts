@@ -100,7 +100,7 @@ export async function createTable(formData: FormData) {
         capacity,
         status: "available" as TableStatus,
         is_active: true,
-        // QR code will be set by database trigger, but we'll ensure it's correct
+        // Don't set QR code here - we'll set it after getting the ID
       })
       .select()
       .single();
@@ -110,10 +110,11 @@ export async function createTable(formData: FormData) {
       return { error: error.message };
     }
 
-    // Generate QR code URL with the actual table ID and ensure it's set correctly
-    const qrCodeUrl = generateTableQRUrl(table.id, restaurantId);
+    // Generate QR code URL with the correct environment URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.ch";
+    const qrCodeUrl = `${baseUrl}/qr/${table.id}`;
 
-    // Update table with QR code URL only if it's not already set correctly
+    // Update table with QR code URL
     const { data: updatedTable, error: updateError } = await supabase
       .from("tables")
       .update({
@@ -121,14 +122,13 @@ export async function createTable(formData: FormData) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", table.id)
-      .eq("qr_code", qrCodeUrl) // Only update if QR code is different
       .select()
       .single();
 
-    if (updateError && updateError.code !== "PGRST116") {
-      // PGRST116 = no rows affected
+    if (updateError) {
       console.error("Error updating table with QR code:", updateError);
-      // Don't fail the operation if QR code update fails
+      // Don't fail the entire operation if QR code update fails
+      // The table was created successfully
     }
 
     // Log activity
@@ -138,11 +138,20 @@ export async function createTable(formData: FormData) {
       type: "table",
       action: "created",
       description: `Created table ${number} with capacity ${capacity}`,
-      metadata: { table_id: table.id, table_number: number, capacity },
+      metadata: {
+        table_id: table.id,
+        table_number: number,
+        capacity: capacity,
+        qr_code: qrCodeUrl,
+      },
     });
 
     revalidatePath("/dashboard/tables");
-    return { success: true, data: updatedTable || table };
+    return {
+      success: true,
+      data: updatedTable || table,
+      message: "Table created successfully",
+    };
   } catch (error: any) {
     console.error("Error in createTable:", error);
     return { error: error.message || "Failed to create table" };
@@ -372,8 +381,9 @@ export async function generateTableQRCode(id: string) {
       return { error: "Table not found" };
     }
 
-    // Generate new QR code URL with the actual table ID
-    const qrCodeUrl = generateTableQRUrl(table.id, restaurantId);
+    // Generate new QR code URL with the correct environment URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.ch";
+    const qrCodeUrl = `${baseUrl}/qr/${table.id}`;
 
     // Check if QR code is already correct
     if (table.qr_code === qrCodeUrl) {
@@ -784,9 +794,12 @@ export async function updateAllQRCodesForEnvironment() {
       return { success: true, message: "No tables found to update" };
     }
 
+    // Generate the correct base URL for this environment
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.ch";
+
     // Check which tables need QR code updates
     const tablesNeedingUpdate = tables.filter((table) => {
-      const expectedQrCode = generateTableQRUrl(table.id, restaurantId);
+      const expectedQrCode = `${baseUrl}/qr/${table.id}`;
       return !table.qr_code || table.qr_code !== expectedQrCode;
     });
 
@@ -800,7 +813,7 @@ export async function updateAllQRCodesForEnvironment() {
 
     // Update only tables that need QR code updates
     const updatePromises = tablesNeedingUpdate.map(async (table) => {
-      const qrCodeUrl = generateTableQRUrl(table.id, restaurantId);
+      const qrCodeUrl = `${baseUrl}/qr/${table.id}`;
 
       const { error: updateError } = await supabase
         .from("tables")
@@ -850,19 +863,19 @@ export async function updateAllQRCodesForEnvironment() {
           failed_updates: failed,
           skipped_tables: skipped,
           environment: process.env.NODE_ENV || "development",
+          base_url: baseUrl,
         },
       });
     }
 
     revalidatePath("/dashboard/tables");
-
     return {
       success: true,
-      message: `Updated QR codes for ${successful} tables (${skipped} already up to date)`,
+      message: `Updated ${successful} QR codes (${failed} failed, ${skipped} skipped)`,
       details: {
         updated: successful,
-        failed,
-        skipped,
+        failed: failed,
+        skipped: skipped,
         total: tables.length,
       },
     };
@@ -892,8 +905,9 @@ export async function checkTableQRCodeStatus(tableId: string) {
       return { error: "Table not found" };
     }
 
-    // Generate expected QR code URL
-    const expectedQrCode = generateTableQRUrl(table.id, restaurantId);
+    // Generate expected QR code URL with correct environment URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.ch";
+    const expectedQrCode = `${baseUrl}/qr/${table.id}`;
     const needsUpdate = !table.qr_code || table.qr_code !== expectedQrCode;
 
     return {
@@ -936,9 +950,12 @@ export async function checkAllTableQRCodes() {
       return { success: true, data: [], message: "No tables found" };
     }
 
+    // Generate the correct base URL for this environment
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.ch";
+
     // Check each table's QR code status
     const qrCodeStatuses = tables.map((table) => {
-      const expectedQrCode = generateTableQRUrl(table.id, restaurantId);
+      const expectedQrCode = `${baseUrl}/qr/${table.id}`;
       const needsUpdate = !table.qr_code || table.qr_code !== expectedQrCode;
 
       return {

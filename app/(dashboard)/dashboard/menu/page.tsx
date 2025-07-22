@@ -92,6 +92,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDropzone } from "react-dropzone";
 import { bytesToSize } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { MenuErrorBoundary } from "@/components/dashboard/menu/MenuErrorBoundary";
+import { useMenuOptimized } from "@/hooks/useMenuOptimized";
+import { retryWithConditions } from "@/lib/utils/retry";
 
 import { toast } from "sonner";
 import {
@@ -167,7 +170,7 @@ interface MenuItemCardProps {
   item: MenuItem;
   onEdit: (item: MenuItem) => void;
   onDelete: (item: MenuItem) => void;
-  onDuplicate?: (item: MenuItem) => void;
+  onToggleVisibility: (item: MenuItem) => void;
   viewMode?: "grid" | "list";
   isSelected?: boolean;
   onSelect?: (itemId: string, selected: boolean) => void;
@@ -229,7 +232,7 @@ const imageHoverVariants = {
   },
 };
 
-export default function MenuPage() {
+function MenuPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -500,6 +503,9 @@ export default function MenuPage() {
 
       setSelectedItems([]);
       setIsBulkMode(false);
+
+      // Refresh menu items to show the updated list instantly
+      await fetchMenuItems();
     } catch (error) {
       toast.error("Failed to delete some items");
     } finally {
@@ -531,6 +537,9 @@ export default function MenuPage() {
       toast.success(
         `Successfully ${newAvailability ? "enabled" : "disabled"} ${selectedItems.length} item(s)`
       );
+
+      // Refresh menu items to show the updated items instantly
+      await fetchMenuItems();
     } catch (error) {
       toast.error("Failed to update some items");
     } finally {
@@ -828,6 +837,23 @@ export default function MenuPage() {
     setShowDuplicateDialog(true);
   };
 
+  const handleToggleVisibility = async (item: MenuItem) => {
+    try {
+      const formData = new FormData();
+      formData.append("available", (!item.available).toString());
+
+      await updateMenuItem(item.id, formData);
+      toast.success(
+        `${item.name} is now ${!item.available ? "available" : "unavailable"}`
+      );
+
+      // Refresh menu items to show the updated status instantly
+      await fetchMenuItems();
+    } catch (error) {
+      toast.error(`Failed to update ${item.name} availability`);
+    }
+  };
+
   const confirmDuplicate = async () => {
     if (!itemToDuplicate) return;
 
@@ -891,6 +917,9 @@ export default function MenuPage() {
       setShowBulkEditDialog(false);
       setBulkEditData({ categoryId: "", available: null, popular: null });
       toast.success(`Successfully updated ${selectedItems.length} item(s)`);
+
+      // Refresh menu items to show the updated items instantly
+      await fetchMenuItems();
     } catch (error) {
       toast.error("Failed to update some items");
     } finally {
@@ -913,11 +942,8 @@ export default function MenuPage() {
   // This enables real-time collaboration when multiple users are managing the menu
   // Changes made by one user will appear instantly for all other users
   // NOTE: WebSocket updates are disabled when dialogs are open to prevent form resets
-  const { disconnect: disconnectWebSocket, isConnected } = useMenuWebSocket({
-    isAddDialogOpen,
-    editingItem,
-    isSubmitting,
-    isAddingCategoryOrAllergen,
+  const { disconnect: disconnectWebSocket, isConnected, reconnectAttempts } = useMenuWebSocket({
+    enabled: !isAddDialogOpen && !editingItem && !isSubmitting,
   });
 
   // Auto-refresh disabled - only manual refresh allowed
@@ -1419,6 +1445,28 @@ export default function MenuPage() {
       isAddingCategoryOrAllergen, // Added parent's state dependency
     ]);
 
+    // Populate form when editing an existing item
+    useEffect(() => {
+      if (item && !formState.isFormInitialized) {
+        setFormState((prev) => ({
+          ...prev,
+          formData: {
+            name: item.name || "",
+            description: item.description || "",
+            price: item.price?.toString() || "",
+            category: item.categoryId || "",
+            preparationTime: item.preparationTime?.toString() || "",
+            available: item.available ?? true,
+            allergens: item.allergenIds || [],
+            popular: item.popular || false,
+            image: item.image || "",
+          },
+          isFormInitialized: true,
+          visitedSteps: new Set(["basic", "details", "image"]),
+        }));
+      }
+    }, [item, formState.isFormInitialized]);
+
     // Helper functions to check step completion
     const isStep1Completed = useCallback(() => {
       return (
@@ -1877,16 +1925,17 @@ export default function MenuPage() {
         }));
 
         try {
-          // Simulate upload progress
+          // Simulate upload progress with proper bounds
           const progressInterval = setInterval(() => {
             setFormState((prev) => ({
               ...prev,
-              uploadProgress: prev.uploadProgress + 10,
+              uploadProgress: Math.min(prev.uploadProgress + 10, 90), // Cap at 90% until actual completion
             }));
           }, 200);
 
           const result = await uploadImage(file, "menu-item");
 
+          // Clear interval and set to 100% on completion
           clearInterval(progressInterval);
           setFormState((prev) => ({ ...prev, uploadProgress: 100 }));
 
@@ -1898,10 +1947,10 @@ export default function MenuPage() {
             updateImageData(result.url || "");
             toast.success("Image uploaded successfully");
 
-            // Clear preview after successful upload
+            // Keep preview for a moment to show success, then clear
             setTimeout(
               () => setFormState((prev) => ({ ...prev, imagePreview: null })),
-              1000
+              2000
             );
 
             // Debug: Log successful upload
@@ -2047,9 +2096,15 @@ export default function MenuPage() {
         if (item) {
           await updateMenuItem(item.id, formDataToSubmit);
           toast.success("Menu item updated successfully!");
+
+          // Refresh menu items to show the updated item instantly
+          await fetchMenuItems();
         } else {
           await addMenuItem(formDataToSubmit);
           toast.success("Menu item added successfully!");
+
+          // Refresh menu items to show the new item instantly
+          await fetchMenuItems();
 
           // Clear localStorage when form is successfully submitted
           clearMenuItemFormProgress();
@@ -2737,16 +2792,20 @@ export default function MenuPage() {
                         <div className="w-16 h-16 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto"></div>
                         <div className="space-y-2">
                           <p className="text-sm font-medium">
-                            Uploading image...
+                            {formState.uploadProgress >= 100
+                              ? "Processing..."
+                              : "Uploading image..."}
                           </p>
                           <div className="w-48 bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${formState.uploadProgress}%` }}
+                              style={{
+                                width: `${Math.min(formState.uploadProgress, 100)}%`,
+                              }}
                             ></div>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            {formState.uploadProgress}%
+                            {Math.min(formState.uploadProgress, 100)}%
                           </p>
                         </div>
                       </div>
@@ -2766,10 +2825,18 @@ export default function MenuPage() {
                     />
                     <div className="absolute inset-0 bg-black/20 rounded-lg flex items-center justify-center">
                       <Badge className="bg-green-600 text-white">
-                        <Upload className="w-3 h-3 mr-1" />
-                        Uploading...
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Upload Complete
                       </Badge>
                     </div>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-green-600 font-medium">
+                      Image uploaded successfully!
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      This preview will disappear in a moment
+                    </p>
                   </div>
                 </div>
               )}
@@ -2933,7 +3000,7 @@ export default function MenuPage() {
     item,
     onEdit,
     onDelete,
-    onDuplicate,
+    onToggleVisibility,
     viewMode = "grid",
     isSelected = false,
     onSelect,
@@ -3024,23 +3091,30 @@ export default function MenuPage() {
                   <Edit className="w-4 h-4" />
                 </motion.div>
               </Button>
-              {onDuplicate && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => onDuplicate(item)}
-                  className="bg-white hover:bg-gray-100 h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
-                  asChild
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => onToggleVisibility(item)}
+                className={cn(
+                  "bg-white hover:bg-gray-100 h-8 w-8 p-0",
+                  item.available
+                    ? "text-green-600 hover:text-green-700"
+                    : "text-gray-600 hover:text-gray-700"
+                )}
+                asChild
+              >
+                <motion.div
+                  variants={buttonHoverVariants}
+                  whileHover="hover"
+                  whileTap="tap"
                 >
-                  <motion.div
-                    variants={buttonHoverVariants}
-                    whileHover="hover"
-                    whileTap="tap"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </motion.div>
-                </Button>
-              )}
+                  {item.available ? (
+                    <Eye className="w-4 h-4" />
+                  ) : (
+                    <EyeOff className="w-4 h-4" />
+                  )}
+                </motion.div>
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -3209,16 +3283,23 @@ export default function MenuPage() {
                     >
                       <Edit className="w-4 h-4" />
                     </Button>
-                    {onDuplicate && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onDuplicate(item)}
-                        className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-gray-200"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onToggleVisibility(item)}
+                      className={cn(
+                        "h-8 w-8 p-0 border-gray-200",
+                        item.available
+                          ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                          : "text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                      )}
+                    >
+                      {item.available ? (
+                        <Eye className="w-4 h-4" />
+                      ) : (
+                        <EyeOff className="w-4 h-4" />
+                      )}
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -3260,6 +3341,42 @@ export default function MenuPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* WebSocket Connection Status */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border">
+                  {isConnected ? (
+                    <>
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      <span className="text-green-700">Live</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-2 h-2 bg-red-500 rounded-full" />
+                      <span className="text-red-700">Offline</span>
+                    </>
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="space-y-1">
+                  <p className="font-medium">Real-time Updates</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isConnected
+                      ? "Connected - Menu will update automatically"
+                      : "Disconnected - Manual refresh required"
+                    }
+                  </p>
+                  {reconnectAttempts > 0 && (
+                    <p className="text-xs text-orange-600">
+                      Reconnection attempts: {reconnectAttempts}
+                    </p>
+                  )}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button
             variant="outline"
             size="sm"
@@ -4015,7 +4132,7 @@ export default function MenuPage() {
                     onDelete={(deletedItem: MenuItem) =>
                       setDeleteConfirmItem(deletedItem)
                     }
-                    onDuplicate={handleDuplicate}
+                    onToggleVisibility={handleToggleVisibility}
                     viewMode={viewMode}
                     isSelected={selectedItems.includes(item.id)}
                     onSelect={handleSelectItem}
@@ -4175,6 +4292,9 @@ export default function MenuPage() {
                     if (deleteConfirmItem) {
                       await removeMenuItem(deleteConfirmItem.id);
                       setDeleteConfirmItem(null);
+
+                      // Refresh menu items to show the updated list instantly
+                      await fetchMenuItems();
                     }
                   }}
                 >
@@ -4628,5 +4748,14 @@ export default function MenuPage() {
         </motion.div>
       )}
     </motion.div>
+  );
+}
+
+// Wrap with error boundary and add connection status
+export default function MenuPageWithErrorBoundary() {
+  return (
+    <MenuErrorBoundary>
+      <MenuPage />
+    </MenuErrorBoundary>
   );
 }

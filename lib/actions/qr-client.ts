@@ -74,7 +74,7 @@ export async function getRestaurantMenu(restaurantId: string) {
       `
       )
       .eq("restaurant_id", restaurantId)
-      .eq("is_active", true)
+      .eq("is_available", true)
       .order("created_at", { ascending: true });
 
     if (error) {
@@ -103,7 +103,7 @@ export async function getRestaurantMenu(restaurantId: string) {
             name: item.name,
             description: item.description,
             price: parseFloat(item.price),
-            image: item.image,
+            image: item.image_url || "/placeholder.svg?height=100&width=100",
             category: categoryName.toLowerCase(),
             available: item.is_available,
             tags: item.tags || [],

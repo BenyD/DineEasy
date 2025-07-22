@@ -25,6 +25,12 @@ interface RestaurantSettings {
   updateRestaurant: (data: Partial<any>) => Promise<void>;
   toggleRestaurantStatus: () => Promise<void>;
   updateNotifications: (settings: any) => Promise<void>;
+
+  // Live update methods for images
+  updateLogo: (logoUrl: string) => void;
+  updateCover: (coverUrl: string) => void;
+  removeLogo: () => void;
+  removeCover: () => void;
 }
 
 export const useRestaurantSettings = create<RestaurantSettings>((set, get) => ({
@@ -231,6 +237,55 @@ export const useRestaurantSettings = create<RestaurantSettings>((set, get) => ({
       console.error("Error updating notifications:", error);
       toast.error(error.message || "Failed to update notification settings");
       throw error;
+    }
+  },
+
+  // Live update methods for images (no database update, just store update)
+  updateLogo: (logoUrl: string) => {
+    const { restaurant } = get();
+    if (restaurant) {
+      set({
+        restaurant: {
+          ...restaurant,
+          logo_url: logoUrl,
+        },
+      });
+    }
+  },
+
+  updateCover: (coverUrl: string) => {
+    const { restaurant } = get();
+    if (restaurant) {
+      set({
+        restaurant: {
+          ...restaurant,
+          cover_url: coverUrl,
+        },
+      });
+    }
+  },
+
+  removeLogo: () => {
+    const { restaurant } = get();
+    if (restaurant) {
+      set({
+        restaurant: {
+          ...restaurant,
+          logo_url: null,
+        },
+      });
+    }
+  },
+
+  removeCover: () => {
+    const { restaurant } = get();
+    if (restaurant) {
+      set({
+        restaurant: {
+          ...restaurant,
+          cover_url: null,
+        },
+      });
     }
   },
 }));

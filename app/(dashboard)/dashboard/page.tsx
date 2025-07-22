@@ -31,7 +31,6 @@ import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getStripeAccountStatus } from "@/lib/actions/stripe-connect";
-import { checkAndSendWelcomeEmail } from "@/lib/actions/restaurant";
 
 // Add this function at the top level
 const formatTime = (date: Date) => {
@@ -68,7 +67,7 @@ export default function DashboardPage() {
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const router = useRouter();
 
-  // Check Stripe Connect status and welcome email
+  // Check Stripe Connect status
   useEffect(() => {
     const checkStripeStatus = async () => {
       try {
@@ -95,29 +94,6 @@ export default function DashboardPage() {
         if (result.status === "not_connected") {
           setShowStripeReminder(true);
           setStripeStatus("not_connected");
-        }
-
-        // Check and send welcome email if needed
-        try {
-          console.log("🔍 Checking welcome email status on dashboard load...");
-          const welcomeEmailResult = await checkAndSendWelcomeEmail(
-            restaurant.id
-          );
-
-          if (welcomeEmailResult.emailSent) {
-            console.log("✅ Welcome email sent from dashboard check");
-          } else if (welcomeEmailResult.reason) {
-            console.log(
-              "ℹ️ Welcome email not sent:",
-              welcomeEmailResult.reason
-            );
-          }
-        } catch (welcomeEmailError) {
-          console.error(
-            "❌ Error checking welcome email on dashboard:",
-            welcomeEmailError
-          );
-          // Don't block the dashboard if welcome email check fails
         }
       } catch (error) {
         console.error("Error checking Stripe status:", error);

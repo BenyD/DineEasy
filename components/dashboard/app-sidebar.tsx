@@ -68,6 +68,7 @@ import {
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSidebarData } from "@/hooks/useSidebarData";
+import { setSidebarRefreshCallback } from "@/lib/actions/profile-client";
 
 // Mock data for notifications (can be replaced with real data later)
 const notifications = [
@@ -269,11 +270,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
 
   // Use real-time data from the hook
-  const { restaurant, user, isLoading, error } = useSidebarData();
+  const { restaurant, user, isLoading, error, refreshUserData } =
+    useSidebarData();
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Register refresh callback for profile updates
+  React.useEffect(() => {
+    setSidebarRefreshCallback(refreshUserData);
+
+    // Cleanup on unmount
+    return () => {
+      setSidebarRefreshCallback(() => {});
+    };
+  }, [refreshUserData]);
 
   const isActive = (href: string) => {
     // Special case for Dashboard - only active when exactly /dashboard
@@ -364,27 +376,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     </SidebarGroup>
   );
 
-  if (!mounted) {
-    return null;
-  }
-
   // Show loading state
-  if (isLoading) {
+  if (!mounted || isLoading) {
     return (
       <>
         <Sidebar {...props}>
           <SidebarHeader className="border-b">
             <div className="p-4">
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="h-14 w-14 rounded-xl bg-gray-100 flex items-center justify-center animate-pulse">
-                    <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-                  </div>
-                </div>
-                <div className="flex-1">
+                <div className="h-14 w-14 rounded-xl bg-gray-100 animate-pulse"></div>
+                <div className="flex-1 min-w-0">
                   <div className="h-4 bg-gray-100 rounded animate-pulse mb-2"></div>
                   <div className="h-3 bg-gray-100 rounded animate-pulse w-16"></div>
-                  <div className="h-3 bg-gray-100 rounded animate-pulse w-24 mt-2"></div>
                 </div>
               </div>
             </div>
@@ -407,8 +410,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     );
   }
 
-  // Show error state
-  if (error || !restaurant || !user) {
+  // Show error state only when there's an actual error and we're not loading
+  if (error && !isLoading) {
     return (
       <>
         <Sidebar {...props}>
@@ -423,6 +426,41 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </div>
             </div>
           </SidebarHeader>
+        </Sidebar>
+        <MobileMenuButton />
+      </>
+    );
+  }
+
+  // Show the actual sidebar content
+  // Only render if we have both restaurant and user data
+  if (!restaurant || !user) {
+    return (
+      <>
+        <Sidebar {...props}>
+          <SidebarHeader className="border-b">
+            <div className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-14 w-14 rounded-xl bg-gray-100 animate-pulse"></div>
+                <div className="flex-1 min-w-0">
+                  <div className="h-4 bg-gray-100 rounded animate-pulse mb-2"></div>
+                  <div className="h-3 bg-gray-100 rounded animate-pulse w-16"></div>
+                </div>
+              </div>
+            </div>
+          </SidebarHeader>
+          <SidebarContent>
+            <div className="p-4">
+              <div className="space-y-2">
+                {[...Array(8)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-8 bg-gray-100 rounded animate-pulse"
+                  ></div>
+                ))}
+              </div>
+            </div>
+          </SidebarContent>
         </Sidebar>
         <MobileMenuButton />
       </>
