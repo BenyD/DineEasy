@@ -1,6 +1,10 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import {
+  getRateLimitConfig,
+  createRateLimit,
+} from "@/lib/middleware/rate-limit";
 
 // Define public routes that don't require authentication
 const publicRoutes = [
@@ -21,6 +25,13 @@ const publicRoutes = [
 
 // Define onboarding routes that should be accessible during onboarding
 const onboardingRoutes = ["/setup", "/select-plan", "/setup/connect"];
+
+// Define health check routes that should bypass rate limiting
+const healthCheckRoutes = [
+  "/api/health",
+  "/api/health/live",
+  "/api/health/ready",
+];
 
 export async function middleware(request: NextRequest) {
   const res = NextResponse.next();
@@ -53,6 +64,22 @@ export async function middleware(request: NextRequest) {
   );
 
   try {
+    // Apply rate limiting for API routes (except health checks)
+    if (
+      request.nextUrl.pathname.startsWith("/api/") &&
+      !healthCheckRoutes.some((route) =>
+        request.nextUrl.pathname.startsWith(route)
+      )
+    ) {
+      const rateLimitConfig = getRateLimitConfig(request.nextUrl.pathname);
+      const rateLimiter = createRateLimit(rateLimitConfig);
+
+      const rateLimitResponse = await rateLimiter(request);
+      if (rateLimitResponse) {
+        return rateLimitResponse;
+      }
+    }
+
     // Check if it's a public route
     if (
       publicRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
@@ -62,6 +89,15 @@ export async function middleware(request: NextRequest) {
 
     // Allow QR client routes without auth
     if (request.nextUrl.pathname.startsWith("/qr/")) {
+      return res;
+    }
+
+    // Allow health check routes without auth
+    if (
+      healthCheckRoutes.some((route) =>
+        request.nextUrl.pathname.startsWith(route)
+      )
+    ) {
       return res;
     }
 
@@ -104,83 +140,26 @@ export async function middleware(request: NextRequest) {
     // Get user's current onboarding status
     const onboardingStatus = await getOnboardingStatus(supabase);
 
-    // If user is on an onboarding route but shouldn't be there, redirect them
-    if (
-      onboardingRoutes.some((route) =>
-        request.nextUrl.pathname.startsWith(route)
-      )
-    ) {
-      const currentRoute = request.nextUrl.pathname;
-      let shouldRedirect = false;
-      let redirectTo = "";
+    // Check if user is on onboarding routes
+    const isOnboardingRoute = onboardingRoutes.some((route) =>
+      request.nextUrl.pathname.startsWith(route)
+    );
 
-      // Check if user is on the wrong onboarding step
-      if (onboardingStatus.step === "auth") {
-        shouldRedirect = true;
-        redirectTo = "/login";
-      } else if (
-        onboardingStatus.step === "setup" &&
-        !currentRoute.startsWith("/setup")
-      ) {
-        shouldRedirect = true;
-        redirectTo = "/setup";
-      } else if (
-        onboardingStatus.step === "select-plan" &&
-        !currentRoute.startsWith("/select-plan")
-      ) {
-        shouldRedirect = true;
-        redirectTo = "/select-plan";
-      } else if (
-        onboardingStatus.step === "connect-stripe" &&
-        !currentRoute.startsWith("/setup/connect")
-      ) {
-        shouldRedirect = true;
-        redirectTo = "/setup/connect";
-      } else if (
-        onboardingStatus.step === "complete" &&
-        onboardingRoutes.some((route) => currentRoute.startsWith(route))
-      ) {
-        shouldRedirect = true;
-        redirectTo = "/dashboard";
-      }
-
-      if (shouldRedirect) {
-        return NextResponse.redirect(new URL(redirectTo, request.url));
-      }
+    // If user is on onboarding route but has completed onboarding, redirect to dashboard
+    if (isOnboardingRoute && onboardingStatus.completed) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
 
-    // If user is trying to access dashboard but hasn't completed onboarding
-    if (
-      request.nextUrl.pathname.startsWith("/dashboard") &&
-      onboardingStatus.step !== "complete"
-    ) {
-      let redirectTo = "";
-      switch (onboardingStatus.step) {
-        case "auth":
-          redirectTo = "/login";
-          break;
-        case "setup":
-          redirectTo = "/setup";
-          break;
-        case "select-plan":
-          redirectTo = "/select-plan";
-          break;
-        case "connect-stripe":
-          redirectTo = "/setup/connect";
-          break;
-        default:
-          redirectTo = "/login";
-      }
-      return NextResponse.redirect(new URL(redirectTo, request.url));
+    // If user is not on onboarding route but hasn't completed onboarding, redirect to setup
+    if (!isOnboardingRoute && !onboardingStatus.completed) {
+      return NextResponse.redirect(new URL("/setup", request.url));
     }
 
     return res;
   } catch (error) {
     console.error("Middleware error:", error);
-    // On any error, redirect to login but preserve the intended URL
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
+    // On error, redirect to login for safety
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 }
 
@@ -191,9 +170,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public (public files)
-     * - api/webhooks (webhook endpoints)
+     * - public folder
      */
-    "/((?!_next/static|_next/image|favicon.ico|public|api/webhooks).*)",
+    "/((?!_next/static|_next/image|favicon.ico|public/).*)",
   ],
 };

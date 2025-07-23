@@ -50,6 +50,7 @@ export default function PaymentReturnPage() {
     type: "unknown",
     message: "Processing your payment...",
   });
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // Function to verify webhook processing
   const verifyWebhookProcessing = async (
@@ -69,6 +70,14 @@ export default function PaymentReturnPage() {
         return false;
       }
 
+      console.log(
+        `🔍 Verifying webhook processing (attempt ${retryCount + 1}/4):`,
+        {
+          sessionId,
+          userId: user.id,
+        }
+      );
+
       // Check if subscription was created/updated in database
       const { data: restaurant, error: restaurantError } = await supabase
         .from("restaurants")
@@ -76,13 +85,15 @@ export default function PaymentReturnPage() {
           `
           id,
           subscription_status,
+          stripe_customer_id,
           subscriptions (
             id,
             stripe_subscription_id,
             plan,
             interval,
             status,
-            created_at
+            created_at,
+            updated_at
           )
         `
         )
@@ -94,32 +105,226 @@ export default function PaymentReturnPage() {
         return false;
       }
 
-      // Check if we have an active subscription
-      const hasActiveSubscription =
-        restaurant.subscriptions &&
-        restaurant.subscriptions.some(
-          (sub: any) => sub.status === "active" || sub.status === "trialing"
+      console.log("📊 Restaurant data found:", {
+        restaurantId: restaurant.id,
+        subscriptionStatus: restaurant.subscription_status,
+        stripeCustomerId: restaurant.stripe_customer_id,
+        subscriptionCount: restaurant.subscriptions?.length || 0,
+      });
+
+      // Check if we have any subscription records
+      if (restaurant.subscriptions && restaurant.subscriptions.length > 0) {
+        console.log(
+          "📋 Subscriptions found:",
+          restaurant.subscriptions.map((sub: any) => ({
+            id: sub.id,
+            stripeId: sub.stripe_subscription_id,
+            status: sub.status,
+            plan: sub.plan,
+            interval: sub.interval,
+            createdAt: sub.created_at,
+            updatedAt: sub.updated_at,
+          }))
         );
 
-      if (hasActiveSubscription) {
-        console.log("Webhook processing verified successfully");
+        // Check for valid subscription statuses (expanded list)
+        const validStatuses = [
+          "active",
+          "trialing",
+          "past_due",
+          "incomplete",
+          "incomplete_expired",
+        ];
+        const hasValidSubscription = restaurant.subscriptions.some((sub: any) =>
+          validStatuses.includes(sub.status)
+        );
+
+        if (hasValidSubscription) {
+          console.log(
+            "✅ Webhook processing verified successfully - valid subscription found"
+          );
+          return true;
+        } else {
+          console.log(
+            "⚠️ Subscriptions found but none have valid status:",
+            restaurant.subscriptions.map((sub: any) => sub.status)
+          );
+        }
+      } else {
+        console.log("📭 No subscriptions found in database yet");
+      }
+
+      // Check restaurant subscription status as fallback
+      if (
+        restaurant.subscription_status &&
+        validStatuses.includes(restaurant.subscription_status)
+      ) {
+        console.log(
+          "✅ Webhook processing verified via restaurant subscription status:",
+          restaurant.subscription_status
+        );
         return true;
       }
 
       // If not found and we haven't exceeded retries, wait and retry
       if (retryCount < 3) {
+        const waitTime = Math.pow(2, retryCount + 1) * 1000; // Exponential backoff: 2s, 4s, 8s
         console.log(
-          `Webhook not processed yet, retrying in 2 seconds... (attempt ${retryCount + 1})`
+          `⏳ Webhook not processed yet, retrying in ${waitTime / 1000} seconds... (attempt ${retryCount + 1}/4)`
         );
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
         return verifyWebhookProcessing(sessionId, retryCount + 1);
       }
 
-      console.error("Webhook processing verification failed after retries");
+      console.error(
+        "❌ Webhook processing verification failed after all retries"
+      );
       return false;
     } catch (error) {
-      console.error("Error verifying webhook processing:", error);
+      console.error("❌ Error verifying webhook processing:", error);
       return false;
+    }
+  };
+
+  // Enhanced verification function that also checks Stripe directly
+  const enhancedVerifyWebhookProcessing = async (
+    sessionId: string,
+    retryCount = 0
+  ): Promise<{ success: boolean; reason: string; stripeData?: any }> => {
+    try {
+      const supabase = createClient();
+
+      // Get current user
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) {
+        return { success: false, reason: "User not authenticated" };
+      }
+
+      console.log(`🔍 Enhanced verification (attempt ${retryCount + 1}/4):`, {
+        sessionId,
+        userId: user.id,
+      });
+
+      // First, check database
+      const { data: restaurant, error: restaurantError } = await supabase
+        .from("restaurants")
+        .select(
+          `
+          id,
+          subscription_status,
+          stripe_customer_id,
+          subscriptions (
+            id,
+            stripe_subscription_id,
+            plan,
+            interval,
+            status,
+            created_at,
+            updated_at
+          )
+        `
+        )
+        .eq("owner_id", user.id)
+        .single();
+
+      if (restaurantError) {
+        return { success: false, reason: "Error fetching restaurant data" };
+      }
+
+      // Check database first
+      const validStatuses = [
+        "active",
+        "trialing",
+        "past_due",
+        "incomplete",
+        "incomplete_expired",
+      ];
+
+      if (restaurant.subscriptions && restaurant.subscriptions.length > 0) {
+        const hasValidSubscription = restaurant.subscriptions.some((sub: any) =>
+          validStatuses.includes(sub.status)
+        );
+
+        if (hasValidSubscription) {
+          return {
+            success: true,
+            reason: "Valid subscription found in database",
+            stripeData: restaurant.subscriptions,
+          };
+        }
+      }
+
+      // Check restaurant subscription status
+      if (
+        restaurant.subscription_status &&
+        validStatuses.includes(restaurant.subscription_status)
+      ) {
+        return {
+          success: true,
+          reason: "Valid subscription status found in restaurant record",
+          stripeData: { status: restaurant.subscription_status },
+        };
+      }
+
+      // If we have a session ID, try to check Stripe directly and sync if needed
+      if (sessionId && retryCount >= 1) {
+        // Check Stripe on retry attempts
+        try {
+          console.log("🔍 Checking Stripe directly for session:", sessionId);
+
+          // Make a server-side call to check the session and sync if needed
+          const response = await fetch("/api/stripe/check-session", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              sessionId,
+              syncToDatabase: true, // Flag to sync subscription to database
+              restaurantId: restaurant.id,
+            }),
+          });
+
+          if (response.ok) {
+            const stripeData = await response.json();
+            if (stripeData.success) {
+              return {
+                success: true,
+                reason: stripeData.synced
+                  ? "Subscription synced from Stripe"
+                  : "Session verified with Stripe",
+                stripeData: stripeData.data,
+              };
+            } else if (stripeData.error) {
+              console.log("Stripe check failed:", stripeData.error);
+            }
+          }
+        } catch (stripeError) {
+          console.error("Error checking Stripe directly:", stripeError);
+        }
+      }
+
+      // If not found and we haven't exceeded retries, wait and retry
+      if (retryCount < 3) {
+        const waitTime = Math.pow(2, retryCount + 1) * 1000;
+        console.log(`⏳ Waiting ${waitTime / 1000}s before retry...`);
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+        return enhancedVerifyWebhookProcessing(sessionId, retryCount + 1);
+      }
+
+      return {
+        success: false,
+        reason: "Verification failed after all retries",
+      };
+    } catch (error) {
+      console.error("❌ Error in enhanced verification:", error);
+      return {
+        success: false,
+        reason: "Verification error: " + (error as Error).message,
+      };
     }
   };
 
@@ -189,24 +394,46 @@ export default function PaymentReturnPage() {
 
             // Verify webhook processing
             if (sessionId) {
-              const webhookVerified = await verifyWebhookProcessing(sessionId);
+              console.log(
+                "🔍 Starting initial webhook verification for session:",
+                sessionId
+              );
 
-              if (webhookVerified) {
+              const verificationResult =
+                await enhancedVerifyWebhookProcessing(sessionId);
+
+              console.log(
+                "📊 Initial verification result:",
+                verificationResult
+              );
+
+              if (verificationResult.success) {
+                console.log(
+                  "✅ Initial verification successful:",
+                  verificationResult.reason
+                );
+
                 status = {
                   ...status,
                   status: "success",
-                  message: isTrialUpgradePayment
-                    ? "Your plan has been upgraded successfully! Your trial period continues unchanged."
-                    : isUpgradePayment
-                      ? "Your plan has been upgraded successfully!"
-                      : "Your subscription has been created successfully!",
+                  message: verificationResult.reason.includes("synced")
+                    ? "Your subscription has been successfully synced from Stripe! Your payment was processed correctly."
+                    : isTrialUpgradePayment
+                      ? "Your plan has been upgraded successfully! Your trial period continues unchanged."
+                      : isUpgradePayment
+                        ? "Your plan has been upgraded successfully!"
+                        : "Your subscription has been created successfully!",
                 };
               } else {
+                console.log(
+                  "❌ Initial verification failed:",
+                  verificationResult.reason
+                );
+
                 status = {
                   ...status,
                   status: "failed",
-                  message:
-                    "Payment was processed but there was an issue setting up your subscription. Please contact support.",
+                  message: `Payment was processed but there was an issue setting up your subscription: ${verificationResult.reason}. Please try retry verification or contact support.`,
                   error: "webhook_processing_failed",
                 };
               }
@@ -370,14 +597,138 @@ export default function PaymentReturnPage() {
     }
   };
 
-  const handleRetry = () => {
+  const handleRetry = async () => {
+    setIsRetrying(true);
     setPaymentStatus((prev) => ({
       ...prev,
-      status: "loading",
+      status: "verifying",
       message: "Retrying payment verification...",
+      retryCount: (prev.retryCount || 0) + 1,
     }));
-    // Re-process the payment return
-    window.location.reload();
+
+    try {
+      // Get the session ID from URL params
+      const sessionId = searchParams.get("session_id");
+
+      if (sessionId) {
+        console.log("🔄 Starting retry verification for session:", sessionId);
+
+        // Retry webhook verification with enhanced function
+        const verificationResult =
+          await enhancedVerifyWebhookProcessing(sessionId);
+
+        console.log("📊 Verification result:", verificationResult);
+
+        if (verificationResult.success) {
+          console.log(
+            "✅ Retry verification successful:",
+            verificationResult.reason
+          );
+
+          setPaymentStatus((prev) => ({
+            ...prev,
+            status: "success",
+            message: verificationResult.reason.includes("synced")
+              ? "Your subscription has been successfully synced from Stripe! Your payment was processed correctly."
+              : prev.type === "trial_upgrade"
+                ? "Your plan has been upgraded successfully! Your trial period continues unchanged."
+                : prev.type === "plan_upgrade"
+                  ? "Your plan has been upgraded successfully!"
+                  : "Your subscription has been created successfully!",
+          }));
+
+          toast.success(
+            verificationResult.reason.includes("synced")
+              ? "Subscription synced successfully!"
+              : "Payment verification successful!"
+          );
+
+          // Auto-redirect after success
+          setTimeout(() => {
+            if (paymentStatus.type === "new_subscription") {
+              router.push("/setup/connect");
+            } else {
+              router.push("/dashboard/billing");
+            }
+          }, 3000);
+        } else {
+          console.log(
+            "❌ Retry verification failed:",
+            verificationResult.reason
+          );
+
+          setPaymentStatus((prev) => ({
+            ...prev,
+            status: "failed",
+            message: `Verification failed: ${verificationResult.reason}. Please try again or contact support.`,
+            error: "verification_failed",
+          }));
+          toast.error("Verification failed. Please try again.");
+        }
+      } else {
+        console.log("⚠️ No session ID found, redirecting to billing");
+        // No session ID, redirect to billing to retry payment
+        router.push("/dashboard/billing");
+      }
+    } catch (error) {
+      console.error("❌ Error during retry:", error);
+      setPaymentStatus((prev) => ({
+        ...prev,
+        status: "failed",
+        message: "An error occurred during retry. Please try again.",
+        error: "retry_error",
+      }));
+      toast.error("Retry failed. Please try again.");
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  const handleTryAgain = async () => {
+    setIsRetrying(true);
+
+    try {
+      // Get the current URL parameters to preserve them
+      const currentParams = new URLSearchParams(searchParams.toString());
+
+      // Determine where to redirect based on the error type
+      if (
+        paymentStatus.error === "webhook_processing_failed" ||
+        paymentStatus.error === "verification_failed"
+      ) {
+        // For webhook/verification issues, try the same payment flow again
+        const sessionId = searchParams.get("session_id");
+        if (sessionId) {
+          // Retry the same session
+          await handleRetry();
+          return; // handleRetry will handle the state
+        } else {
+          // Go to billing to retry
+          router.push("/dashboard/billing");
+        }
+      } else if (paymentStatus.error === "payment_failed") {
+        // For payment failures, go back to the payment page
+        const returnUrl =
+          searchParams.get("return_url") || "/dashboard/billing";
+        router.push(returnUrl);
+      } else {
+        // For unknown errors, go to billing
+        router.push("/dashboard/billing");
+      }
+    } catch (error) {
+      console.error("Error in try again:", error);
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  const handleGoToBilling = () => {
+    router.push("/dashboard/billing");
+  };
+
+  const handleGoToDashboard = () => {
+    router.push("/dashboard");
   };
 
   return (
@@ -422,6 +773,25 @@ export default function PaymentReturnPage() {
                 transition={{ delay: 0.4 }}
                 className="space-y-4"
               >
+                {/* Success Message */}
+                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <span className="font-semibold text-green-800">
+                      {paymentStatus.type === "trial_upgrade"
+                        ? "Plan Upgraded Successfully!"
+                        : paymentStatus.type === "plan_upgrade"
+                          ? "Plan Upgraded Successfully!"
+                          : paymentStatus.type === "trial_end_payment"
+                            ? "Billing Started Successfully!"
+                            : "Payment Successful!"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-green-700">
+                    {paymentStatus.message}
+                  </p>
+                </div>
+
                 {/* Plan Information */}
                 {paymentStatus.plan && (
                   <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
@@ -433,7 +803,7 @@ export default function PaymentReturnPage() {
                         Plan
                       </span>
                     </div>
-                    <div className="text-sm text-green-700">
+                    <div className="text-sm text-green-700 text-center">
                       <p>
                         {paymentStatus.interval === "monthly"
                           ? "Monthly"
@@ -460,7 +830,7 @@ export default function PaymentReturnPage() {
                           : `${paymentStatus.trialDays || 14}-Day Free Trial`}
                       </span>
                     </div>
-                    <p className="text-sm text-blue-700">
+                    <p className="text-sm text-blue-700 text-center">
                       {paymentStatus.type === "trial_upgrade"
                         ? "Your trial period continues unchanged. No charges until your trial ends."
                         : "Your trial period is now active. No charges until your trial ends."}
@@ -477,7 +847,7 @@ export default function PaymentReturnPage() {
                         Trial Ended - Billing Active
                       </span>
                     </div>
-                    <p className="text-sm text-purple-700">
+                    <p className="text-sm text-purple-700 text-center">
                       Your trial period has ended and regular billing has
                       started. You'll be charged {paymentStatus.currency} for
                       your {paymentStatus.plan} plan.
@@ -496,7 +866,7 @@ export default function PaymentReturnPage() {
                           Plan Upgrade Complete
                         </span>
                       </div>
-                      <p className="text-sm text-orange-700">
+                      <p className="text-sm text-orange-700 text-center">
                         Your new plan is now active. You'll be charged at your
                         next billing cycle.
                       </p>
@@ -547,7 +917,7 @@ export default function PaymentReturnPage() {
 
                 {/* Redirect Message */}
                 <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 text-center">
                     {paymentStatus.type === "new_subscription"
                       ? "You will be redirected to the next setup step in a few seconds..."
                       : paymentStatus.type === "plan_upgrade" ||
@@ -564,7 +934,7 @@ export default function PaymentReturnPage() {
                     <>
                       <Button
                         onClick={() => router.push("/setup/connect")}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg"
+                        className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg font-semibold"
                       >
                         <CreditCard className="mr-2 h-5 w-5" />
                         Continue to Next Step
@@ -574,7 +944,7 @@ export default function PaymentReturnPage() {
                       <Button
                         onClick={() => router.push("/dashboard")}
                         variant="outline"
-                        className="w-full"
+                        className="w-full h-11"
                       >
                         Go to Dashboard
                       </Button>
@@ -585,7 +955,7 @@ export default function PaymentReturnPage() {
                     <>
                       <Button
                         onClick={() => router.push("/dashboard/billing")}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg"
+                        className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg font-semibold"
                       >
                         <CreditCard className="mr-2 h-5 w-5" />
                         View Billing Details
@@ -595,7 +965,7 @@ export default function PaymentReturnPage() {
                       <Button
                         onClick={() => router.push("/dashboard")}
                         variant="outline"
-                        className="w-full"
+                        className="w-full h-11"
                       >
                         Continue to Dashboard
                       </Button>
@@ -604,7 +974,7 @@ export default function PaymentReturnPage() {
                     <>
                       <Button
                         onClick={() => router.push("/dashboard")}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg"
+                        className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg font-semibold"
                       >
                         <CreditCard className="mr-2 h-5 w-5" />
                         Go to Dashboard
@@ -614,7 +984,7 @@ export default function PaymentReturnPage() {
                       <Button
                         onClick={() => router.push("/dashboard/billing")}
                         variant="outline"
-                        className="w-full"
+                        className="w-full h-11"
                       >
                         View Billing
                       </Button>
@@ -634,59 +1004,173 @@ export default function PaymentReturnPage() {
                 {/* Error Details */}
                 {paymentStatus.error && (
                   <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle className="h-4 w-4 text-red-600" />
-                      <span className="font-medium text-red-800">
-                        Error Details
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertTriangle className="h-5 w-5 text-red-600" />
+                      <span className="font-semibold text-red-800">
+                        What happened?
                       </span>
+                      {paymentStatus.retryCount &&
+                        paymentStatus.retryCount > 0 && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs bg-red-100 text-red-700 border-red-300"
+                          >
+                            Attempt {paymentStatus.retryCount}/3
+                          </Badge>
+                        )}
                     </div>
-                    <p className="text-sm text-red-700">
-                      {paymentStatus.error === "webhook_processing_failed"
-                        ? "Payment was processed but there was an issue setting up your subscription. Our team has been notified."
-                        : paymentStatus.error === "payment_failed"
-                          ? "The payment was not completed. Please check your payment method and try again."
-                          : "An unexpected error occurred. Please contact support for assistance."}
-                    </p>
+
+                    <div className="space-y-2">
+                      <p className="text-sm text-red-700">
+                        {paymentStatus.error === "webhook_processing_failed"
+                          ? "Your payment was successful, but we're having trouble setting up your subscription. We'll try to sync it from Stripe automatically."
+                          : paymentStatus.error === "verification_failed"
+                            ? "We couldn't verify your payment was processed correctly. We'll attempt to sync your subscription from Stripe."
+                            : paymentStatus.error === "retry_error"
+                              ? "Something went wrong while trying to verify your payment. Please try again."
+                              : paymentStatus.error === "payment_failed"
+                                ? "Your payment wasn't completed. Please check your payment method and try again."
+                                : "An unexpected error occurred. Please try again or contact support."}
+                      </p>
+
+                      <p className="text-xs text-red-600">
+                        {paymentStatus.error === "webhook_processing_failed" ||
+                        paymentStatus.error === "verification_failed"
+                          ? "💡 Tip: We'll automatically sync your subscription from Stripe if it exists there."
+                          : paymentStatus.error === "payment_failed"
+                            ? "💡 Tip: Make sure your card has sufficient funds and try again."
+                            : "💡 Tip: If this persists, please contact our support team."}
+                      </p>
+                    </div>
+
+                    {/* Debug Information */}
+                    {process.env.NODE_ENV === "development" && (
+                      <details className="mt-3">
+                        <summary className="text-xs text-red-600 cursor-pointer hover:text-red-700 font-medium">
+                          Debug Information
+                        </summary>
+                        <div className="mt-2 p-2 bg-red-100 rounded text-xs text-red-800 font-mono">
+                          <div>
+                            Session ID:{" "}
+                            {searchParams.get("session_id") || "N/A"}
+                          </div>
+                          <div>
+                            Payment Intent:{" "}
+                            {searchParams.get("payment_intent") || "N/A"}
+                          </div>
+                          <div>
+                            Redirect Status:{" "}
+                            {searchParams.get("redirect_status") || "N/A"}
+                          </div>
+                          <div>Plan: {searchParams.get("plan") || "N/A"}</div>
+                          <div>
+                            Interval: {searchParams.get("interval") || "N/A"}
+                          </div>
+                          <div>
+                            Upgraded: {searchParams.get("upgraded") || "N/A"}
+                          </div>
+                          <div>
+                            Trial Preserved:{" "}
+                            {searchParams.get("trial_preserved") || "N/A"}
+                          </div>
+                        </div>
+                      </details>
+                    )}
                   </div>
                 )}
 
                 <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                  <p className="text-sm text-red-700">
+                  <p className="text-sm text-red-700 text-center">
                     Don't worry! You can try again or contact our support team
                     for assistance.
                   </p>
                 </div>
 
                 <div className="space-y-3">
-                  {paymentStatus.error === "webhook_processing_failed" && (
-                    <Button
-                      onClick={handleRetry}
-                      className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-                    >
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Retry Verification
-                    </Button>
-                  )}
+                  {/* Show retry limit message if reached */}
+                  {paymentStatus.retryCount &&
+                    paymentStatus.retryCount >= 3 && (
+                      <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200 mb-3">
+                        <p className="text-sm text-yellow-700 text-center">
+                          Maximum retry attempts reached. Please contact support
+                          for assistance.
+                        </p>
+                      </div>
+                    )}
 
+                  {/* Primary Action - Smart retry based on error type */}
                   <Button
-                    onClick={() => router.back()}
-                    variant="outline"
-                    className="w-full"
+                    onClick={handleTryAgain}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-lg font-semibold"
+                    disabled={
+                      isRetrying ||
+                      (paymentStatus.retryCount &&
+                        paymentStatus.retryCount >= 3)
+                    }
                   >
-                    Try Again
+                    {isRetrying ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-5 w-5" />
+                        {paymentStatus.error === "webhook_processing_failed" ||
+                        paymentStatus.error === "verification_failed"
+                          ? "Retry Verification"
+                          : paymentStatus.error === "payment_failed"
+                            ? "Try Payment Again"
+                            : "Try Again"}
+                      </>
+                    )}
                   </Button>
 
+                  {/* Contact Support when retry limit reached */}
+                  {paymentStatus.retryCount &&
+                    paymentStatus.retryCount >= 3 && (
+                      <Button
+                        onClick={() => {
+                          const subject = encodeURIComponent(
+                            "Payment Verification Issue - Support Needed"
+                          );
+                          const body = encodeURIComponent(`Hi DineEasy Support,
+
+I'm experiencing issues with payment verification on my account. Here are the details:
+
+- Error: ${paymentStatus.error}
+- Retry attempts: ${paymentStatus.retryCount}
+- Session ID: ${searchParams.get("session_id") || "N/A"}
+- Payment Intent: ${searchParams.get("payment_intent") || "N/A"}
+
+Please help me resolve this issue.
+
+Thank you.`);
+                          window.open(
+                            `mailto:support@dineeasy.ch?subject=${subject}&body=${body}`
+                          );
+                        }}
+                        className="w-full bg-orange-600 hover:bg-orange-700 text-white h-11"
+                      >
+                        Contact Support
+                      </Button>
+                    )}
+
+                  {/* Secondary Action - Go to Billing */}
                   <Button
-                    onClick={() => router.push("/dashboard/billing")}
-                    className="w-full"
+                    onClick={handleGoToBilling}
+                    variant="outline"
+                    className="w-full h-11"
                   >
+                    <CreditCard className="mr-2 h-4 w-4" />
                     Go to Billing
                   </Button>
 
+                  {/* Tertiary Action - Go to Dashboard */}
                   <Button
-                    onClick={() => router.push("/dashboard")}
+                    onClick={handleGoToDashboard}
                     variant="ghost"
-                    className="w-full"
+                    className="w-full h-10 text-gray-600 hover:text-gray-800"
                   >
                     Go to Dashboard
                   </Button>

@@ -519,6 +519,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       restaurant.subscription_plan.slice(1).toLowerCase()}
                   </Badge>
                 )}
+
+                {/* Pending Subscription Badge */}
+                {!restaurant.subscription_plan && (
+                  <Badge
+                    variant="outline"
+                    className="absolute -bottom-1 -right-1 h-5 px-1.5 bg-yellow-50 border-yellow-200 text-yellow-700 text-xs font-medium shadow-sm"
+                  >
+                    Pending
+                  </Badge>
+                )}
                 {/* Status Indicator */}
                 <div
                   className={cn(

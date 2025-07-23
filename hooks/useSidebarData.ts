@@ -91,9 +91,42 @@ export function useSidebarData(): SidebarData {
           : false;
         const isOpen = manualStatus !== null ? manualStatus : autoStatus;
 
-        // Get subscription plan
-        const subscriptionPlan =
-          storeRestaurant?.subscriptions?.[0]?.plan || "Starter";
+        // Get subscription plan - only show actual subscription plans, not defaults
+        let subscriptionPlan = null;
+        if (
+          storeRestaurant?.subscriptions &&
+          storeRestaurant.subscriptions.length > 0
+        ) {
+          // Get the most recent active subscription
+          const activeSubscription = storeRestaurant.subscriptions
+            .filter((sub: any) =>
+              [
+                "active",
+                "trialing",
+                "past_due",
+                "incomplete",
+                "incomplete_expired",
+              ].includes(sub.status)
+            )
+            .sort(
+              (a: any, b: any) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime()
+            )[0];
+
+          if (activeSubscription) {
+            subscriptionPlan = activeSubscription.plan;
+          }
+        }
+
+        // Only show subscription plan if we have a valid subscription
+        // Don't default to "Starter" when there's no actual subscription
+        if (
+          !subscriptionPlan &&
+          storeRestaurant?.subscription_status === "pending"
+        ) {
+          subscriptionPlan = null; // Don't show any plan for pending status
+        }
 
         console.log("✅ Sidebar data fetched successfully:", {
           restaurant: storeRestaurant?.name,
