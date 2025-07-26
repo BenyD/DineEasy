@@ -563,10 +563,21 @@ export async function getMenuItemsPaginated({
         // Parse preparation time from interval
         let preparationTime = 0;
         if (item.preparation_time) {
-          const timeStr = item.preparation_time.toString();
-          const match = timeStr.match(/(\d+) minutes?/);
-          if (match) {
-            preparationTime = parseInt(match[1]);
+          // If it's a string like '00:15:00'
+          if (typeof item.preparation_time === "string") {
+            const parts = item.preparation_time.split(":");
+            if (parts.length === 3) {
+              preparationTime =
+                parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+            }
+          }
+          // If it's an object (e.g., { minutes: 15 })
+          else if (
+            typeof item.preparation_time === "object" &&
+            item.preparation_time !== null &&
+            "minutes" in item.preparation_time
+          ) {
+            preparationTime = item.preparation_time.minutes;
           }
         }
 
@@ -597,7 +608,12 @@ export async function getMenuItemsPaginated({
           image: imageUrl,
           available: item.is_available,
           preparationTime,
-          allergens: item.allergens?.map((a: any) => a.allergen?.name) || [],
+          allergens:
+            item.allergens?.map((a: any) => ({
+              id: a.allergen?.id,
+              name: a.allergen?.name,
+              icon: a.allergen?.icon || "⚠️",
+            })) || [],
           allergenIds: item.allergens?.map((a: any) => a.allergen?.id) || [],
           popular: item.is_popular || false,
           restaurantId: item.restaurant_id,

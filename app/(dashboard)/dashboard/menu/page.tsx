@@ -740,8 +740,31 @@ export default function MenuPage() {
               isCategoriesLoading || isAllergensLoading
             }
             onSubmit={async (formData) => {
-              // Handle form submission
-              setIsAddDialogOpen(false);
+              try {
+                // Show loading toast
+                const loadingToast = toast.loading("Adding menu item...");
+
+                // Create the menu item
+                const result = await createMenuItem(formData);
+
+                if (result.error) {
+                  toast.error(`Failed to add menu item: ${result.error}`, {
+                    id: loadingToast,
+                  });
+                } else {
+                  // Success - close modal and show success message
+                  setIsAddDialogOpen(false);
+                  toast.success("Menu item added successfully!", {
+                    id: loadingToast,
+                  });
+
+                  // Refresh data to show the new item
+                  await refresh();
+                }
+              } catch (error: any) {
+                console.error("Add menu item error:", error);
+                toast.error("Failed to add menu item. Please try again.");
+              }
             }}
             onAddCategory={async (name: string, description: string) => {
               const formData = new FormData();
@@ -913,142 +936,6 @@ export default function MenuPage() {
       >
         {({ selectedIds, isBulkMode, handleSelectItem }) => (
           <>
-            {/* Custom bulk action buttons */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  if (selectedIds.length > 0) {
-                    openBulkConfirm("delete", selectedIds.length, async () => {
-                      setBulkLoading(true);
-                      const result = await bulkDeleteMenuItems(selectedIds);
-                      setBulkLoading(false);
-                      if (result.error) {
-                        toast.error(result.error);
-                      } else {
-                        const deleted = result.deleted ?? 0;
-                        const errors = result.errors || [];
-                        if (errors.length > 0) {
-                          toast.error(
-                            `Deleted ${deleted} items, ${errors.length} failed. See console for details.`
-                          );
-                          console.error("Bulk delete errors:", errors);
-                        } else {
-                          toast.success(
-                            `Deleted ${deleted} items successfully!`
-                          );
-                        }
-                      }
-                      setSelectedItems(new Set());
-                      await refresh();
-                    });
-                  }
-                }}
-                disabled={bulkLoading || selectedIds.length === 0}
-                className="text-red-600 hover:text-red-700 text-xs"
-              >
-                {bulkLoading ? (
-                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                ) : (
-                  <Trash2 className="w-3 h-3 mr-1" />
-                )}
-                Delete
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  if (selectedIds.length > 0) {
-                    openBulkConfirm("toggle", selectedIds.length, async () => {
-                      setBulkLoading(true);
-                      const first = menuItems.find(
-                        (i) => i.id === selectedIds[0]
-                      );
-                      const newAvailable = first ? !first.available : true;
-                      const result = await bulkToggleAvailability(
-                        selectedIds,
-                        newAvailable
-                      );
-                      setBulkLoading(false);
-                      if (result.error) {
-                        toast.error(result.error);
-                      } else {
-                        const updated = result.updated ?? 0;
-                        const errors = result.errors || [];
-                        if (errors.length > 0) {
-                          toast.error(
-                            `Updated ${updated} items, ${errors.length} failed. See console for details.`
-                          );
-                          console.error("Bulk toggle errors:", errors);
-                        } else {
-                          toast.success(
-                            `Updated ${updated} items successfully!`
-                          );
-                        }
-                      }
-                      setSelectedItems(new Set());
-                      await refresh();
-                    });
-                  }
-                }}
-                disabled={bulkLoading || selectedIds.length === 0}
-                className="text-xs"
-              >
-                {bulkLoading ? (
-                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                ) : (
-                  <Eye className="w-3 h-3 mr-1" />
-                )}
-                Toggle Availability
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={async () => {
-                  if (selectedIds.length !== pagination.total) {
-                    setSelectAllLoading(true);
-                    // Gather current filters
-                    const currentFilters = {
-                      searchTerm: filters.searchTerm,
-                      categoryId:
-                        filters.categoryId !== "all"
-                          ? filters.categoryId
-                          : undefined,
-                      available: filters.available,
-                      popular: filters.popular,
-                      minPrice: filters.minPrice,
-                      maxPrice: filters.maxPrice,
-                    };
-                    const result = await getAllMenuItemIds(currentFilters);
-                    setSelectAllLoading(false);
-                    if (result.error) {
-                      toast.error(result.error);
-                    } else {
-                      setSelectedItems(new Set(result.ids));
-                    }
-                  } else {
-                    setSelectedItems(new Set());
-                  }
-                }}
-                disabled={selectAllLoading || bulkLoading}
-                className="text-xs"
-              >
-                {selectAllLoading ? (
-                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                ) : null}
-                {selectedIds.length !== pagination.total
-                  ? `Select all ${pagination.total} items`
-                  : "Deselect all"}
-              </Button>
-            </div>
-            {selectedIds.length === pagination.total &&
-              pagination.total > 0 && (
-                <Badge className="ml-2 bg-blue-100 text-blue-800">
-                  All {pagination.total} items selected
-                </Badge>
-              )}
-
             {/* Menu Items Grid */}
             <motion.div
               className={cn(

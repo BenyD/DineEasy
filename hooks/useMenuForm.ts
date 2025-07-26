@@ -449,29 +449,29 @@ export function useMenuForm({
 
       try {
         // Start with compression progress
-        setFormState((prev) => ({ ...prev, uploadProgress: 10 }));
+        setFormState((prev) => ({ ...prev, uploadProgress: 5 }));
 
-        // Simulate compression progress
-        const compressionInterval = setInterval(() => {
-          setFormState((prev) => ({
-            ...prev,
-            uploadProgress: Math.min(prev.uploadProgress + 5, 30),
-          }));
-        }, 100);
+        // Simulate compression progress (5% to 35%)
+        for (let i = 5; i <= 35; i += 3) {
+          await new Promise(resolve => setTimeout(resolve, 80));
+          setFormState((prev) => ({ ...prev, uploadProgress: i }));
+        }
 
-        // Simulate upload progress
-        const uploadInterval = setInterval(() => {
-          setFormState((prev) => ({
-            ...prev,
-            uploadProgress: Math.min(prev.uploadProgress + 3, 85),
-          }));
-        }, 150);
+        // Simulate upload progress (35% to 90%)
+        for (let i = 35; i <= 90; i += 2) {
+          await new Promise(resolve => setTimeout(resolve, 120));
+          setFormState((prev) => ({ ...prev, uploadProgress: i }));
+        }
 
         const result = await onUploadImage(file);
 
-        clearInterval(compressionInterval);
-        clearInterval(uploadInterval);
+        // Complete the progress
         setFormState((prev) => ({ ...prev, uploadProgress: 100 }));
+
+        // Keep 100% for a moment before resetting
+        setTimeout(() => {
+          setFormState((prev) => ({ ...prev, uploadProgress: 0 }));
+        }, 500);
 
         if ("error" in result) {
           toast.error(result.error);

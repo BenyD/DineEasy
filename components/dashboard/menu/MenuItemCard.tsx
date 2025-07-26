@@ -209,18 +209,25 @@ export function MenuItemCard({
       <motion.div
         className={cn(
           "group relative",
-          "hover:shadow-xl border border-gray-200/60 relative bg-white/50 backdrop-blur-sm",
-          !item.available && "opacity-75 grayscale",
-          isSelected && "ring-2 ring-green-500 ring-offset-2",
-          "hover:border-green-300/60"
+          "bg-white border-2 border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden",
+          !item.available && "opacity-70 grayscale",
+          isSelected && "ring-2 ring-green-500 ring-offset-2"
         )}
         variants={cardHoverVariants}
         whileHover="hover"
+        onClick={() => {
+          if (showCheckbox && onSelect) {
+            onSelect(item.id, !isSelected);
+          }
+        }}
+        style={{ cursor: showCheckbox ? "pointer" : "default" }}
       >
-        <Card className="overflow-hidden h-full">
+        {/* Image Section */}
+        <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden rounded-t-xl">
+          {/* Checkbox for bulk mode */}
           {showCheckbox && (
             <motion.div
-              className="absolute top-3 left-3 z-10"
+              className="absolute top-3 left-3 z-20"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.2 }}
@@ -230,183 +237,175 @@ export function MenuItemCard({
                 onCheckedChange={(checked) =>
                   onSelect?.(item.id, checked as boolean)
                 }
-                className="bg-white/95 border-2 rounded-md shadow-lg"
+                className="w-5 h-5 bg-white/95 border-2 border-green-500 rounded-md shadow-lg data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 data-[state=checked]:text-white"
               />
             </motion.div>
           )}
 
-          <motion.div
-            className="relative aspect-[4/3] overflow-hidden"
-            whileHover="hover"
-          >
-            {/* Image Loading State */}
-            {imageLoading && (
-              <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-              </div>
+          {/* Status badges */}
+          <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
+            {item.popular && (
+              <Badge className="bg-gradient-to-r from-green-500 to-green-600 text-white border-none shadow-md px-2 py-1 text-xs font-semibold">
+                <Sparkles className="w-3 h-3 mr-1" /> Popular
+              </Badge>
             )}
-
-            {/* Image */}
-            <motion.img
-              src={getImageSrc()}
-              alt={item.name}
+            <Badge
               className={cn(
-                "w-full h-full object-cover transition-opacity duration-300",
-                imageLoading ? "opacity-0" : "opacity-100"
+                "px-2 py-1 text-xs font-semibold border-none shadow-md",
+                item.available
+                  ? "bg-green-100 text-green-700"
+                  : "bg-gray-200 text-gray-500"
               )}
-              variants={imageHoverVariants}
-              onLoad={handleImageLoad}
-              onError={handleImageError}
-            />
-
-            {/* Image Error State */}
-            {imageError && (
-              <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-                <div className="text-center text-gray-500">
-                  <ImageIcon className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-xs">Image unavailable</p>
-                </div>
-              </div>
-            )}
-
-            {/* Status badges */}
-            <motion.div
-              className="absolute top-3 right-3 flex flex-col gap-2"
-              initial={{ opacity: 0, x: 20 }}
-              whileHover={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3 }}
             >
-              {item.popular && (
-                <Badge className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white border-none shadow-lg">
-                  <Sparkles className="w-3 h-3 mr-1" />
-                  Popular
+              {item.available ? (
+                <>
+                  <CheckCircle className="w-3 h-3 mr-1" /> Available
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-3 h-3 mr-1" /> Unavailable
+                </>
+              )}
+            </Badge>
+          </div>
+
+          {/* Category badge */}
+          <div className="absolute bottom-3 left-3 z-10">
+            <Badge className="bg-white/90 text-gray-700 border border-gray-200 shadow-sm px-2 py-1 text-xs font-medium">
+              <Tag className="w-3 h-3 mr-1" />
+              {category?.name || "Uncategorized"}
+            </Badge>
+          </div>
+
+          {/* Image */}
+          {imageLoading && (
+            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+            </div>
+          )}
+          <img
+            src={getImageSrc()}
+            alt={item.name}
+            className={cn(
+              "w-full h-full object-cover transition-opacity duration-300",
+              imageLoading ? "opacity-0" : "opacity-100"
+            )}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+          />
+          {imageError && (
+            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+              <div className="text-center text-gray-500">
+                <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+                <p className="text-xs">Image unavailable</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Main Content */}
+        <div className="p-5 flex flex-col gap-3">
+          {/* Title and Actions */}
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-bold text-lg line-clamp-1 text-gray-900 group-hover:text-green-700 transition-colors">
+              {item.name}
+            </h3>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-green-50 hover:text-green-700 transition-colors"
+                  disabled={isLoading}
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {commonDropdownItems}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Description */}
+          <p className="text-gray-600 text-sm line-clamp-2 min-h-[2.5rem] leading-relaxed">
+            {item.description || "No description provided"}
+          </p>
+
+          {/* Big Price */}
+          <div className="text-2xl font-bold text-green-600">
+            {currencySymbol}
+            {item.price.toFixed(2)}
+          </div>
+
+          {/* Footer: Allergens and Prep Time */}
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+            {/* Allergens */}
+            <div className="flex-1">
+              {item.allergens?.length > 0 ? (
+                <HoverCard openDelay={200} closeDelay={100}>
+                  <HoverCardTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3 text-xs font-medium border-green-200 bg-green-50/70 hover:bg-green-100/70 text-green-700 flex items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <AlertCircle className="w-3 h-3" />
+                      {item.allergens.length} Allergen
+                      {item.allergens.length !== 1 && "s"}
+                    </Button>
+                  </HoverCardTrigger>
+                  <HoverCardContent
+                    align="start"
+                    side="top"
+                    className="w-auto p-3 bg-white border border-gray-200 shadow-lg rounded-lg"
+                    sideOffset={8}
+                  >
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-gray-900">
+                        Allergens:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {item.allergens && item.allergens.length > 0 ? (
+                          item.allergens.map((allergen, index) => (
+                            <Badge
+                              key={allergen.id || `allergen-${index}`}
+                              variant="outline"
+                              className="text-xs bg-green-50/70 hover:bg-green-100/70 border-green-200 transition-colors"
+                            >
+                              <span className="text-base mr-1">
+                                {allergen.icon || "⚠️"}
+                              </span>
+                              {allergen.name || `Allergen ${index + 1}`}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-500">
+                            No allergens listed
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className="text-xs border-dashed text-gray-400 px-3 py-1"
+                >
+                  No Allergens
                 </Badge>
               )}
-              <Badge
-                variant={item.available ? "default" : "secondary"}
-                className={cn(
-                  "border-none shadow-lg",
-                  item.available
-                    ? "bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
-                    : "bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white"
-                )}
-              >
-                {item.available ? (
-                  <>
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    Available
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-3 h-3 mr-1" />
-                    Unavailable
-                  </>
-                )}
-              </Badge>
-            </motion.div>
-
-            {/* Category badge */}
-            <motion.div
-              className="absolute bottom-3 left-3"
-              initial={{ opacity: 0, y: 20 }}
-              whileHover={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Badge className="bg-white/90 text-gray-700 border-none shadow-lg backdrop-blur-sm">
-                <Tag className="w-3 h-3 mr-1" />
-                {category?.name || "Uncategorized"}
-              </Badge>
-            </motion.div>
-          </motion.div>
-
-          <div className="p-5">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-lg line-clamp-1 text-gray-900 group-hover:text-green-700 transition-colors">
-                    {item.name}
-                  </h3>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 hover:bg-green-50 hover:text-green-700 transition-colors"
-                        disabled={isLoading}
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      {commonDropdownItems}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <p className="text-sm text-gray-600 line-clamp-2 min-h-[2.5rem] leading-relaxed">
-                  {item.description || "No description provided"}
-                </p>
-              </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                  <Clock className="w-4 h-4" />
-                  <span>{item.preparationTime} min</span>
-                </div>
-                <div className="text-lg font-bold text-green-600">
-                  {currencySymbol}
-                  {item.price.toFixed(2)}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {item.allergens?.length > 0 ? (
-                  <HoverCard openDelay={200} closeDelay={100}>
-                    <HoverCardTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-3 text-xs hover:bg-green-50 hover:border-green-300 transition-colors"
-                      >
-                        <AlertCircle className="w-3 h-3 mr-1.5" />
-                        {item.allergens.length} Allergen
-                        {item.allergens.length !== 1 && "s"}
-                      </Button>
-                    </HoverCardTrigger>
-                    <HoverCardContent
-                      align="start"
-                      className="w-auto p-4 bg-white border shadow-xl rounded-xl"
-                      sideOffset={8}
-                    >
-                      <div className="flex flex-wrap gap-2">
-                        {item.allergens.map((allergen) => (
-                          <Badge
-                            key={allergen.id}
-                            variant="outline"
-                            className="text-xs bg-green-50/70 hover:bg-green-100/70 border-green-200 transition-colors"
-                          >
-                            <span className="text-base mr-1">
-                              {allergen.icon}
-                            </span>
-                            {allergen.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </HoverCardContent>
-                  </HoverCard>
-                ) : (
-                  <Badge
-                    variant="outline"
-                    className="text-xs border-dashed text-gray-400"
-                  >
-                    No Allergens
-                  </Badge>
-                )}
-              </div>
+            {/* Preparation Time */}
+            <div className="flex items-center gap-1.5 text-sm text-gray-500">
+              <Clock className="w-4 h-4" />
+              <span>{item.preparationTime} min</span>
             </div>
           </div>
-        </Card>
+        </div>
       </motion.div>
     );
   }
@@ -417,6 +416,12 @@ export function MenuItemCard({
       className="group relative w-full"
       variants={cardHoverVariants}
       whileHover="hover"
+      onClick={() => {
+        if (showCheckbox && onSelect) {
+          onSelect(item.id, !isSelected);
+        }
+      }}
+      style={{ cursor: showCheckbox ? "pointer" : "default" }}
     >
       <Card className="overflow-hidden">
         <div className="p-6">
@@ -428,7 +433,7 @@ export function MenuItemCard({
                   onCheckedChange={(checked) =>
                     onSelect?.(item.id, checked as boolean)
                   }
-                  className="bg-white/95 border-2 rounded-md shadow-lg"
+                  className="w-5 h-5 bg-white/95 border-2 border-green-500 rounded-md shadow-lg data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 data-[state=checked]:text-white"
                 />
               </div>
             )}
@@ -525,19 +530,60 @@ export function MenuItemCard({
                       </div>
                     </div>
 
-                    {item.allergens.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {item.allergens.map((allergen) => (
-                          <Badge
-                            key={allergen.id}
+                    {item.allergens.length > 0 ? (
+                      <HoverCard openDelay={200} closeDelay={100}>
+                        <HoverCardTrigger asChild>
+                          <Button
                             variant="outline"
-                            className="bg-green-50/70 text-green-700 border-green-200/70 text-xs px-2 py-1 flex items-center gap-1.5 transition-colors hover:bg-green-100/70"
+                            size="sm"
+                            className="h-8 px-3 text-xs font-medium border-green-200 bg-green-50/70 hover:bg-green-100/70 text-green-700 flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <span className="text-sm">{allergen.icon}</span>
-                            {allergen.name}
-                          </Badge>
-                        ))}
-                      </div>
+                            <AlertCircle className="w-3 h-3" />
+                            {item.allergens.length} Allergen
+                            {item.allergens.length !== 1 && "s"}
+                          </Button>
+                        </HoverCardTrigger>
+                        <HoverCardContent
+                          align="start"
+                          side="top"
+                          className="w-auto p-3 bg-white border border-gray-200 shadow-lg rounded-lg"
+                          sideOffset={8}
+                        >
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium text-gray-900">
+                              Allergens:
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {item.allergens && item.allergens.length > 0 ? (
+                                item.allergens.map((allergen, index) => (
+                                  <Badge
+                                    key={allergen.id || `allergen-${index}`}
+                                    variant="outline"
+                                    className="text-xs bg-green-50/70 hover:bg-green-100/70 border-green-200 transition-colors"
+                                  >
+                                    <span className="text-base mr-1">
+                                      {allergen.icon || "⚠️"}
+                                    </span>
+                                    {allergen.name || `Allergen ${index + 1}`}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-xs text-gray-500">
+                                  No allergens listed
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </HoverCardContent>
+                      </HoverCard>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="text-xs border-dashed text-gray-400 px-3 py-1"
+                      >
+                        No Allergens
+                      </Badge>
                     )}
                   </div>
                 </div>

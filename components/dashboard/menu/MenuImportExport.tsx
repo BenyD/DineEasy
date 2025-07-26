@@ -232,7 +232,9 @@ export function MenuImportExport({
         }
 
         if (importData.length === 0) {
-          throw new Error("No valid menu items found in the CSV file. Please check the format and try again.");
+          throw new Error(
+            "No valid menu items found in the CSV file. Please check the format and try again."
+          );
         }
 
         // Call the bulk import function
@@ -359,12 +361,12 @@ export function MenuImportExport({
             disabled={isExporting || menuItems.length === 0}
             className="w-full justify-start text-sm"
           >
-            <Download className="w-5 h-5 mr-2" />
+            <Download className="w-5 h-5 mr-2 flex-shrink-0" />
             {isExporting
               ? "Exporting..."
               : menuItems.length === 0
-              ? "Export Menu (No items)"
-              : `Export Menu (${menuItems.length} items)`}
+                ? "Export Menu (No items)"
+                : `Export Menu (${menuItems.length} items)`}
           </Button>
           <Button
             variant="ghost"
@@ -373,7 +375,7 @@ export function MenuImportExport({
             disabled={isImporting}
             className="w-full justify-start text-sm"
           >
-            <Upload className="w-5 h-5 mr-2" />
+            <Upload className="w-5 h-5 mr-2 flex-shrink-0" />
             {isImporting ? "Processing..." : "Import Menu"}
           </Button>
           <input
@@ -390,7 +392,7 @@ export function MenuImportExport({
             onClick={handleDownloadTemplate}
             className="w-full justify-start text-sm"
           >
-            <FileText className="w-4 h-4 mr-2" />
+            <FileText className="w-4 h-4 mr-2 flex-shrink-0" />
             Download Template
           </Button>
         </div>

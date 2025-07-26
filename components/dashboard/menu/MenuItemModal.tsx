@@ -144,16 +144,6 @@ export function MenuItemModal({
   // Update local state when props change
   useEffect(() => {
     setLocalCategories(menuCategories);
-    // Auto-select last added category if present
-    if (lastAddedCategoryId.current) {
-      const found = menuCategories.find(
-        (c) => c.id === lastAddedCategoryId.current
-      );
-      if (found) {
-        updateFormData({ category: found.id });
-        lastAddedCategoryId.current = null;
-      }
-    }
   }, [menuCategories]);
 
   useEffect(() => {
@@ -205,6 +195,19 @@ export function MenuItemModal({
       return await uploadImage(file, "menu-item");
     },
   });
+
+  // Auto-select last added category if present
+  useEffect(() => {
+    if (lastAddedCategoryId.current) {
+      const found = localCategories.find(
+        (c) => c.id === lastAddedCategoryId.current
+      );
+      if (found) {
+        updateFormData({ category: found.id });
+        lastAddedCategoryId.current = null;
+      }
+    }
+  }, [localCategories, updateFormData]);
 
   // Safety mechanism to reset upload state if it gets stuck
   useEffect(() => {
@@ -383,14 +386,16 @@ export function MenuItemModal({
   );
 
   // Add local step completion logic
-  const isStep1Completed = Boolean(
-    formState.formData.name.trim() &&
-      formState.formData.price &&
-      parseFloat(formState.formData.price) > 0 &&
-      formState.formData.preparationTime &&
-      parseInt(formState.formData.preparationTime) > 0
-  );
-  const isStep2Completed = Boolean(formState.formData.category);
+  const isStep1Completed =
+    Boolean(
+      formState.formData.name.trim() &&
+        formState.formData.price &&
+        parseFloat(formState.formData.price) > 0 &&
+        formState.formData.preparationTime &&
+        parseInt(formState.formData.preparationTime) > 0
+    ) || Boolean(item); // Always true in edit mode
+  const isStep2Completed =
+    Boolean(formState.formData.category) || Boolean(item); // Always true in edit mode
 
   // Handle adding new category
   const handleAddNewCategory = async () => {
@@ -633,13 +638,10 @@ export function MenuItemModal({
               handleTabChange(tab as "basic" | "details" | "image")
             }
           >
-            <TabsList className="grid w-full grid-cols-3 bg-gray-100 p-1 rounded-lg gap-1">
+            <TabsList className="grid w-full grid-cols-3 bg-gray-100 p-1 rounded-lg">
               <TabsTrigger
                 value="basic"
-                className={cn(
-                  "data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium",
-                  "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:text-gray-900"
-                )}
+                className="rounded-[6px] data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium data-[state=active]:-mt-0.5"
               >
                 Basic Info
               </TabsTrigger>
@@ -650,8 +652,7 @@ export function MenuItemModal({
                       value="details"
                       disabled={!isStep1Completed}
                       className={cn(
-                        "flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium",
-                        "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:text-gray-900",
+                        "rounded-[6px] flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium data-[state=active]:-mt-0.5",
                         !isStep1Completed && "cursor-not-allowed opacity-50"
                       )}
                     >
@@ -673,8 +674,7 @@ export function MenuItemModal({
                       value="image"
                       disabled={!isStep2Completed}
                       className={cn(
-                        "flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium",
-                        "data-[state=inactive]:text-gray-600 data-[state=inactive]:hover:text-gray-900",
+                        "rounded-[6px] flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium data-[state=active]:-mt-0.5",
                         !isStep2Completed && "cursor-not-allowed opacity-50"
                       )}
                     >
@@ -1117,37 +1117,40 @@ export function MenuItemModal({
                           <div className="space-y-3">
                             <div>
                               <p className="text-sm font-medium text-gray-700">
-                                {formState.uploadProgress < 30
+                                {formState.uploadProgress < 35
                                   ? "Compressing image..."
-                                  : formState.uploadProgress < 85
+                                  : formState.uploadProgress < 90
                                     ? "Uploading image..."
                                     : "Finalizing upload..."}
                               </p>
                               <p className="text-xs text-gray-500 mt-1">
-                                {formState.uploadProgress < 30
+                                {formState.uploadProgress < 35
                                   ? "Optimizing for web..."
-                                  : formState.uploadProgress < 85
+                                  : formState.uploadProgress < 90
                                     ? "Sending to server..."
                                     : "Processing complete"}
                               </p>
                             </div>
-                            <div className="space-y-2">
-                              <div className="w-64 h-3 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="space-y-3">
+                              <div className="w-80 h-4 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
                                 <div
-                                  className="h-full bg-gradient-to-r from-green-500 to-green-600 transition-all duration-300 rounded-full shadow-sm"
+                                  className="h-full bg-gradient-to-r from-green-500 via-green-600 to-green-700 transition-all duration-500 ease-out rounded-full shadow-inner relative"
                                   style={{
                                     width: `${formState.uploadProgress}%`,
                                   }}
-                                />
+                                >
+                                  {/* Animated shine effect */}
+                                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+                                </div>
                               </div>
-                              <div className="flex items-center justify-between text-xs text-gray-500">
-                                <span>
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-600 font-medium">
                                   {formState.uploadProgress}% complete
                                 </span>
-                                <span>
-                                  {formState.uploadProgress < 30
+                                <span className="text-gray-500">
+                                  {formState.uploadProgress < 35
                                     ? "Compression"
-                                    : formState.uploadProgress < 85
+                                    : formState.uploadProgress < 90
                                       ? "Upload"
                                       : "Processing"}
                                 </span>
