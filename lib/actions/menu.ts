@@ -133,67 +133,73 @@ export async function updateMenuItem(id: string, formData: FormData) {
     const allergens = formData.getAll("allergens") as string[];
     const imageUrl = formData.get("imageUrl") as string;
 
-    // Handle image update - delete old image if new one is provided
-    if (imageUrl !== null && imageUrl !== undefined) {
-      // Get current menu item to check if it has an existing image
-      const { data: currentMenuItem, error: fetchError } = await supabase
-        .from("menu_items")
-        .select("image_url")
-        .eq("id", id)
-        .eq("restaurant_id", restaurantId)
-        .single();
+    // Get current menu item to check if it has an existing image
+    const { data: currentMenuItem, error: fetchError } = await supabase
+      .from("menu_items")
+      .select("image_url")
+      .eq("id", id)
+      .eq("restaurant_id", restaurantId)
+      .single();
 
-      if (fetchError) {
-        console.warn(
-          "Failed to fetch current menu item for image cleanup:",
-          fetchError
-        );
-      } else if (currentMenuItem?.image_url) {
-        // Delete old image if it exists and is not the placeholder
-        if (
-          currentMenuItem.image_url !==
-            "/placeholder.svg?height=100&width=100" &&
-          currentMenuItem.image_url !== imageUrl // Don't delete if it's the same image
-        ) {
-          try {
-            // Extract the file path from the Supabase URL
-            const urlParts = currentMenuItem.image_url.split("/");
-            const bucketIndex = urlParts.findIndex(
-              (part: string) => part === "menu-images"
-            );
+    if (fetchError) {
+      console.warn(
+        "Failed to fetch current menu item for image cleanup:",
+        fetchError
+      );
+    }
 
-            if (bucketIndex !== -1 && bucketIndex + 1 < urlParts.length) {
-              // Get the path after the bucket name
-              const filePath = urlParts.slice(bucketIndex + 1).join("/");
+    // Handle image update - delete old image if new one is provided and different
+    if (
+      imageUrl !== null &&
+      imageUrl !== undefined &&
+      currentMenuItem?.image_url
+    ) {
+      const oldImageUrl = currentMenuItem.image_url;
+      const newImageUrl = imageUrl;
 
-              console.log(
-                `Deleting old menu item image from storage:`,
-                filePath
+      // Check if we're actually changing the image (not just updating other fields)
+      if (
+        oldImageUrl !== newImageUrl &&
+        oldImageUrl !== "/placeholder.svg" &&
+        oldImageUrl !== "/placeholder.svg?height=100&width=100" &&
+        newImageUrl !== "/placeholder.svg" &&
+        newImageUrl !== "/placeholder.svg?height=100&width=100"
+      ) {
+        try {
+          // Extract the file path from the Supabase URL
+          const urlParts = oldImageUrl.split("/");
+          const bucketIndex = urlParts.findIndex(
+            (part: string) => part === "menu-images"
+          );
+
+          if (bucketIndex !== -1 && bucketIndex + 1 < urlParts.length) {
+            // Get the path after the bucket name
+            const filePath = urlParts.slice(bucketIndex + 1).join("/");
+
+            console.log(`Deleting old menu item image from storage:`, filePath);
+
+            const { error: deleteError } = await supabase.storage
+              .from("menu-images")
+              .remove([filePath]);
+
+            if (deleteError) {
+              console.warn(
+                "Failed to delete old menu item image from storage:",
+                deleteError
               );
-
-              const { error: deleteError } = await supabase.storage
-                .from("menu-images")
-                .remove([filePath]);
-
-              if (deleteError) {
-                console.warn(
-                  "Failed to delete old menu item image from storage:",
-                  deleteError
-                );
-                // Continue with update even if deletion fails
-              } else {
-                console.log(
-                  "Successfully deleted old menu item image from storage"
-                );
-              }
+              // Continue with update even if deletion fails
+            } else {
+              console.log(
+                "Successfully deleted old menu item image from storage"
+              );
             }
-          } catch (storageError) {
-            console.warn(
-              "Error deleting old menu item image from storage:",
-              storageError
-            );
-            // Continue with update even if deletion fails
           }
+        } catch (storageError) {
+          console.warn(
+            "Error deleting old menu item image from storage:",
+            storageError
+          );
+          // Continue with update even if deletion fails
         }
       }
     }
@@ -224,7 +230,16 @@ export async function updateMenuItem(id: string, formData: FormData) {
       updateData.is_popular = popularStr === "true";
     }
     if (imageUrl !== null && imageUrl !== undefined) {
-      updateData.image_url = imageUrl || null;
+      // Only update image_url if it's not empty or placeholder
+      if (
+        imageUrl &&
+        imageUrl !== "/placeholder.svg" &&
+        imageUrl !== "/placeholder.svg?height=100&width=100"
+      ) {
+        updateData.image_url = imageUrl;
+      } else {
+        updateData.image_url = null; // Clear image if placeholder is provided
+      }
     }
 
     // Validate that we have at least one field to update
@@ -455,13 +470,38 @@ export async function deleteMultipleMenuItems(ids: string[]) {
   }
 }
 
-export async function getMenuItems() {
+// Paginated menu items with server-side filtering
+export async function getMenuItemsPaginated({
+  page = 1,
+  pageSize = 20,
+  searchTerm = "",
+  categoryId = "",
+  available,
+  popular,
+  minPrice,
+  maxPrice,
+  sortBy = "created_at",
+  sortOrder = "desc" as "asc" | "desc",
+}: {
+  page?: number;
+  pageSize?: number;
+  searchTerm?: string;
+  categoryId?: string;
+  available?: boolean;
+  popular?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}) {
   const supabase = createClient();
 
   try {
     const restaurantId = await getCurrentRestaurantId();
+    const offset = (page - 1) * pageSize;
 
-    const { data: menuItems, error } = await supabase
+    // Build the query
+    let query = supabase
       .from("menu_items")
       .select(
         `
@@ -478,10 +518,40 @@ export async function getMenuItems() {
             icon
           )
         )
-      `
+      `,
+        { count: "exact" }
       )
-      .eq("restaurant_id", restaurantId)
-      .order("created_at", { ascending: false });
+      .eq("restaurant_id", restaurantId);
+
+    // Apply filters
+    if (searchTerm) {
+      query = query.or(
+        `name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`
+      );
+    }
+    if (categoryId) {
+      query = query.eq("category_id", categoryId);
+    }
+    if (available !== undefined) {
+      query = query.eq("is_available", available);
+    }
+    if (popular !== undefined) {
+      query = query.eq("is_popular", popular);
+    }
+    if (minPrice !== undefined) {
+      query = query.gte("price", minPrice);
+    }
+    if (maxPrice !== undefined) {
+      query = query.lte("price", maxPrice);
+    }
+
+    // Apply sorting
+    query = query.order(sortBy, { ascending: sortOrder === "asc" });
+
+    // Apply pagination
+    query = query.range(offset, offset + pageSize - 1);
+
+    const { data: menuItems, error, count } = await query;
 
     if (error) {
       throw error;
@@ -500,6 +570,23 @@ export async function getMenuItems() {
           }
         }
 
+        // Validate and process image URL
+        let imageUrl = "/placeholder.svg";
+        if (item.image_url && item.image_url.trim() !== "") {
+          // Check if it's a valid URL or Supabase storage URL
+          if (
+            item.image_url.startsWith("http") ||
+            item.image_url.startsWith("/storage")
+          ) {
+            imageUrl = item.image_url;
+          } else if (item.image_url.startsWith("/placeholder")) {
+            imageUrl = item.image_url;
+          } else {
+            // If it's just a path, assume it's a Supabase storage URL
+            imageUrl = item.image_url;
+          }
+        }
+
         return {
           id: item.id,
           name: item.name,
@@ -507,22 +594,44 @@ export async function getMenuItems() {
           price: item.price,
           category: item.category?.name || "Uncategorized",
           categoryId: item.category?.id,
-          image: item.image_url || "/placeholder.svg?height=100&width=100",
+          image: imageUrl,
           available: item.is_available,
           preparationTime,
           allergens: item.allergens?.map((a: any) => a.allergen?.name) || [],
           allergenIds: item.allergens?.map((a: any) => a.allergen?.id) || [],
           popular: item.is_popular || false,
+          restaurantId: item.restaurant_id,
           createdAt: item.created_at,
           updatedAt: item.updated_at,
         };
       }) || [];
 
-    return { success: true, data: transformedItems };
+    return {
+      success: true,
+      data: transformedItems,
+      pagination: {
+        page,
+        pageSize,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / pageSize),
+        hasNextPage: page * pageSize < (count || 0),
+        hasPrevPage: page > 1,
+      },
+    };
   } catch (error: any) {
-    console.error("Error fetching menu items:", error);
+    console.error("Error fetching paginated menu items:", error);
     return { error: error.message || "Failed to fetch menu items" };
   }
+}
+
+export async function getMenuItems() {
+  // Use the paginated version to get all items
+  const result = await getMenuItemsPaginated({
+    page: 1,
+    pageSize: 1000, // Large page size to get all items
+  });
+
+  return result;
 }
 
 // Categories CRUD
@@ -771,5 +880,265 @@ export async function getAllergens() {
   } catch (error: any) {
     console.error("Error fetching allergens:", error);
     return { error: error.message || "Failed to fetch allergens" };
+  }
+}
+
+// Bulk import menu items from CSV data
+export async function bulkImportMenuItems(
+  importData: Array<{
+    name: string;
+    description: string;
+    price: number;
+    categoryName: string;
+    available: boolean;
+    popular: boolean;
+    allergens: string;
+    preparationTime: number;
+    imageUrl: string;
+  }>
+) {
+  const supabase = createClient();
+
+  try {
+    const restaurantId = await getCurrentRestaurantId();
+
+    // Get existing categories and allergens for mapping
+    const { data: categories } = await supabase
+      .from("menu_categories")
+      .select("id, name")
+      .eq("restaurant_id", restaurantId);
+
+    const { data: allergens } = await supabase
+      .from("allergens")
+      .select("id, name")
+      .eq("restaurant_id", restaurantId);
+
+    const createdItems = [];
+    const errors = [];
+
+    for (let i = 0; i < importData.length; i++) {
+      const item = importData[i];
+
+      try {
+        // Find or create category
+        let categoryId = categories?.find(
+          (c) => c.name.toLowerCase() === item.categoryName.toLowerCase()
+        )?.id;
+
+        if (!categoryId && item.categoryName) {
+          // Create new category
+          const { data: newCategory, error: categoryError } = await supabase
+            .from("menu_categories")
+            .insert({
+              restaurant_id: restaurantId,
+              name: item.categoryName,
+              description: `Imported category: ${item.categoryName}`,
+            })
+            .select()
+            .single();
+
+          if (categoryError) {
+            throw new Error(`Failed to create category: ${item.categoryName}`);
+          }
+
+          categoryId = newCategory.id;
+          // Add to local categories array for subsequent items
+          categories?.push(newCategory);
+        }
+
+        // Create menu item
+        const { data: menuItem, error: menuError } = await supabase
+          .from("menu_items")
+          .insert({
+            restaurant_id: restaurantId,
+            category_id: categoryId || null,
+            name: item.name,
+            description: item.description,
+            price: item.price,
+            image_url: item.imageUrl || null,
+            preparation_time: `${item.preparationTime} minutes`,
+            is_available: item.available,
+            is_popular: item.popular,
+          })
+          .select()
+          .single();
+
+        if (menuError) {
+          throw menuError;
+        }
+
+        // Add allergens if specified
+        if (item.allergens) {
+          const allergenNames = item.allergens.split(",").map((a) => a.trim());
+          const allergenIds = [];
+
+          for (const allergenName of allergenNames) {
+            if (!allergenName) continue;
+
+            let allergenId = allergens?.find(
+              (a) => a.name.toLowerCase() === allergenName.toLowerCase()
+            )?.id;
+
+            if (!allergenId) {
+              // Create new allergen
+              const { data: newAllergen, error: allergenError } = await supabase
+                .from("allergens")
+                .insert({
+                  restaurant_id: restaurantId,
+                  name: allergenName,
+                  icon: "⚠️",
+                })
+                .select()
+                .single();
+
+              if (allergenError) {
+                console.warn(`Failed to create allergen: ${allergenName}`);
+                continue;
+              }
+
+              allergenId = newAllergen.id;
+              allergens?.push(newAllergen);
+            }
+
+            allergenIds.push(allergenId);
+          }
+
+          // Create allergen relationships
+          if (allergenIds.length > 0) {
+            const allergenRelations = allergenIds.map((id) => ({
+              menu_item_id: menuItem.id,
+              allergen_id: id,
+            }));
+
+            const { error: relationError } = await supabase
+              .from("menu_item_allergens")
+              .insert(allergenRelations);
+
+            if (relationError) {
+              console.warn(`Failed to add allergens to item: ${item.name}`);
+            }
+          }
+        }
+
+        createdItems.push(menuItem);
+      } catch (error: any) {
+        errors.push({
+          row: i + 1,
+          item: item.name,
+          error: error.message,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        created: createdItems.length,
+        errors,
+        total: importData.length,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error in bulk import:", error);
+    return { error: error.message || "Failed to import menu items" };
+  }
+}
+
+// Bulk delete menu items
+export async function bulkDeleteMenuItems(ids: string[]) {
+  const supabase = createClient();
+  const errors: Array<{ id: string; error: string }> = [];
+  let deleted = 0;
+
+  try {
+    for (const id of ids) {
+      const { error } = await supabase.from("menu_items").delete().eq("id", id);
+      if (error) {
+        errors.push({ id, error: error.message });
+      } else {
+        deleted++;
+      }
+    }
+    return { success: true, deleted, errors };
+  } catch (error: any) {
+    return { error: error.message || "Failed to delete menu items" };
+  }
+}
+
+// Bulk toggle availability
+export async function bulkToggleAvailability(
+  ids: string[],
+  available: boolean
+) {
+  const supabase = createClient();
+  const errors: Array<{ id: string; error: string }> = [];
+  let updated = 0;
+
+  try {
+    for (const id of ids) {
+      const { error } = await supabase
+        .from("menu_items")
+        .update({ is_available: available })
+        .eq("id", id);
+      if (error) {
+        errors.push({ id, error: error.message });
+      } else {
+        updated++;
+      }
+    }
+    return { success: true, updated, errors };
+  } catch (error: any) {
+    return { error: error.message || "Failed to update availability" };
+  }
+}
+
+// Get all menu item IDs matching filters
+export async function getAllMenuItemIds({
+  searchTerm = "",
+  categoryId = "",
+  available,
+  popular,
+  minPrice,
+  maxPrice,
+}: {
+  searchTerm?: string;
+  categoryId?: string;
+  available?: boolean;
+  popular?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+}) {
+  const supabase = createClient();
+  try {
+    const restaurantId = await getCurrentRestaurantId();
+    let query = supabase
+      .from("menu_items")
+      .select("id")
+      .eq("restaurant_id", restaurantId);
+
+    if (searchTerm) {
+      query = query.ilike("name", `%${searchTerm}%`);
+    }
+    if (categoryId) {
+      query = query.eq("category_id", categoryId);
+    }
+    if (available !== undefined) {
+      query = query.eq("is_available", available);
+    }
+    if (popular !== undefined) {
+      query = query.eq("is_popular", popular);
+    }
+    if (minPrice !== undefined) {
+      query = query.gte("price", minPrice);
+    }
+    if (maxPrice !== undefined) {
+      query = query.lte("price", maxPrice);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return { success: true, ids: (data || []).map((row: any) => row.id) };
+  } catch (error: any) {
+    return { error: error.message || "Failed to fetch menu item IDs" };
   }
 }

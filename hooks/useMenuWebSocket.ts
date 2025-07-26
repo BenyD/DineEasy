@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { toast } from "sonner";
 import { getMenuWebSocket, disconnectMenuWebSocket } from "@/lib/websocket";
 import type { Database } from "@/types/supabase";
@@ -39,6 +39,7 @@ export function useMenuWebSocket({
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   const connect = useCallback(() => {
     if (!enabled || isConnectedRef.current) return;
@@ -90,6 +91,7 @@ export function useMenuWebSocket({
 
       unsubscribeRef.current = unsubscribe;
       isConnectedRef.current = true;
+      setIsConnected(true);
       reconnectAttemptsRef.current = 0;
 
       // Update presence
@@ -118,6 +120,7 @@ export function useMenuWebSocket({
     }
 
     isConnectedRef.current = false;
+    setIsConnected(false);
     console.log("Menu WebSocket disconnected");
   }, []);
 
@@ -139,26 +142,13 @@ export function useMenuWebSocket({
     }, reconnectInterval);
   }, [connect, reconnectInterval, maxReconnectAttempts]);
 
-  // Setup WebSocket error handling
+  // Handle enabled state changes
   useEffect(() => {
-    if (!enabled) return;
-
-    // The MenuWebSocket class handles reconnection internally
-    // No need for additional error handling methods
-    return () => {
-      // Cleanup handled by disconnect
-    };
-  }, [enabled]);
-
-  // Connect on mount
-  useEffect(() => {
-    if (enabled) {
+    if (enabled && !isConnectedRef.current) {
       connect();
-    }
-
-    return () => {
+    } else if (!enabled && isConnectedRef.current) {
       disconnect();
-    };
+    }
   }, [enabled, connect, disconnect]);
 
   // Cleanup on unmount
@@ -170,7 +160,7 @@ export function useMenuWebSocket({
   }, [disconnect]);
 
   return {
-    isConnected: isConnectedRef.current,
+    isConnected,
     reconnectAttempts: reconnectAttemptsRef.current,
     connect,
     disconnect,

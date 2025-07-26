@@ -134,19 +134,26 @@ export interface Staff {
   updatedAt: Date;
 }
 
+export interface MenuItemAllergen {
+  id: string;
+  name: string;
+  icon: string;
+}
+
 export interface MenuItem {
   id: string;
-  restaurantId: string;
-  categoryId: string;
   name: string;
-  description?: string;
+  description: string;
   price: number;
-  imageUrl?: string;
-  allergens?: string[];
-  preparationTime?: number;
-  isAvailable: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  image?: string;
+  preparationTime: number;
+  available: boolean;
+  popular: boolean;
+  allergens: MenuItemAllergen[];
+  categoryId: string;
+  restaurantId: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface MenuCategory {

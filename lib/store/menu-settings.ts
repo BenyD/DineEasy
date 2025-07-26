@@ -23,16 +23,21 @@ export interface MenuItem {
   name: string;
   description: string;
   price: number;
-  category: string;
-  categoryId?: string;
+  image?: string;
   preparationTime: number;
   available: boolean;
-  allergens: string[];
-  allergenIds: string[];
   popular: boolean;
-  image: string;
-  createdAt?: string;
-  updatedAt?: string;
+  allergens: MenuItemAllergen[];
+  categoryId: string;
+  restaurantId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MenuItemAllergen {
+  id: string;
+  name: string;
+  icon: string;
 }
 
 export interface MenuCategory {

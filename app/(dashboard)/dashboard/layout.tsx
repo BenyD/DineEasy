@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { BreadcrumbHeader } from "@/components/dashboard/breadcrumb-header";
+import { DashboardFooter } from "@/components/dashboard/dashboard-footer";
 import DashboardLayoutClient from "@/components/dashboard/dashboard-layout-client";
 import { RestaurantStoreInitializer } from "@/components/dashboard/restaurant-store-initializer";
 
@@ -56,6 +57,7 @@ export default async function DashboardLayout({
           <main className="flex-1 overflow-y-auto">
             <div className="container mx-auto py-6">{children}</div>
           </main>
+          <DashboardFooter />
         </SidebarInset>
       </div>
     </SidebarProvider>

@@ -35,6 +35,10 @@ export async function getTableInfo(tableId: string) {
       .eq("is_active", true)
       .single();
 
+    console.log("QR Client - Table found:", !!table);
+    console.log("QR Client - Table status:", table?.status);
+    console.log("QR Client - Restaurant ID from table:", table?.restaurant_id);
+
     if (tableError) {
       console.error("Error fetching table:", tableError);
       return { error: "Table not found" };
@@ -82,6 +86,9 @@ export async function getRestaurantMenu(restaurantId: string) {
       return { error: "Failed to fetch menu" };
     }
 
+    console.log("QR Client - Menu items found:", menuItems?.length || 0);
+    console.log("QR Client - Restaurant ID:", restaurantId);
+
     // Group items by category
     const menuByCategory =
       menuItems?.reduce(
@@ -109,13 +116,20 @@ export async function getRestaurantMenu(restaurantId: string) {
             tags: item.tags || [],
             allergens,
             preparationTime: item.preparation_time
-              ? Math.ceil(parseInt(item.preparation_time) / 60)
+              ? (() => {
+                  const timeStr = item.preparation_time.toString();
+                  const match = timeStr.match(/(\d+) minutes?/);
+                  return match ? parseInt(match[1]) : 15;
+                })()
               : 15,
           });
+
+          return acc;
         },
         {} as Record<string, any[]>
       ) || {};
 
+    console.log("QR Client - Menu by category:", Object.keys(menuByCategory));
     return { success: true, data: menuByCategory };
   } catch (error: any) {
     console.error("Error in getRestaurantMenu:", error);
