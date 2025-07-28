@@ -868,6 +868,64 @@ export async function POST(req: Request) {
           metadata: paymentIntent.metadata,
         });
 
+        // Check if this is a QR payment
+        if (paymentIntent.metadata.isQRPayment === "true") {
+          console.log("Processing QR payment success:", {
+            orderId: paymentIntent.metadata.orderId,
+            restaurantId: paymentIntent.metadata.restaurantId,
+            tableId: paymentIntent.metadata.tableId,
+            amount: paymentIntent.amount / 100,
+            platformFee: paymentIntent.metadata.platformFee,
+          });
+
+          // Update order status to completed
+          if (paymentIntent.metadata.orderId) {
+            const { error: updateError } = await adminSupabase
+              .from("orders")
+              .update({
+                status: "completed",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", paymentIntent.metadata.orderId);
+
+            if (updateError) {
+              console.error("Error updating QR order status:", updateError);
+            } else {
+              console.log(
+                "QR order status updated to completed:",
+                paymentIntent.metadata.orderId
+              );
+            }
+          }
+
+          // Create payment record for QR payment
+          if (
+            paymentIntent.metadata.restaurantId &&
+            paymentIntent.metadata.orderId
+          ) {
+            const { error: createError } = await adminSupabase.rpc(
+              "create_payment_with_fallback",
+              [
+                paymentIntent.metadata.restaurantId,
+                paymentIntent.metadata.orderId,
+                paymentIntent.amount / 100, // Convert from cents
+                "completed",
+                "card",
+                paymentIntent.id,
+                paymentIntent.currency.toUpperCase(),
+              ]
+            );
+
+            if (createError) {
+              console.error("Error creating QR payment record:", createError);
+            } else {
+              console.log("QR payment record created successfully");
+            }
+          }
+
+          break;
+        }
+
         // Try to get restaurant ID from metadata first, then from customer
         let restaurantId = paymentIntent.metadata.restaurantId;
 
@@ -935,6 +993,57 @@ export async function POST(req: Request) {
           amount: paymentIntent.amount,
           metadata: paymentIntent.metadata,
         });
+
+        // Check if this is a QR payment
+        if (paymentIntent.metadata.isQRPayment === "true") {
+          console.log("Processing QR payment failure:", {
+            orderId: paymentIntent.metadata.orderId,
+            restaurantId: paymentIntent.metadata.restaurantId,
+            tableId: paymentIntent.metadata.tableId,
+            amount: paymentIntent.amount / 100,
+          });
+
+          // Update order status to failed
+          if (paymentIntent.metadata.orderId) {
+            const { error: updateError } = await adminSupabase
+              .from("orders")
+              .update({
+                status: "failed",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", paymentIntent.metadata.orderId);
+
+            if (updateError) {
+              console.error("Error updating QR order status to failed:", updateError);
+            } else {
+              console.log("QR order status updated to failed:", paymentIntent.metadata.orderId);
+            }
+          }
+
+          // Create payment record for failed QR payment
+          if (paymentIntent.metadata.restaurantId && paymentIntent.metadata.orderId) {
+            const { error: createError } = await adminSupabase.rpc(
+              "create_payment_with_fallback",
+              [
+                paymentIntent.metadata.restaurantId,
+                paymentIntent.metadata.orderId,
+                paymentIntent.amount / 100, // Convert from cents
+                "failed",
+                "card",
+                paymentIntent.id,
+                paymentIntent.currency.toUpperCase(),
+              ]
+            );
+
+            if (createError) {
+              console.error("Error creating failed QR payment record:", createError);
+            } else {
+              console.log("Failed QR payment record created successfully");
+            }
+          }
+
+          break;
+        }
 
         // Try to get restaurant ID from metadata first, then from customer
         let restaurantId = paymentIntent.metadata.restaurantId;

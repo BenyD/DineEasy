@@ -327,7 +327,7 @@ export default function CartPage({
 
       {/* Enhanced Proceed Button */}
       <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-gradient-to-t from-white via-white/95 to-transparent">
-        <Link href={`/qr/${resolvedParams.tableId}/checkout`}>
+        <Link href={`/qr/${resolvedParams.tableId}/checkout?specialInstructions=${encodeURIComponent(specialInstructions)}`}>
           <Button
             size="lg"
             className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-xl hover:shadow-2xl transition-all duration-200 h-16 rounded-2xl text-lg font-semibold"

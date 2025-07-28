@@ -27,7 +27,10 @@ export async function getTableInfo(tableId: string) {
           currency,
           phone,
           email,
-          description
+          description,
+          stripe_account_enabled,
+          stripe_account_id,
+          payment_methods
         )
       `
       )
@@ -48,6 +51,17 @@ export async function getTableInfo(tableId: string) {
       return { error: "Table not found" };
     }
 
+    // Debug: Log table structure
+    console.log("QR Client - Table structure:", {
+      id: table.id,
+      restaurant_id: table.restaurant_id,
+      hasRestaurants: !!table.restaurants,
+      restaurantsType: typeof table.restaurants,
+      restaurantsKeys: table.restaurants
+        ? Object.keys(table.restaurants)
+        : null,
+    });
+
     return { success: true, data: table };
   } catch (error: any) {
     console.error("Error in getTableInfo:", error);
@@ -60,6 +74,18 @@ export async function getRestaurantMenu(restaurantId: string) {
   const supabase = createClient();
 
   try {
+    console.log("QR Client - Fetching menu for restaurant:", restaurantId);
+
+    // Validate restaurantId
+    if (
+      !restaurantId ||
+      restaurantId === "undefined" ||
+      restaurantId === "null"
+    ) {
+      console.error("Invalid restaurant ID:", restaurantId);
+      return { error: "Invalid restaurant ID" };
+    }
+
     const { data: menuItems, error } = await supabase
       .from("menu_items")
       .select(
@@ -89,10 +115,26 @@ export async function getRestaurantMenu(restaurantId: string) {
     console.log("QR Client - Menu items found:", menuItems?.length || 0);
     console.log("QR Client - Restaurant ID:", restaurantId);
 
+    // Debug: Log first few menu items to see their structure
+    if (menuItems && menuItems.length > 0) {
+      console.log("QR Client - First menu item sample:", {
+        id: menuItems[0].id,
+        name: menuItems[0].name,
+        restaurant_id: menuItems[0].restaurant_id,
+        category: menuItems[0].menu_categories?.name,
+      });
+    }
+
     // Group items by category
     const menuByCategory =
       menuItems?.reduce(
         (acc, item) => {
+          // Validate that the item has a valid ID
+          if (!item.id) {
+            console.warn("Menu item missing ID:", item);
+            return acc;
+          }
+
           const categoryName = item.menu_categories?.name || "Other";
           if (!acc[categoryName]) {
             acc[categoryName] = [];
@@ -110,10 +152,10 @@ export async function getRestaurantMenu(restaurantId: string) {
             name: item.name,
             description: item.description,
             price: parseFloat(item.price),
-            image: item.image_url || "/placeholder.svg?height=100&width=100",
+            image: item.image_url || "/placeholder.svg",
             category: categoryName.toLowerCase(),
             available: item.is_available,
-            tags: item.tags || [],
+            tags: item.is_popular ? ["Popular"] : [],
             allergens,
             preparationTime: item.preparation_time
               ? (() => {

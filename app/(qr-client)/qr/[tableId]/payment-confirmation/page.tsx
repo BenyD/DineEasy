@@ -8,12 +8,17 @@ import {
   Loader2,
   CreditCard,
   Shield,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/useCart";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { confirmQRPayment } from "@/lib/actions/qr-payments";
+import { loadStripe } from "@stripe/stripe-js";
+
+// Initialize Stripe
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export default function PaymentConfirmationPage({
   params,
@@ -30,6 +35,7 @@ export default function PaymentConfirmationPage({
   >("processing");
   const [orderId, setOrderId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stripe, setStripe] = useState<any>(null);
 
   useEffect(() => {
     const clientSecret = searchParams.get("client_secret");
@@ -43,22 +49,39 @@ export default function PaymentConfirmationPage({
 
     setOrderId(orderIdParam);
 
-    // Simulate payment processing (in a real implementation, you'd verify the payment with Stripe)
+    // Initialize Stripe and process payment
     const processPayment = async () => {
       try {
-        // Wait a moment to simulate processing
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        // Confirm the payment on the server side
-        const result = await confirmQRPayment(orderIdParam);
-
-        if (result.error) {
-          throw new Error(result.error);
+        const stripeInstance = await stripePromise;
+        if (!stripeInstance) {
+          throw new Error("Failed to load Stripe");
         }
 
-        // Payment successful
+        setStripe(stripeInstance);
+
+        // Confirm the payment with Stripe
+        const { error: stripeError } = await stripeInstance.confirmPayment({
+          clientSecret,
+          confirmParams: {
+            return_url: `${window.location.origin}/qr/${resolvedParams.tableId}/confirmation?order_id=${orderIdParam}&payment=stripe`,
+          },
+        });
+
+        if (stripeError) {
+          console.error("Stripe payment error:", stripeError);
+          throw new Error(stripeError.message || "Payment failed");
+        }
+
+        // If we reach here, payment was successful
         setPaymentStatus("success");
         clearCart();
+
+        // Confirm the payment on our server
+        const result = await confirmQRPayment(orderIdParam);
+        if (result.error) {
+          console.error("Server confirmation error:", result.error);
+          // Don't throw here as the payment was successful on Stripe's side
+        }
 
         // Redirect to confirmation page after a short delay
         setTimeout(() => {
@@ -75,7 +98,7 @@ export default function PaymentConfirmationPage({
     };
 
     processPayment();
-  }, [searchParams, orderIdParam, resolvedParams.tableId, router, clearCart]);
+  }, [searchParams, resolvedParams.tableId, router, clearCart]);
 
   const handleRetry = () => {
     router.push(`/qr/${resolvedParams.tableId}/checkout`);
@@ -86,14 +109,14 @@ export default function PaymentConfirmationPage({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center px-4">
+    <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         className="max-w-md w-full"
       >
         {/* Payment Status Card */}
-        <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
+        <div className="bg-white border border-gray-200 rounded-lg p-8">
           {paymentStatus === "processing" && (
             <div className="text-center">
               <motion.div
@@ -187,7 +210,7 @@ export default function PaymentConfirmationPage({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4"
+          className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4"
         >
           <div className="flex items-center gap-2 text-blue-700 mb-2">
             <Shield className="w-4 h-4" />

@@ -10,45 +10,43 @@ import {
   Loader2,
   Shield,
   Lock,
+  AlertCircle,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { TipSelector } from "@/components/qr/TipSelector";
 import { useCart } from "@/hooks/useCart";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   createQRPaymentIntent,
+  createCashOrder,
   type QRPaymentData,
 } from "@/lib/actions/qr-payments";
 import { getTableInfo } from "@/lib/actions/qr-client";
-
-const paymentMethods = [
-  {
-    id: "stripe",
-    name: "Credit Card",
-    description: "Secure payment with Visa, Mastercard, or American Express",
-    icon: CreditCard,
-    color: "blue",
-  },
-  {
-    id: "cash",
-    name: "Pay at Counter",
-    description: "Pay with cash when you leave",
-    icon: Banknote,
-    color: "green",
-  },
-];
 
 interface RestaurantData {
   id: string;
   name: string;
   logo_url?: string;
   address?: string;
+  cuisine?: string;
+  opening_hours?: any;
   currency?: string;
+  phone?: string;
+  email?: string;
+  description?: string;
+  stripe_account_enabled?: boolean;
+  stripe_account_id?: string;
+  payment_methods?: {
+    cardEnabled: boolean;
+    cashEnabled: boolean;
+  };
 }
 
 interface TableData {
@@ -65,23 +63,27 @@ export default function CheckoutPage({
 }) {
   const resolvedParams = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { cart, getTotalPrice, clearCart } = useCart();
   const [selectedPayment, setSelectedPayment] = useState("");
   const [email, setEmail] = useState("");
   const [tip, setTip] = useState(0);
+  const [specialInstructions, setSpecialInstructions] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [restaurant, setRestaurant] = useState<RestaurantData | null>(null);
   const [tableData, setTableData] = useState<TableData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const subtotal = getTotalPrice();
   const tax = subtotal * 0.077;
   const total = subtotal + tax + tip;
 
-  // Load restaurant and table data
+  // Load restaurant and table data and special instructions
   useEffect(() => {
     const loadData = async () => {
       try {
+        setLoading(true);
         // Get table info
         const tableResult = await getTableInfo(resolvedParams.tableId);
         if (tableResult.success) {
@@ -98,8 +100,17 @@ export default function CheckoutPage({
         if (storedRestaurantId && !restaurantId) {
           setRestaurantId(storedRestaurantId);
         }
+
+        // Load special instructions from URL params
+        const specialInstructionsParam = searchParams.get("specialInstructions");
+        if (specialInstructionsParam) {
+          setSpecialInstructions(decodeURIComponent(specialInstructionsParam));
+        }
       } catch (error) {
         console.error("Error loading restaurant data:", error);
+        toast.error("Failed to load restaurant information");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -121,6 +132,16 @@ export default function CheckoutPage({
 
     try {
       if (selectedPayment === "stripe") {
+        // Validate Stripe Connect is enabled
+        if (
+          !restaurant?.stripe_account_enabled ||
+          !restaurant?.stripe_account_id
+        ) {
+          throw new Error(
+            "Restaurant payment processing is not available. Please pay at the counter."
+          );
+        }
+
         // Create server-side Stripe payment intent
         const paymentData: QRPaymentData = {
           tableId: resolvedParams.tableId,
@@ -136,6 +157,7 @@ export default function CheckoutPage({
           tip,
           total,
           email,
+          specialInstructions,
         };
 
         const result = await createQRPaymentIntent(paymentData);
@@ -145,33 +167,40 @@ export default function CheckoutPage({
         }
 
         if (result.clientSecret) {
-          // Redirect to a payment confirmation page that handles the payment
-          // This follows the server-side pattern used in your codebase
+          // Redirect to Stripe Checkout
           router.push(
             `/qr/${resolvedParams.tableId}/payment-confirmation?client_secret=${result.clientSecret}&order_id=${result.orderId}`
           );
         }
       } else if (selectedPayment === "cash") {
         // Handle cash payment
-        const orderId = crypto.randomUUID();
+        const paymentData: QRPaymentData = {
+          tableId: resolvedParams.tableId,
+          restaurantId: restaurantId,
+          items: cart.map((item) => ({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+          })),
+          subtotal,
+          tax,
+          tip,
+          total,
+          email,
+          specialInstructions,
+        };
 
-        // Store order details for cash payment
-        localStorage.setItem(
-          "cashOrder",
-          JSON.stringify({
-            orderId,
-            items: cart,
-            total,
-            tip,
-            tableId: resolvedParams.tableId,
-            restaurantId: restaurantId,
-          })
-        );
+        const result = await createCashOrder(paymentData);
+
+        if (result.error) {
+          throw new Error(result.error);
+        }
 
         // Clear cart and redirect to confirmation
         clearCart();
         router.push(
-          `/qr/${resolvedParams.tableId}/confirmation?payment=cash&order_id=${orderId}&total=${total.toFixed(2)}&tip=${tip.toFixed(2)}`
+          `/qr/${resolvedParams.tableId}/confirmation?payment=cash&order_id=${result.orderId}&total=${total.toFixed(2)}&tip=${tip.toFixed(2)}`
         );
       }
     } catch (error: any) {
@@ -185,9 +214,20 @@ export default function CheckoutPage({
     setSelectedPayment(methodId);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-gray-300 border-t-green-600 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading checkout...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (cart.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">
             Your cart is empty
@@ -205,178 +245,221 @@ export default function CheckoutPage({
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
-      {/* Enhanced Header */}
-      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-lg border-b border-gray-100 shadow-sm">
-        <div className="flex items-center gap-4 px-4 py-4">
-          <Link href={`/qr/${resolvedParams.tableId}/cart`}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-2 hover:bg-gray-100 rounded-full"
-            >
-              <ArrowLeft className="w-5 h-5" />
+  // Check if restaurant has Stripe Connect enabled
+  const hasStripeConnect =
+    restaurant?.stripe_account_enabled && restaurant?.stripe_account_id;
+
+  // Get payment method settings from restaurant
+  const paymentMethods = restaurant?.payment_methods || {
+    cardEnabled: true,
+    cashEnabled: true,
+  };
+
+  // Check which payment methods are available
+  const cardPaymentEnabled = hasStripeConnect && paymentMethods.cardEnabled;
+  const cashPaymentEnabled = paymentMethods.cashEnabled;
+
+  // If no payment methods are enabled, show error
+  if (!cardPaymentEnabled && !cashPaymentEnabled) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-red-600" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            No Payment Methods Available
+          </h2>
+          <p className="text-gray-600 mb-6">
+            This restaurant has not enabled any payment methods. Please contact
+            the restaurant directly.
+          </p>
+          <Link href={`/qr/${resolvedParams.tableId}`}>
+            <Button className="bg-green-600 hover:bg-green-700">
+              Back to Menu
             </Button>
           </Link>
-          <div className="flex-1">
-            <h1 className="text-lg font-bold">Payment</h1>
-            <p className="text-sm text-gray-500">
-              {restaurant?.name || "Restaurant"} • Table{" "}
-              {tableData?.number || resolvedParams.tableId}
-            </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
+        <div className="px-4 py-4">
+          <div className="flex items-center gap-3 mb-4">
+            <Link href={`/qr/${resolvedParams.tableId}`}>
+              <Button variant="ghost" size="sm" className="p-2">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-lg font-semibold text-gray-900">Checkout</h1>
+              <p className="text-sm text-gray-600">
+                {restaurant?.name} • Table {tableData?.number}
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="px-4 py-6 pb-32 space-y-6">
-        {/* Restaurant Info */}
-        {restaurant && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-4 border border-green-200"
-          >
-            <div className="flex items-center gap-3">
-              {restaurant.logo_url && (
-                <img
-                  src={restaurant.logo_url}
-                  alt={restaurant.name}
-                  className="w-12 h-12 rounded-xl object-cover"
-                />
-              )}
-              <div className="flex-1">
-                <h3 className="font-bold text-gray-900">{restaurant.name}</h3>
-                {restaurant.address && (
-                  <p className="text-sm text-gray-600">{restaurant.address}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2 text-green-600">
-                <Shield className="w-4 h-4" />
-                <span className="text-xs font-medium">Secure Payment</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Enhanced Order Summary */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
-        >
-          <h3 className="font-bold text-gray-900 mb-4 text-lg">
+      <div className="px-4 py-6 space-y-6">
+        {/* Order Summary */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Order Summary
-          </h3>
-          <div className="space-y-3 text-sm">
+          </h2>
+          <div className="space-y-3">
             {cart.map((item) => (
               <div key={item.id} className="flex justify-between items-center">
                 <div className="flex-1">
-                  <span className="text-gray-900 font-medium">
-                    {item.quantity}x {item.name}
-                  </span>
-                  {/* Popular tag removed - not available in MenuItem type */}
+                  <p className="font-medium text-gray-900">{item.name}</p>
+                  <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                 </div>
-                <span className="text-gray-900 font-medium">
-                  {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
-                  {(item.price * item.quantity).toFixed(2)}
-                </span>
+                <p className="font-semibold text-gray-900">
+                  CHF {(item.price * item.quantity).toFixed(2)}
+                </p>
               </div>
             ))}
-            <Separator className="my-3" />
-            <div className="flex justify-between text-base">
+          </div>
+          <Separator className="my-4" />
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
               <span className="text-gray-600">Subtotal</span>
-              <span className="text-gray-900 font-medium">
-                {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
-                {subtotal.toFixed(2)}
-              </span>
+              <span className="text-gray-900">CHF {subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-base">
+            <div className="flex justify-between text-sm">
               <span className="text-gray-600">Tax (7.7%)</span>
-              <span className="text-gray-900 font-medium">
-                {restaurant?.currency?.toUpperCase() || "CHF"} {tax.toFixed(2)}
-              </span>
+              <span className="text-gray-900">CHF {tax.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Tip</span>
+              <span className="text-gray-900">CHF {tip.toFixed(2)}</span>
+            </div>
+            <Separator className="my-2" />
+            <div className="flex justify-between text-lg font-semibold">
+              <span className="text-gray-900">Total</span>
+              <span className="text-gray-900">CHF {total.toFixed(2)}</span>
             </div>
           </div>
-        </motion.div>
+        </div>
 
-        {/* Tip Selection */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.2 }}
-          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
-        >
-          <h3 className="font-bold text-gray-900 mb-4 text-lg">Add a Tip</h3>
-          <TipSelector subtotal={subtotal} onTipChange={setTip} />
-        </motion.div>
+        {/* Tip Selector */}
+        <TipSelector onTipChange={setTip} subtotal={subtotal} />
+
+        {/* Special Instructions */}
+        {specialInstructions && (
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare className="w-5 h-5 text-gray-600" />
+              <h3 className="font-semibold text-gray-900">Special Instructions</h3>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <p className="text-gray-700 text-sm whitespace-pre-wrap">{specialInstructions}</p>
+            </div>
+          </div>
+        )}
 
         {/* Payment Methods */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.3 }}
-          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
-        >
-          <h3 className="font-bold text-gray-900 mb-4 text-lg">
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900">
             Payment Method
-          </h3>
+          </h2>
+
+          {!cardPaymentEnabled && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-2 text-amber-700 mb-2">
+                <AlertCircle className="w-5 h-5" />
+                <span className="font-medium">
+                  Online payments not available
+                </span>
+              </div>
+              <p className="text-sm text-amber-600">
+                This restaurant doesn't have online payment processing set up.
+                Please pay at the counter.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-3">
-            {paymentMethods.map((method) => (
-              <button
-                key={method.id}
-                onClick={() => handleMethodToggle(method.id)}
-                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 ${
-                  selectedPayment === method.id
+            {cardPaymentEnabled && (
+              <div
+                className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                  selectedPayment === "stripe"
                     ? "border-green-500 bg-green-50"
                     : "border-gray-200 hover:border-gray-300"
                 }`}
+                onClick={() => handleMethodToggle("stripe")}
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                      selectedPayment === method.id
+                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      selectedPayment === "stripe"
                         ? "border-green-500 bg-green-500"
                         : "border-gray-300"
                     }`}
                   >
-                    {selectedPayment === method.id && (
+                    {selectedPayment === "stripe" && (
                       <Check className="w-3 h-3 text-white" />
                     )}
                   </div>
-                  <div className="flex items-center gap-3 flex-1">
-                    <method.icon
-                      className={`w-6 h-6 ${
-                        method.color === "blue"
-                          ? "text-blue-600"
-                          : "text-green-600"
-                      }`}
-                    />
-                    <div className="text-left">
-                      <div className="font-semibold text-gray-900">
-                        {method.name}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {method.description}
-                      </div>
+                  <div className="flex items-center gap-3">
+                    <CreditCard className="w-6 h-6 text-blue-600" />
+                    <div>
+                      <p className="font-medium text-gray-900">Credit Card</p>
+                      <p className="text-sm text-gray-600">
+                        Secure payment with Visa, Mastercard, or American
+                        Express
+                      </p>
                     </div>
                   </div>
                 </div>
-              </button>
-            ))}
-          </div>
-        </motion.div>
+              </div>
+            )}
 
-        {/* Email Input for Stripe */}
+            {cashPaymentEnabled && (
+              <div
+                className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                  selectedPayment === "cash"
+                    ? "border-green-500 bg-green-50"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}
+                onClick={() => handleMethodToggle("cash")}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      selectedPayment === "cash"
+                        ? "border-green-500 bg-green-500"
+                        : "border-gray-300"
+                    }`}
+                  >
+                    {selectedPayment === "cash" && (
+                      <Check className="w-3 h-3 text-white" />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Banknote className="w-6 h-6 text-green-600" />
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        Pay at Counter
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Pay with cash when you leave
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Email for Receipt */}
         {selectedPayment === "stripe" && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.4 }}
-            className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
-          >
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
             <Label htmlFor="email" className="text-gray-700 font-medium mb-2">
               Email for Receipt
             </Label>
@@ -386,47 +469,39 @@ export default function CheckoutPage({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="your@email.com"
-              className="h-12 text-lg border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-xl"
+              className="h-12 text-lg border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
             />
             <p className="text-xs text-gray-500 mt-2">
               We'll send your receipt and order confirmation to this email
             </p>
-          </motion.div>
+          </div>
         )}
 
         {/* Security Notice */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.5 }}
-          className="bg-blue-50 border border-blue-200 rounded-2xl p-4"
-        >
-          <div className="flex items-center gap-2 text-blue-700">
-            <Lock className="w-4 h-4" />
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 text-blue-700 mb-2">
+            <Shield className="w-4 h-4" />
             <span className="text-sm font-medium">Secure Payment</span>
           </div>
-          <p className="text-xs text-blue-600 mt-1">
+          <p className="text-xs text-blue-600">
             Your payment is processed securely by Stripe. Your card details are
             never stored on our servers.
           </p>
-        </motion.div>
-      </div>
+        </div>
 
-      {/* Enhanced Proceed Button */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-gradient-to-t from-white via-white/95 to-transparent">
+        {/* Proceed Button */}
         <Button
           onClick={handleConfirmOrder}
-          disabled={isProcessing || !selectedPayment}
-          size="lg"
-          className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-xl hover:shadow-2xl transition-all duration-200 h-16 rounded-2xl text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={!selectedPayment || isProcessing}
+          className="w-full bg-green-600 hover:bg-green-700 text-white h-14 text-lg font-medium"
         >
           {isProcessing ? (
-            <>
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin" />
               Processing...
-            </>
+            </div>
           ) : (
-            `Pay ${restaurant?.currency?.toUpperCase() || "CHF"} ${total.toFixed(2)}`
+            `Confirm Order • CHF ${total.toFixed(2)}`
           )}
         </Button>
       </div>
