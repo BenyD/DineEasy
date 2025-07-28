@@ -57,23 +57,5 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- RLS policies for layout fields
-ALTER TABLE tables ENABLE ROW LEVEL SECURITY;
-
--- Policy to allow restaurant owners to update their table layouts
-CREATE POLICY "Users can update their table layouts" ON tables
-  FOR UPDATE USING (
-    restaurant_id IN (
-      SELECT restaurant_id FROM staff 
-      WHERE user_id = auth.uid() AND is_active = true
-    )
-  );
-
--- Policy to allow restaurant owners to view their table layouts
-CREATE POLICY "Users can view their table layouts" ON tables
-  FOR SELECT USING (
-    restaurant_id IN (
-      SELECT restaurant_id FROM staff 
-      WHERE user_id = auth.uid() AND is_active = true
-    )
-  ); 
+-- RLS policies for layout fields will be created in a separate migration
+-- to avoid circular dependencies with staff table 

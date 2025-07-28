@@ -87,15 +87,21 @@ import {
   createTable,
   updateTable,
   deleteTable,
+  bulkDeleteTables,
   updateTableStatus,
   bulkUpdateTableStatus,
   bulkUpdateTableLayouts,
   generateTableQRCode,
   updateAllQRCodesForEnvironment,
+  cleanupOrphanedData,
 } from "@/lib/actions/tables";
 
 import type { Database } from "@/types/supabase";
-import TableLayoutEditor from "@/components/dashboard/tables/TableLayoutEditor";
+import {
+  TABLE_CAPACITY_OPTIONS,
+  TABLE_CAPACITY_FILTER_OPTIONS,
+} from "@/lib/constants/tables";
+
 import { BulkActions } from "@/components/dashboard/common/BulkActions";
 import { TableQRCode } from "@/components/dashboard/tables/TableQRCode";
 import { UnifiedQRSettingsModal } from "@/components/dashboard/tables/UnifiedQRSettingsModal";
@@ -122,13 +128,8 @@ const tableStatuses = [
   { value: "unavailable", label: "Unavailable" },
 ];
 
-const capacityOptions = [
-  { value: "all", label: "All Capacities" },
-  { value: "1-2", label: "1-2 People" },
-  { value: "3-4", label: "3-4 People" },
-  { value: "5-6", label: "5-6 People" },
-  { value: "7+", label: "7+ People" },
-];
+// Use shared capacity constants
+const capacityOptions = TABLE_CAPACITY_FILTER_OPTIONS;
 
 // Animation variants
 const containerVariants = {
@@ -192,7 +193,7 @@ function TablesPage() {
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(20);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [showLayoutEditor, setShowLayoutEditor] = useState(false);
+
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "json">("csv");
@@ -201,6 +202,8 @@ function TablesPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showBulkOperations, setShowBulkOperations] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [tableToDelete, setTableToDelete] = useState<Table | null>(null);
 
   // Optimized state management
   const {
@@ -328,6 +331,36 @@ function TablesPage() {
     selectTable(tableId, selected);
   };
 
+  const handleDeleteTable = async (table: Table) => {
+    setTableToDelete(table);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteTable = async () => {
+    if (!tableToDelete) return;
+
+    setActionLoading(tableToDelete.id);
+    try {
+      const result = await deleteTable(tableToDelete.id);
+      if (result.success) {
+        toast.success("Table deleted successfully");
+        closeDeleteDialog();
+      } else {
+        toast.error(result.error || "Failed to delete table");
+      }
+    } catch (error) {
+      console.error("Delete table error:", error);
+      toast.error("Failed to delete table");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setTableToDelete(null);
+  };
+
   const handleBulkDelete = async () => {
     if (selectedTables.size === 0) return;
 
@@ -338,18 +371,25 @@ function TablesPage() {
 
       if (!confirmed) return;
 
-      for (const id of selectedTables) {
-        const result = await deleteTable(id);
-        if (!result.success) {
-          toast.error(`Failed to delete table: ${result.error}`);
-          return;
-        }
-      }
+      const result = await bulkDeleteTables(Array.from(selectedTables));
 
-      toast.success(`Successfully deleted ${selectedTables.size} table(s)`);
-      clearSelection();
-      setShowBulkOperations(false);
+      if (result.success) {
+        if (result.errors && result.errors.length > 0) {
+          // Some tables failed to delete
+          const errorMessages = result.errors.map((e) => e.error).join(", ");
+          toast.error(
+            `Deleted ${result.deleted} table(s), but failed to delete ${result.errors.length}: ${errorMessages}`
+          );
+        } else {
+          toast.success(`Successfully deleted ${result.deleted} table(s)`);
+        }
+        clearSelection();
+        setShowBulkOperations(false);
+      } else {
+        toast.error(result.error || "Failed to delete tables");
+      }
     } catch (error) {
+      console.error("Bulk delete error:", error);
       toast.error("Failed to delete tables");
     }
   };
@@ -572,14 +612,7 @@ function TablesPage() {
         statusFilter === "all" || table.status === statusFilter;
       const matchesCapacity =
         capacityFilter === "all" ||
-        (capacityFilter === "1-2" && table.capacity <= 2) ||
-        (capacityFilter === "3-4" &&
-          table.capacity >= 3 &&
-          table.capacity <= 4) ||
-        (capacityFilter === "5-6" &&
-          table.capacity >= 5 &&
-          table.capacity <= 6) ||
-        (capacityFilter === "7+" && table.capacity >= 7);
+        capacityFilter === table.capacity.toString();
       return matchesSearch && matchesStatus && matchesCapacity;
     });
 
@@ -625,18 +658,91 @@ function TablesPage() {
   }) => {
     const [formData, setFormData] = useState({
       number: table?.number || "",
-      capacity: table?.capacity?.toString() || "",
+      capacity: table?.capacity?.toString() || "4",
     });
     const [submitting, setSubmitting] = useState(false);
+
+    // Auto-generate next table number
+    const getNextTableNumber = useCallback(() => {
+      if (table) return table.number; // Don't auto-number when editing
+
+      const existingNumbers = tables
+        .map((t) => parseInt(t.number))
+        .filter((n) => !isNaN(n));
+
+      if (existingNumbers.length === 0) {
+        return "1";
+      }
+
+      // Find the first gap in the sequence
+      const sortedNumbers = [...existingNumbers].sort((a, b) => a - b);
+
+      // Check for gaps starting from 1
+      for (let i = 1; i <= Math.max(...sortedNumbers) + 1; i++) {
+        if (!sortedNumbers.includes(i)) {
+          return i.toString();
+        }
+      }
+
+      // If no gaps, use the next number after the highest
+      return (Math.max(...sortedNumbers) + 1).toString();
+    }, [tables, table]);
+
+    // Set initial table number when creating a new table
+    useEffect(() => {
+      if (!table && formData.number === "") {
+        setFormData((prev) => ({
+          ...prev,
+          number: getNextTableNumber(),
+        }));
+      }
+    }, [table, getNextTableNumber]);
+
+    // Handle keyboard shortcuts
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && e.ctrlKey) {
+        e.preventDefault();
+        handleSubmit(e as any);
+      }
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    // Use shared capacity constants
+    const capacityOptions = TABLE_CAPACITY_OPTIONS;
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       setSubmitting(true);
 
       try {
+        // Validation
+        const tableNumber = formData.number.trim();
+        const capacity = parseInt(formData.capacity);
+
+        if (!tableNumber) {
+          toast.error("Table number is required");
+          return;
+        }
+
+        if (isNaN(capacity) || capacity < 1 || capacity > 20) {
+          toast.error("Capacity must be between 1 and 20");
+          return;
+        }
+
+        // Check for duplicate table number (only for new tables or when number changed)
+        if (!table || table.number !== tableNumber) {
+          const existingTable = tables.find((t) => t.number === tableNumber);
+          if (existingTable) {
+            toast.error(`Table ${tableNumber} already exists`);
+            return;
+          }
+        }
+
         const formDataObj = new FormData();
-        formDataObj.append("number", formData.number);
-        formDataObj.append("capacity", formData.capacity);
+        formDataObj.append("number", tableNumber);
+        formDataObj.append("capacity", capacity.toString());
 
         let result;
         if (table) {
@@ -681,34 +787,97 @@ function TablesPage() {
     };
 
     return (
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4"
+        onKeyDown={handleKeyDown}
+      >
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="number">Table Number</Label>
-            <Input
-              id="number"
-              value={formData.number}
-              onChange={(e) =>
-                setFormData({ ...formData, number: e.target.value })
-              }
-              placeholder="1"
-              required
-            />
+            <div className="relative">
+              <Input
+                id="number"
+                value={formData.number}
+                onChange={(e) =>
+                  setFormData({ ...formData, number: e.target.value })
+                }
+                placeholder="1"
+                required
+                className={!table ? "pr-20" : ""}
+              />
+              {!table && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="absolute right-1 top-1 h-7 px-2 text-xs"
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      number: getNextTableNumber(),
+                    }))
+                  }
+                >
+                  Auto
+                </Button>
+              )}
+            </div>
+            {!table && (
+              <p className="text-xs text-muted-foreground">
+                Auto-fills the next available number. Click "Auto" to
+                regenerate.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="capacity">Capacity</Label>
-            <Input
-              id="capacity"
-              type="number"
+            <Select
               value={formData.capacity}
-              onChange={(e) =>
-                setFormData({ ...formData, capacity: e.target.value })
+              onValueChange={(value) =>
+                setFormData({ ...formData, capacity: value })
               }
-              placeholder="4"
-              required
-            />
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select capacity" />
+              </SelectTrigger>
+              <SelectContent>
+                {capacityOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
+        {/* Table numbering info */}
+        {!table && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-start space-x-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+              <div className="text-sm">
+                <p className="font-medium text-blue-900">Smart Numbering</p>
+                <p className="text-blue-700">
+                  Automatically finds the next available table number.
+                  {tables.length > 0 && (
+                    <span className="block mt-1">
+                      Current tables:{" "}
+                      {tables
+                        .map((t) => t.number)
+                        .sort((a, b) => parseInt(a) - parseInt(b))
+                        .join(", ")}
+                    </span>
+                  )}
+                  <span className="block mt-1">
+                    Next available: <strong>{getNextTableNumber()}</strong>
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-end space-x-2 pt-4">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
@@ -925,24 +1094,6 @@ function TablesPage() {
             </motion.div>
           </Button>
 
-          {/* QR Settings Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={openSettingsModal}
-            asChild
-          >
-            <motion.div
-              variants={buttonHoverVariants}
-              whileHover="hover"
-              whileTap="tap"
-              className="flex items-center"
-            >
-              <Settings className="w-4 h-4 mr-2" />
-              QR Settings
-            </motion.div>
-          </Button>
-
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1006,23 +1157,53 @@ function TablesPage() {
             </Tooltip>
           </TooltipProvider>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowLayoutEditor(true)}
-            disabled={loading}
-            asChild
-          >
-            <motion.div
-              variants={buttonHoverVariants}
-              whileHover="hover"
-              whileTap="tap"
-              className="flex items-center"
-            >
-              <Grid3X3 className="w-4 h-4 mr-2" />
-              Layout Editor
-            </motion.div>
-          </Button>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-green-600 hover:bg-green-700" asChild>
+                <motion.div
+                  variants={buttonHoverVariants}
+                  whileHover="hover"
+                  whileTap="tap"
+                  className="flex items-center"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Table
+                </motion.div>
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Table</DialogTitle>
+              </DialogHeader>
+              <TableForm onClose={() => setIsAddDialogOpen(false)} />
+            </DialogContent>
+          </Dialog>
+
+          {/* Layout Editor Button */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    (window.location.href = "/dashboard/tables/layout")
+                  }
+                  className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                >
+                  <Layout className="w-4 h-4 mr-2" />
+                  Layout Editor
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="space-y-1">
+                  <p className="font-medium">Table Layout Editor</p>
+                  <p className="text-xs text-muted-foreground">
+                    Visualize and arrange your restaurant tables
+                  </p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           <Popover>
             <PopoverTrigger asChild>
@@ -1046,40 +1227,57 @@ function TablesPage() {
                 </div>
                 <Separator />
                 <div className="space-y-2">
+                  {/* Only show these options in development environment */}
+                  {process.env.NODE_ENV === "development" && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowExportDialog(true)}
+                        className="w-full justify-start"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Export Tables
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowImportDialog(true)}
+                        className="w-full justify-start"
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Import Tables
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          // Open QR setup for the first table if available
+                          if (tables.length > 0) {
+                            openSettingsModal();
+                          } else {
+                            toast.error("No tables available for QR setup");
+                          }
+                        }}
+                        className="w-full justify-start"
+                      >
+                        <QrCode className="w-4 h-4 mr-2" />
+                        QR Code Setup
+                      </Button>
+                    </>
+                  )}
+
+                  {/* Always show these options */}
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowExportDialog(true)}
+                    onClick={openSettingsModal}
                     className="w-full justify-start"
                   >
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Tables
+                    <Settings className="w-4 h-4 mr-2" />
+                    QR Settings
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowImportDialog(true)}
-                    className="w-full justify-start"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import Tables
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      // Open QR setup for the first table if available
-                      if (tables.length > 0) {
-                        openSettingsModal();
-                      } else {
-                        toast.error("No tables available for QR setup");
-                      }
-                    }}
-                    className="w-full justify-start"
-                  >
-                    <QrCode className="w-4 h-4 mr-2" />
-                    QR Code Setup
-                  </Button>
+
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1089,32 +1287,39 @@ function TablesPage() {
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Update All QR Codes
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const confirmed = window.confirm(
+                          "This will clean up orphaned data from the database. This action cannot be undone. Continue?"
+                        );
+                        if (!confirmed) return;
+
+                        const result = await cleanupOrphanedData();
+                        if (result.success) {
+                          toast.success(
+                            `Cleaned up ${result.cleaned} orphaned records`
+                          );
+                        } else {
+                          toast.error(
+                            result.error || "Failed to cleanup orphaned data"
+                          );
+                        }
+                      } catch (error) {
+                        toast.error("Failed to cleanup orphaned data");
+                      }
+                    }}
+                    className="w-full justify-start"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Cleanup Orphaned Data
+                  </Button>
                 </div>
               </div>
             </PopoverContent>
           </Popover>
-
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-green-600 hover:bg-green-700" asChild>
-                <motion.div
-                  variants={buttonHoverVariants}
-                  whileHover="hover"
-                  whileTap="tap"
-                  className="flex items-center"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Table
-                </motion.div>
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Table</DialogTitle>
-              </DialogHeader>
-              <TableForm onClose={() => setIsAddDialogOpen(false)} />
-            </DialogContent>
-          </Dialog>
         </div>
       </motion.div>
 
@@ -1154,21 +1359,25 @@ function TablesPage() {
               title: "Available Tables",
               value: stats.available,
               description: "Ready to seat guests",
+              icon: CheckSquare,
             },
             {
               title: "Occupied Tables",
               value: stats.occupied,
               description: "Currently serving guests",
+              icon: Users,
             },
             {
               title: "Total Tables",
               value: stats.total,
               description: "All restaurant tables",
+              icon: Layout,
             },
             {
               title: "Total Seating Capacity",
               value: stats.totalCapacity,
               description: "Maximum guest capacity",
+              icon: BarChart3,
             },
           ].map((stat, index) => (
             <motion.div
@@ -1184,6 +1393,7 @@ function TablesPage() {
                   <CardTitle className="text-sm font-medium">
                     {stat.title}
                   </CardTitle>
+                  <stat.icon className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{stat.value}</div>
@@ -1293,6 +1503,20 @@ function TablesPage() {
         isBulkMode={showBulkOperations}
         onBulkModeChange={setShowBulkOperations}
         color="blue"
+        onBulkDelete={handleBulkDelete}
+        onBulkToggleAvailability={async () => {
+          // For tables, we'll toggle between available and unavailable
+          const firstTable = paginatedTables.find((table) =>
+            selectedTables.has(table.id)
+          );
+          const targetStatus =
+            firstTable && firstTable.status === "available"
+              ? "unavailable"
+              : "available";
+          await handleBulkStatusUpdate(targetStatus as TableStatus);
+        }}
+        onBulkExport={() => handleBulkExport("csv")}
+        bulkActionsLoading={false}
       >
         {({ selectedIds }) => (
           <>
@@ -1318,8 +1542,17 @@ function TablesPage() {
                         showBulkOperations && "ring-2 ring-blue-200",
                         selectedIds.includes(table.id) &&
                           "ring-2 ring-blue-500 bg-blue-50/80",
-                        "hover:border-gray-300 hover:scale-[1.02]"
+                        "hover:border-gray-300 hover:scale-[1.02]",
+                        showBulkOperations && "cursor-pointer"
                       )}
+                      onClick={() => {
+                        if (showBulkOperations) {
+                          selectTable(
+                            table.id,
+                            !selectedIds.includes(table.id)
+                          );
+                        }
+                      }}
                     >
                       {/* Bulk Selection Checkbox */}
                       {showBulkOperations && (
@@ -1334,7 +1567,8 @@ function TablesPage() {
                             onCheckedChange={(checked) => {
                               selectTable(table.id, !!checked);
                             }}
-                            className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 shadow-lg"
+                            className="w-6 h-6 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 shadow-xl border-2 border-blue-300 bg-white/95 backdrop-blur-sm hover:scale-110 transition-all duration-200"
+                            onClick={(e) => e.stopPropagation()}
                           />
                         </motion.div>
                       )}
@@ -1820,29 +2054,7 @@ function TablesPage() {
                               size="sm"
                               className="h-9 px-3 bg-white hover:bg-red-50 border-gray-200 hover:border-red-300 text-red-600 hover:text-red-700 transition-all duration-200"
                               disabled={actionLoading === table.id}
-                              onClick={async () => {
-                                if (
-                                  confirm(
-                                    `Are you sure you want to delete Table ${table.number}?`
-                                  )
-                                ) {
-                                  setActionLoading(table.id);
-                                  try {
-                                    const result = await deleteTable(table.id);
-                                    if (result.success) {
-                                      toast.success(
-                                        "Table deleted successfully"
-                                      );
-                                    } else {
-                                      toast.error(
-                                        result.error || "Failed to delete table"
-                                      );
-                                    }
-                                  } finally {
-                                    setActionLoading(null);
-                                  }
-                                }
-                              }}
+                              onClick={() => handleDeleteTable(table)}
                             >
                               {actionLoading === table.id ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1961,37 +2173,6 @@ function TablesPage() {
             </Button>
           </div>
         </motion.div>
-      )}
-
-      {/* Layout Editor */}
-      {showLayoutEditor && (
-        <TableLayoutEditor
-          tables={tables}
-          onSave={async (positions) => {
-            try {
-              const layoutData = positions.map((pos) => ({
-                table_id: pos.id,
-                x: pos.x,
-                y: pos.y,
-                rotation: pos.rotation,
-                width: pos.width,
-                height: pos.height,
-              }));
-              const result = await bulkUpdateTableLayouts(layoutData);
-              if (result.success) {
-                toast.success("Table layout updated successfully");
-                await fetchData();
-              } else {
-                toast.error(result.error || "Failed to update layout");
-              }
-            } catch (error) {
-              console.error("Error updating layout:", error);
-              toast.error("Failed to update layout");
-            }
-          }}
-          onClose={() => setShowLayoutEditor(false)}
-          restaurantId={restaurant?.id || ""}
-        />
       )}
 
       {/* Unified QR Settings Modal */}
@@ -2265,6 +2446,70 @@ function TablesPage() {
                 </>
               )}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={closeDeleteDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-500" />
+              Delete Table
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-foreground">
+                Table {tableToDelete?.number}
+              </span>
+              ? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-red-800">
+                    This will permanently delete the table
+                  </p>
+                  <p className="text-red-600 mt-1">
+                    • All associated QR codes will be invalidated
+                  </p>
+                  <p className="text-red-600">
+                    • Any active orders will be affected
+                  </p>
+                  <p className="text-red-600">• This action cannot be undone</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={closeDeleteDialog}
+                disabled={actionLoading === tableToDelete?.id}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmDeleteTable}
+                disabled={actionLoading === tableToDelete?.id}
+              >
+                {actionLoading === tableToDelete?.id ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Table
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

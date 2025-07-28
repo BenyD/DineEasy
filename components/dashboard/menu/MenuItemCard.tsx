@@ -107,6 +107,22 @@ export function MenuItemCard({
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Helper function to format preparation time
+  const formatPreparationTime = (minutes: number): string => {
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const remainingMinutes = minutes % 60;
+      
+      if (remainingMinutes === 0) {
+        return `${hours} hour${hours > 1 ? 's' : ''}`;
+      } else {
+        return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} min`;
+      }
+    } else {
+      return `${minutes} min`;
+    }
+  };
+
   // Helper function to get image source
   const getImageSrc = () => {
     if (imageError || !item.image || item.image === "/placeholder.svg") {
@@ -402,7 +418,7 @@ export function MenuItemCard({
             {/* Preparation Time */}
             <div className="flex items-center gap-1.5 text-sm text-gray-500">
               <Clock className="w-4 h-4" />
-              <span>{item.preparationTime} min</span>
+              <span>{formatPreparationTime(item.preparationTime)}</span>
             </div>
           </div>
         </div>
@@ -526,7 +542,7 @@ export function MenuItemCard({
                       </Badge>
                       <div className="flex items-center gap-1.5 text-gray-500">
                         <Clock className="w-4 h-4" />
-                        <span>{item.preparationTime} min</span>
+                        <span>{formatPreparationTime(item.preparationTime)}</span>
                       </div>
                     </div>
 

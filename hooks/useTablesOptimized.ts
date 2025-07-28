@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
   getTables,
@@ -118,6 +118,7 @@ export function useTablesOptimized(): UseTablesOptimizedReturn {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
+  const hasInitialized = useRef(false);
 
   // Load cached data on mount
   useEffect(() => {
@@ -261,6 +262,14 @@ export function useTablesOptimized(): UseTablesOptimizedReturn {
       setLoading(false);
     }
   }, []);
+
+  // Fetch fresh data on mount (only once)
+  useEffect(() => {
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      fetchData();
+    }
+  }, [fetchData]);
 
   const refreshData = useCallback(async () => {
     if (!loading && !refreshing) {

@@ -19,6 +19,7 @@ interface SidebarData {
   } | null;
   isLoading: boolean;
   error: string | null;
+  refreshUserData: () => void;
 }
 
 export function useSidebarData(): SidebarData {

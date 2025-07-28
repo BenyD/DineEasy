@@ -215,25 +215,25 @@ export function useMenuForm({
   useEffect(() => {
     if (isAutoSelectingRef.current) return;
 
-    if (item && !formState.isFormInitialized) {
+    if (item) {
       // Ensure allergens are properly formatted
       const formattedAllergens =
-        item.allergens?.map((allergen: string | MenuItemAllergen) => {
-          // If allergen is already an object with id, name, and icon, use it
-          if (
-            typeof allergen === "object" &&
-            allergen !== null &&
-            "id" in allergen
-          ) {
-            return allergen as MenuItemAllergen;
-          }
-          // If it's just an ID string, find the full allergen object
-          return {
-            id: allergen as string,
-            name: allergen as string,
-            icon: "⚠️",
-          };
-        }) || [];
+        item.allergens
+          ?.map((allergen: string | MenuItemAllergen) => {
+            // If allergen is already an object with id, name, and icon, use it
+            if (
+              typeof allergen === "object" &&
+              allergen !== null &&
+              "id" in allergen
+            ) {
+              return allergen as MenuItemAllergen;
+            }
+            // If it's just a name string, we need to find the corresponding allergen object
+            // This should be handled by the parent component providing the full allergen data
+            // For now, return null and filter out
+            return null;
+          })
+          .filter(Boolean) || [];
 
       setFormState((prev) => ({
         ...prev,
@@ -321,8 +321,8 @@ export function useMenuForm({
     (tab: "basic" | "details" | "image") => {
       if (tab === formState.activeTab) return;
 
-      // Validate current tab before allowing change
-      if (tab === "details" && !validateForm()) {
+      // Only validate when adding new items, not when editing
+      if (!item && tab === "details" && !validateForm()) {
         toast.error("Please fix the errors before proceeding");
         return;
       }
@@ -333,7 +333,7 @@ export function useMenuForm({
         visitedSteps: new Set([...prev.visitedSteps, tab]),
       }));
     },
-    [formState.activeTab, validateForm]
+    [formState.activeTab, validateForm, item]
   );
 
   // Handle form submission
@@ -453,13 +453,13 @@ export function useMenuForm({
 
         // Simulate compression progress (5% to 35%)
         for (let i = 5; i <= 35; i += 3) {
-          await new Promise(resolve => setTimeout(resolve, 80));
+          await new Promise((resolve) => setTimeout(resolve, 80));
           setFormState((prev) => ({ ...prev, uploadProgress: i }));
         }
 
         // Simulate upload progress (35% to 90%)
         for (let i = 35; i <= 90; i += 2) {
-          await new Promise(resolve => setTimeout(resolve, 120));
+          await new Promise((resolve) => setTimeout(resolve, 120));
           setFormState((prev) => ({ ...prev, uploadProgress: i }));
         }
 

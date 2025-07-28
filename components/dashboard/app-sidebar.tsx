@@ -137,6 +137,18 @@ const navigationData = {
       href: "/dashboard/tables",
       icon: QrCode,
       description: "Manage tables and QR codes",
+      subItems: [
+        {
+          name: "All Tables",
+          href: "/dashboard/tables/all",
+          description: "View and manage all tables",
+        },
+        {
+          name: "Layout Editor",
+          href: "/dashboard/tables/layout",
+          description: "Visual table layout editor",
+        },
+      ],
     },
   ],
   management: [

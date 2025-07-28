@@ -45,6 +45,8 @@ import {
   Image as ImageIcon,
   Info,
   ArrowRight,
+  FileText,
+  Settings,
 } from "lucide-react";
 import { useMenuForm } from "@/hooks/useMenuForm";
 import { toast } from "sonner";
@@ -386,16 +388,29 @@ export function MenuItemModal({
   );
 
   // Add local step completion logic
-  const isStep1Completed =
-    Boolean(
-      formState.formData.name.trim() &&
-        formState.formData.price &&
-        parseFloat(formState.formData.price) > 0 &&
-        formState.formData.preparationTime &&
-        parseInt(formState.formData.preparationTime) > 0
-    ) || Boolean(item); // Always true in edit mode
-  const isStep2Completed =
-    Boolean(formState.formData.category) || Boolean(item); // Always true in edit mode
+  const isStep1Completed = Boolean(
+    formState.formData.name.trim() &&
+      formState.formData.price &&
+      parseFloat(formState.formData.price) > 0 &&
+      formState.formData.preparationTime &&
+      parseInt(formState.formData.preparationTime) > 0
+  );
+
+  const isStep2Completed = Boolean(formState.formData.category);
+
+  // In edit mode, only show steps as completed if we've visited them or are on a later step
+  const shouldShowStep1Completed =
+    isStep1Completed &&
+    (!item ||
+      formState.activeTab === "details" ||
+      formState.activeTab === "image" ||
+      formState.visitedSteps.has("details"));
+
+  const shouldShowStep2Completed =
+    isStep2Completed &&
+    (!item ||
+      formState.activeTab === "image" ||
+      formState.visitedSteps.has("image"));
 
   // Handle adding new category
   const handleAddNewCategory = async () => {
@@ -520,117 +535,134 @@ export function MenuItemModal({
             </DialogTitle>
           </DialogHeader>
 
-          {/* Progress Indicator */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-600">
-                Step{" "}
-                {formState.activeTab === "basic"
-                  ? "1"
-                  : formState.activeTab === "details"
-                    ? "2"
-                    : "3"}{" "}
-                of 3
-              </span>
-              <span className="text-sm text-gray-600">
-                {formState.activeTab === "basic"
-                  ? "Basic Information"
-                  : formState.activeTab === "details"
-                    ? "Details & Settings"
-                    : "Image Upload"}
-              </span>
-            </div>
-
-            {/* Step completion indicators */}
-            <div className="flex items-center gap-2 mb-2">
-              {/* Step 1: Basic Info */}
-              <div
-                className={cn(
-                  "flex items-center gap-1 text-xs",
-                  isStep1Completed ? "text-green-600" : "text-gray-400"
-                )}
-              >
-                <div
-                  className={cn(
-                    "w-4 h-4 rounded-full flex items-center justify-center",
-                    isStep1Completed
-                      ? "bg-green-100 text-green-600"
-                      : "bg-gray-100 text-gray-400"
-                  )}
-                >
-                  {isStep1Completed ? <CheckCircle className="w-3 h-3" /> : "1"}
-                </div>
-                <span>Basic Info</span>
+          {/* Progress Indicator - Only show when adding new items */}
+          {!item && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-600">
+                  Step{" "}
+                  {formState.activeTab === "basic"
+                    ? "1"
+                    : formState.activeTab === "details"
+                      ? "2"
+                      : "3"}{" "}
+                  of 3
+                </span>
+                <span className="text-sm text-gray-600">
+                  {formState.activeTab === "basic"
+                    ? "Basic Information"
+                    : formState.activeTab === "details"
+                      ? "Details & Settings"
+                      : "Image Upload"}
+                </span>
               </div>
 
-              <div className="w-8 h-px bg-gray-300"></div>
-
-              {/* Step 2: Details */}
-              <div
-                className={cn(
-                  "flex items-center gap-1 text-xs",
-                  isStep2Completed ? "text-green-600" : "text-gray-400"
-                )}
-              >
+              {/* Step completion indicators */}
+              <div className="flex items-center gap-2 mb-2">
+                {/* Step 1: Basic Info */}
                 <div
                   className={cn(
-                    "w-4 h-4 rounded-full flex items-center justify-center",
-                    isStep2Completed
-                      ? "bg-green-100 text-green-600"
-                      : "bg-gray-100 text-gray-400"
+                    "flex items-center gap-1 text-xs",
+                    shouldShowStep1Completed
+                      ? "text-green-600"
+                      : "text-gray-400"
                   )}
                 >
-                  {isStep2Completed ? <CheckCircle className="w-3 h-3" /> : "2"}
+                  <div
+                    className={cn(
+                      "w-4 h-4 rounded-full flex items-center justify-center",
+                      shouldShowStep1Completed
+                        ? "bg-green-100 text-green-600"
+                        : "bg-gray-100 text-gray-400"
+                    )}
+                  >
+                    {shouldShowStep1Completed ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      "1"
+                    )}
+                  </div>
+                  <span>Basic Info</span>
                 </div>
-                <span>Details</span>
-              </div>
 
-              <div className="w-8 h-px bg-gray-300"></div>
+                <div className="w-8 h-px bg-gray-300"></div>
 
-              {/* Step 3: Image */}
-              <div
-                className={cn(
-                  "flex items-center gap-1 text-xs",
-                  isStep2Completed && formState.visitedSteps.has("image")
-                    ? "text-green-600"
-                    : "text-gray-400"
-                )}
-              >
+                {/* Step 2: Details */}
                 <div
                   className={cn(
-                    "w-4 h-4 rounded-full flex items-center justify-center",
-                    isStep2Completed && formState.visitedSteps.has("image")
-                      ? "bg-green-100 text-green-600"
-                      : "bg-gray-100 text-gray-400"
+                    "flex items-center gap-1 text-xs",
+                    shouldShowStep2Completed
+                      ? "text-green-600"
+                      : "text-gray-400"
                   )}
                 >
-                  {isStep2Completed && formState.visitedSteps.has("image") ? (
-                    <CheckCircle className="w-3 h-3" />
-                  ) : (
-                    "3"
-                  )}
+                  <div
+                    className={cn(
+                      "w-4 h-4 rounded-full flex items-center justify-center",
+                      shouldShowStep2Completed
+                        ? "bg-green-100 text-green-600"
+                        : "bg-gray-100 text-gray-400"
+                    )}
+                  >
+                    {shouldShowStep2Completed ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      "2"
+                    )}
+                  </div>
+                  <span>Details</span>
                 </div>
-                <span>Image</span>
+
+                <div className="w-8 h-px bg-gray-300"></div>
+
+                {/* Step 3: Image */}
+                <div
+                  className={cn(
+                    "flex items-center gap-1 text-xs",
+                    shouldShowStep2Completed &&
+                      formState.visitedSteps.has("image")
+                      ? "text-green-600"
+                      : "text-gray-400"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-4 h-4 rounded-full flex items-center justify-center",
+                      shouldShowStep2Completed &&
+                        formState.visitedSteps.has("image")
+                        ? "bg-green-100 text-green-600"
+                        : "bg-gray-100 text-gray-400"
+                    )}
+                  >
+                    {shouldShowStep2Completed &&
+                    formState.visitedSteps.has("image") ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      "3"
+                    )}
+                  </div>
+                  <span>Image</span>
+                </div>
+              </div>
+
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                  style={{
+                    width: shouldShowStep1Completed
+                      ? formState.activeTab === "basic"
+                        ? "33%"
+                        : shouldShowStep2Completed
+                          ? formState.activeTab === "details"
+                            ? "66%"
+                            : "100%"
+                          : "33%"
+                      : "0%",
+                  }}
+                ></div>
               </div>
             </div>
-
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                style={{
-                  width: isStep1Completed
-                    ? formState.activeTab === "basic"
-                      ? "33%"
-                      : isStep2Completed
-                        ? formState.activeTab === "details"
-                          ? "66%"
-                          : "100%"
-                        : "33%"
-                    : "0%",
-                }}
-              ></div>
-            </div>
-          </div>
+          )}
 
           <Tabs
             value={formState.activeTab}
@@ -639,50 +671,75 @@ export function MenuItemModal({
             }
           >
             <TabsList className="grid w-full grid-cols-3 bg-gray-100 p-1 rounded-lg">
-              <TabsTrigger
-                value="basic"
-                className="rounded-[6px] data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium data-[state=active]:-mt-0.5"
-              >
-                Basic Info
-              </TabsTrigger>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <TabsTrigger
-                      value="details"
-                      disabled={!isStep1Completed}
-                      className={cn(
-                        "rounded-[6px] flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium data-[state=active]:-mt-0.5",
-                        !isStep1Completed && "cursor-not-allowed opacity-50"
-                      )}
-                    >
-                      Details
-                      {!isStep1Completed && <Lock className="w-3 h-3" />}
-                    </TabsTrigger>
+                    <div className="w-full">
+                      <TabsTrigger
+                        value="basic"
+                        className="w-full rounded-[6px] flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium data-[state=active]:-mt-0.5 transition-all duration-200"
+                      >
+                        <FileText className="w-4 h-4" />
+                        Basic Info
+                      </TabsTrigger>
+                    </div>
                   </TooltipTrigger>
-                  {!isStep1Completed && (
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="w-full">
+                      <TabsTrigger
+                        value="details"
+                        disabled={!isStep1Completed && !item}
+                        className={cn(
+                          "w-full rounded-[6px] flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium data-[state=active]:-mt-0.5 transition-all duration-200",
+                          !isStep1Completed &&
+                            !item &&
+                            "cursor-not-allowed opacity-50"
+                        )}
+                      >
+                        <Settings className="w-4 h-4" />
+                        Details
+                        {!isStep1Completed && !item && (
+                          <Lock className="w-3 h-3" />
+                        )}
+                      </TabsTrigger>
+                    </div>
+                  </TooltipTrigger>
+                  {!isStep1Completed && !item && (
                     <TooltipContent>
                       <p>Complete Basic Information first</p>
                     </TooltipContent>
                   )}
                 </Tooltip>
               </TooltipProvider>
+
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <TabsTrigger
-                      value="image"
-                      disabled={!isStep2Completed}
-                      className={cn(
-                        "rounded-[6px] flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium data-[state=active]:-mt-0.5",
-                        !isStep2Completed && "cursor-not-allowed opacity-50"
-                      )}
-                    >
-                      Image
-                      {!isStep2Completed && <Lock className="w-3 h-3" />}
-                    </TabsTrigger>
+                    <div className="w-full">
+                      <TabsTrigger
+                        value="image"
+                        disabled={!isStep2Completed && !item}
+                        className={cn(
+                          "w-full rounded-[6px] flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=active]:font-medium data-[state=active]:-mt-0.5 transition-all duration-200",
+                          !isStep2Completed &&
+                            !item &&
+                            "cursor-not-allowed opacity-50"
+                        )}
+                      >
+                        <ImageIcon className="w-4 h-4" />
+                        Image
+                        {!isStep2Completed && !item && (
+                          <Lock className="w-3 h-3" />
+                        )}
+                      </TabsTrigger>
+                    </div>
                   </TooltipTrigger>
-                  {!isStep2Completed && (
+                  {!isStep2Completed && !item && (
                     <TooltipContent>
                       <p>Complete Details & Settings first</p>
                     </TooltipContent>
@@ -720,21 +777,49 @@ export function MenuItemModal({
                 </div>
 
                 <div>
-                  <Label
-                    htmlFor="description"
-                    className="text-sm font-medium text-gray-700 mb-2 block"
-                  >
-                    Description
-                  </Label>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label
+                      htmlFor="description"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Description
+                    </Label>
+                    <span
+                      className={cn(
+                        "text-xs",
+                        formState.formData.description.length > 250
+                          ? "text-red-500"
+                          : formState.formData.description.length > 200
+                            ? "text-orange-500"
+                            : "text-gray-500"
+                      )}
+                    >
+                      {formState.formData.description.length}/250
+                    </span>
+                  </div>
                   <Textarea
                     id="description"
                     value={formState.formData.description}
-                    onChange={(e) =>
-                      updateFormData({ description: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.length <= 250) {
+                        updateFormData({ description: value });
+                      }
+                    }}
                     placeholder="Describe your menu item..."
-                    className="h-24 focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
+                    className={cn(
+                      "h-24 focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none",
+                      formState.formData.description.length > 250 &&
+                        "border-red-500 focus:ring-red-500"
+                    )}
+                    maxLength={250}
                   />
+                  {formState.formData.description.length > 250 && (
+                    <p className="mt-2 text-sm text-red-500 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      Description cannot exceed 250 characters
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">

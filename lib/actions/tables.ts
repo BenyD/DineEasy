@@ -273,6 +273,9 @@ export async function deleteTable(id: string) {
       return { error: "Cannot delete table with active orders" };
     }
 
+    // Clean up related data first
+    await cleanupTableData(id, restaurantId);
+
     // Soft delete table
     const { error } = await supabase
       .from("tables")
@@ -303,6 +306,140 @@ export async function deleteTable(id: string) {
   } catch (error: any) {
     console.error("Error in deleteTable:", error);
     return { error: error.message || "Failed to delete table" };
+  }
+}
+
+// Bulk delete tables
+export async function bulkDeleteTables(tableIds: string[]) {
+  const supabase = createClient();
+
+  try {
+    const restaurantId = await getCurrentRestaurantId();
+    const errors: Array<{ id: string; error: string }> = [];
+    let deleted = 0;
+
+    for (const tableId of tableIds) {
+      try {
+        // Check if table exists and belongs to restaurant
+        const { data: table, error: fetchError } = await supabase
+          .from("tables")
+          .select("*")
+          .eq("id", tableId)
+          .eq("restaurant_id", restaurantId)
+          .eq("is_active", true)
+          .single();
+
+        if (fetchError || !table) {
+          errors.push({ id: tableId, error: "Table not found" });
+          continue;
+        }
+
+        // Check if table has active orders
+        const { data: activeOrders } = await supabase
+          .from("orders")
+          .select("id")
+          .eq("table_id", tableId)
+          .in("status", ["pending", "preparing", "ready"]);
+
+        if (activeOrders && activeOrders.length > 0) {
+          errors.push({
+            id: tableId,
+            error: "Cannot delete table with active orders",
+          });
+          continue;
+        }
+
+        // Clean up related data first
+        await cleanupTableData(tableId, restaurantId);
+
+        // Soft delete table
+        const { error } = await supabase
+          .from("tables")
+          .update({
+            is_active: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", tableId)
+          .eq("restaurant_id", restaurantId);
+
+        if (error) {
+          errors.push({ id: tableId, error: error.message });
+          continue;
+        }
+
+        // Log activity
+        await supabase.from("activity_logs").insert({
+          restaurant_id: restaurantId,
+          user_id: (await supabase.auth.getUser()).data.user?.id,
+          type: "table",
+          action: "deleted",
+          description: `Deleted table ${table.number}`,
+          metadata: { table_id: tableId, table_number: table.number },
+        });
+
+        deleted++;
+      } catch (error: any) {
+        errors.push({ id: tableId, error: error.message || "Unknown error" });
+      }
+    }
+
+    revalidatePath("/dashboard/tables");
+    return { success: true, deleted, errors };
+  } catch (error: any) {
+    console.error("Error in bulkDeleteTables:", error);
+    return { error: error.message || "Failed to delete tables" };
+  }
+}
+
+// Helper function to clean up table-related data
+async function cleanupTableData(tableId: string, restaurantId: string) {
+  const supabase = createClient();
+
+  try {
+    // 1. Get all orders for this table
+    const { data: orders } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("table_id", tableId)
+      .eq("restaurant_id", restaurantId);
+
+    if (orders && orders.length > 0) {
+      const orderIds = orders.map((order) => order.id);
+
+      // 2. Delete related payments
+      await supabase
+        .from("payments")
+        .delete()
+        .in("order_id", orderIds)
+        .eq("restaurant_id", restaurantId);
+
+      // 3. Delete related order items
+      await supabase.from("order_items").delete().in("order_id", orderIds);
+
+      // 4. Update feedback to remove order references
+      await supabase
+        .from("feedback")
+        .update({ order_id: null })
+        .in("order_id", orderIds)
+        .eq("restaurant_id", restaurantId);
+
+      // 5. Delete the orders
+      await supabase
+        .from("orders")
+        .delete()
+        .in("id", orderIds)
+        .eq("restaurant_id", restaurantId);
+    }
+
+    // 6. Clean up any orphaned feedback (feedback without orders)
+    await supabase
+      .from("feedback")
+      .delete()
+      .eq("restaurant_id", restaurantId)
+      .is("order_id", null);
+  } catch (error) {
+    console.error("Error cleaning up table data:", error);
+    throw error;
   }
 }
 
@@ -711,6 +848,52 @@ export async function getTableHistory(tableId?: string) {
   }
 }
 
+// Get tables with layout data
+export async function getTablesWithLayout() {
+  const supabase = createClient();
+
+  try {
+    const restaurantId = await getCurrentRestaurantId();
+
+    const { data: tables, error } = await supabase
+      .from("tables")
+      .select(
+        `
+        id,
+        restaurant_id,
+        number,
+        capacity,
+        status,
+        qr_code,
+        is_active,
+        layout_x,
+        layout_y,
+        layout_rotation,
+        layout_width,
+        layout_height,
+        created_at,
+        updated_at
+      `
+      )
+      .eq("restaurant_id", restaurantId)
+      .eq("is_active", true)
+      .order("number");
+
+    if (error) {
+      console.error("Error fetching tables with layout:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: tables || [] };
+  } catch (error: any) {
+    console.error("Error in getTablesWithLayout:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to fetch tables with layout",
+    };
+  }
+}
+
 // Update table layout positions
 export async function updateTableLayout(
   tableId: string,
@@ -988,5 +1171,238 @@ export async function checkAllTableQRCodes() {
   } catch (error: any) {
     console.error("Error in checkAllTableQRCodes:", error);
     return { error: error.message || "Failed to check QR codes" };
+  }
+}
+
+// Clean up orphaned data (for maintenance)
+export async function cleanupOrphanedData() {
+  const supabase = createClient();
+
+  try {
+    const restaurantId = await getCurrentRestaurantId();
+    let cleaned = 0;
+
+    // 1. Clean up orphaned feedback (feedback without orders)
+    const { data: orphanedFeedback } = await supabase
+      .from("feedback")
+      .select("id")
+      .eq("restaurant_id", restaurantId)
+      .is("order_id", null);
+
+    if (orphanedFeedback && orphanedFeedback.length > 0) {
+      await supabase
+        .from("feedback")
+        .delete()
+        .eq("restaurant_id", restaurantId)
+        .is("order_id", null);
+      cleaned += orphanedFeedback.length;
+    }
+
+    // 2. Clean up orphaned payments (payments without orders)
+    const { data: orphanedPayments } = await supabase
+      .from("payments")
+      .select("id")
+      .eq("restaurant_id", restaurantId)
+      .not(
+        "order_id",
+        "in",
+        `(select id from orders where restaurant_id = '${restaurantId}')`
+      );
+
+    if (orphanedPayments && orphanedPayments.length > 0) {
+      await supabase
+        .from("payments")
+        .delete()
+        .eq("restaurant_id", restaurantId)
+        .not(
+          "order_id",
+          "in",
+          `(select id from orders where restaurant_id = '${restaurantId}')`
+        );
+      cleaned += orphanedPayments.length;
+    }
+
+    // 3. Clean up orphaned order items (order items without orders)
+    const { data: orphanedOrderItems } = await supabase
+      .from("order_items")
+      .select("id")
+      .not(
+        "order_id",
+        "in",
+        `(select id from orders where restaurant_id = '${restaurantId}')`
+      );
+
+    if (orphanedOrderItems && orphanedOrderItems.length > 0) {
+      await supabase
+        .from("order_items")
+        .delete()
+        .not(
+          "order_id",
+          "in",
+          `(select id from orders where restaurant_id = '${restaurantId}')`
+        );
+      cleaned += orphanedOrderItems.length;
+    }
+
+    // 4. Clean up orders for deleted tables
+    const { data: orphanedOrders } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("restaurant_id", restaurantId)
+      .not(
+        "table_id",
+        "in",
+        `(select id from tables where restaurant_id = '${restaurantId}' and is_active = true)`
+      );
+
+    if (orphanedOrders && orphanedOrders.length > 0) {
+      // Delete related payments first
+      await supabase
+        .from("payments")
+        .delete()
+        .in(
+          "order_id",
+          orphanedOrders.map((o) => o.id)
+        )
+        .eq("restaurant_id", restaurantId);
+
+      // Delete related order items
+      await supabase
+        .from("order_items")
+        .delete()
+        .in(
+          "order_id",
+          orphanedOrders.map((o) => o.id)
+        );
+
+      // Update feedback to remove order references
+      await supabase
+        .from("feedback")
+        .update({ order_id: null })
+        .in(
+          "order_id",
+          orphanedOrders.map((o) => o.id)
+        )
+        .eq("restaurant_id", restaurantId);
+
+      // Delete the orders
+      await supabase
+        .from("orders")
+        .delete()
+        .in(
+          "id",
+          orphanedOrders.map((o) => o.id)
+        )
+        .eq("restaurant_id", restaurantId);
+
+      cleaned += orphanedOrders.length;
+    }
+
+    return { success: true, cleaned };
+  } catch (error: any) {
+    console.error("Error in cleanupOrphanedData:", error);
+    return { error: error.message || "Failed to cleanup orphaned data" };
+  }
+}
+
+// Get current restaurant type
+export async function getCurrentRestaurantType(): Promise<string | null> {
+  const supabase = createClient();
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("Not authenticated");
+    }
+
+    const { data: restaurant, error } = await supabase
+      .from("restaurants")
+      .select("type")
+      .eq("owner_id", user.id)
+      .single();
+
+    if (error || !restaurant) {
+      console.error("Error fetching restaurant type:", error);
+      return null;
+    }
+
+    return restaurant.type;
+  } catch (error: any) {
+    console.error("Error in getCurrentRestaurantType:", error);
+    return null;
+  }
+}
+
+// Get restaurant elements for layout
+export async function getRestaurantElements() {
+  const supabase = createClient();
+
+  try {
+    const restaurantId = await getCurrentRestaurantId();
+
+    const { data: elements, error } = await supabase.rpc(
+      "get_restaurant_elements",
+      {
+        p_restaurant_id: restaurantId,
+      }
+    );
+
+    if (error) {
+      console.error("Error fetching restaurant elements:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: elements || [] };
+  } catch (error: any) {
+    console.error("Error in getRestaurantElements:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to fetch restaurant elements",
+    };
+  }
+}
+
+// Save restaurant elements for layout
+export async function saveRestaurantElements(elements: any[]) {
+  const supabase = createClient();
+
+  try {
+    const restaurantId = await getCurrentRestaurantId();
+
+    // Convert elements to the format expected by the database function
+    const elementsData = elements.map((element) => ({
+      type: element.type,
+      name: element.name,
+      x: element.x,
+      y: element.y,
+      width: element.width,
+      height: element.height,
+      rotation: element.rotation,
+      color: element.color,
+      icon: element.icon,
+      locked: element.locked,
+      visible: element.visible,
+    }));
+
+    const { data, error } = await supabase.rpc("upsert_restaurant_elements", {
+      p_restaurant_id: restaurantId,
+      p_elements: elementsData,
+    });
+
+    if (error) {
+      console.error("Error saving restaurant elements:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+  } catch (error: any) {
+    console.error("Error in saveRestaurantElements:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to save restaurant elements",
+    };
   }
 }

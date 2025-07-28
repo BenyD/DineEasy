@@ -261,3 +261,18 @@ export interface Notification {
   isRead: boolean;
   createdAt: Date;
 }
+
+export interface RestaurantElement {
+  id: string;
+  type: "entrance" | "kitchen" | "bar" | "bathroom" | "counter" | "storage";
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  color: string;
+  icon: string;
+  locked: boolean;
+  visible: boolean;
+}

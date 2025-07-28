@@ -87,6 +87,7 @@ import { useMenuWebSocket } from "@/hooks/useMenuWebSocket";
 import { getMenuWebSocket } from "@/lib/websocket/menu";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { createClient } from "@/lib/supabase/client";
 
 // Animation variants
 const containerVariants = {
@@ -338,6 +339,65 @@ export default function MenuPage() {
     }
   };
 
+  // Function to copy image to new location in storage
+  const copyImageToNewLocation = async (
+    originalImageUrl: string
+  ): Promise<string> => {
+    const supabase = createClient();
+
+    try {
+      // Extract the file path from the original URL
+      const urlParts = originalImageUrl.split("/");
+      const bucketIndex = urlParts.findIndex(
+        (part: string) => part === "menu-images"
+      );
+
+      if (bucketIndex === -1 || bucketIndex + 1 >= urlParts.length) {
+        throw new Error("Invalid image URL format");
+      }
+
+      // Get the original file path
+      const originalFilePath = urlParts.slice(bucketIndex + 1).join("/");
+
+      // Create a new file path with timestamp to ensure uniqueness
+      const timestamp = Date.now();
+      const fileExtension = originalFilePath.split(".").pop();
+      const fileName =
+        originalFilePath.split("/").pop()?.split(".")[0] || "image";
+      const newFilePath = `${fileName}_${timestamp}.${fileExtension}`;
+
+      // Download the original image
+      const { data: originalImageData, error: downloadError } =
+        await supabase.storage.from("menu-images").download(originalFilePath);
+
+      if (downloadError || !originalImageData) {
+        throw new Error("Failed to download original image");
+      }
+
+      // Upload the image to the new location
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("menu-images")
+        .upload(newFilePath, originalImageData, {
+          contentType: originalImageData.type,
+          cacheControl: "3600",
+        });
+
+      if (uploadError) {
+        throw new Error("Failed to upload copied image");
+      }
+
+      // Get the public URL for the new image
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("menu-images").getPublicUrl(newFilePath);
+
+      return publicUrl;
+    } catch (error) {
+      console.error("Error copying image:", error);
+      throw error;
+    }
+  };
+
   // Enhanced duplicate handler
   const handleDuplicate = async (item: MenuItem) => {
     try {
@@ -352,7 +412,24 @@ export default function MenuPage() {
       formData.append("preparationTime", item.preparationTime.toString());
       formData.append("available", item.available.toString());
       formData.append("popular", item.popular.toString());
-      formData.append("imageUrl", item.image || "");
+
+      // Handle image duplication
+      if (
+        item.image &&
+        item.image !== "/placeholder.svg" &&
+        item.image !== "/placeholder.svg?height=100&width=100"
+      ) {
+        try {
+          // Copy the image to a new location
+          const newImageUrl = await copyImageToNewLocation(item.image);
+          formData.append("imageUrl", newImageUrl);
+        } catch (imageError) {
+          console.warn("Failed to copy image, using placeholder:", imageError);
+          formData.append("imageUrl", "/placeholder.svg");
+        }
+      } else {
+        formData.append("imageUrl", "/placeholder.svg");
+      }
 
       // Add allergens
       if (item.allergens && item.allergens.length > 0) {
@@ -464,6 +541,114 @@ export default function MenuPage() {
     } catch (error: any) {
       console.error("Delete error:", error);
       toast.error("Failed to delete menu item");
+    }
+  };
+
+  // Bulk operations handlers
+  const handleBulkDelete = async () => {
+    if (selectedItems.size === 0) return;
+
+    try {
+      const confirmed = window.confirm(
+        `Are you sure you want to delete ${selectedItems.size} menu item(s)? This action cannot be undone.`
+      );
+
+      if (!confirmed) return;
+
+      setBulkLoading(true);
+      const result = await bulkDeleteMenuItems(Array.from(selectedItems));
+
+      if (result.success) {
+        toast.success(
+          `Successfully deleted ${selectedItems.size} menu item(s)`
+        );
+        setSelectedItems(new Set());
+        await refresh();
+      } else {
+        toast.error(`Failed to delete menu items: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+      toast.error("Failed to delete menu items. Please try again.");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkToggleAvailability = async () => {
+    if (selectedItems.size === 0) return;
+
+    try {
+      const confirmed = window.confirm(
+        `Are you sure you want to toggle availability for ${selectedItems.size} menu item(s)?`
+      );
+
+      if (!confirmed) return;
+
+      setBulkLoading(true);
+      // For bulk toggle, we'll toggle to the opposite of the first selected item's availability
+      const firstItem = menuItems.find((item) => selectedItems.has(item.id));
+      const targetAvailability = firstItem ? !firstItem.available : true;
+
+      const result = await bulkToggleAvailability(
+        Array.from(selectedItems),
+        targetAvailability
+      );
+
+      if (result.success) {
+        toast.success(
+          `Successfully toggled availability for ${selectedItems.size} menu item(s)`
+        );
+        setSelectedItems(new Set());
+        await refresh();
+      } else {
+        toast.error(`Failed to toggle availability: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Bulk toggle availability error:", error);
+      toast.error("Failed to toggle availability. Please try again.");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  // Handle card selection in bulk mode
+  const handleCardSelect = (itemId: string, selected: boolean) => {
+    const newSelected = new Set(selectedItems);
+    if (selected) {
+      newSelected.add(itemId);
+    } else {
+      newSelected.delete(itemId);
+    }
+    setSelectedItems(newSelected);
+  };
+
+  // Handle select all across all pages
+  const handleSelectAllAcrossPages = async () => {
+    try {
+      setBulkLoading(true);
+      const allItemIds = await getAllMenuItemIds({
+        searchTerm: filters.searchTerm,
+        categoryId: filters.categoryId !== "all" ? filters.categoryId : "",
+        available: filters.available,
+        popular: filters.popular,
+        minPrice: filters.minPrice,
+        maxPrice: filters.maxPrice,
+      });
+
+      if (allItemIds.success) {
+        setSelectedItems(new Set(allItemIds.ids));
+        toast.success(
+          `Selected all ${allItemIds.ids.length} menu items across all pages`
+        );
+      } else {
+        toast.error("Failed to select all items");
+      }
+    } catch (error) {
+      console.error("Select all error:", error);
+      toast.error("Failed to select all items");
+    } finally {
+      setBulkLoading(false);
     }
   };
 
@@ -933,6 +1118,10 @@ export default function MenuPage() {
         isBulkMode={showBulkOperations}
         onBulkModeChange={setShowBulkOperations}
         color="green"
+        onBulkDelete={handleBulkDelete}
+        onBulkToggleAvailability={handleBulkToggleAvailability}
+        onSelectAllAcrossPages={handleSelectAllAcrossPages}
+        bulkActionsLoading={bulkLoading}
       >
         {({ selectedIds, isBulkMode, handleSelectItem }) => (
           <>
@@ -966,15 +1155,7 @@ export default function MenuPage() {
                       isSelected={selectedIds.includes(item.id)}
                       showCheckbox={isBulkMode}
                       currencySymbol={currencySymbol}
-                      onSelect={(id, selected) => {
-                        const newSelected = new Set(selectedItems);
-                        if (selected) {
-                          newSelected.add(id);
-                        } else {
-                          newSelected.delete(id);
-                        }
-                        setSelectedItems(newSelected);
-                      }}
+                      onSelect={handleCardSelect}
                       onEdit={() => setEditingItem(item)}
                       onDuplicate={() => handleDuplicate(item)}
                       onToggleAvailability={handleToggleAvailability}
@@ -1036,56 +1217,40 @@ export default function MenuPage() {
       )}
 
       {/* Edit Dialog */}
-      {editingItem && (
-        <Dialog open={!!editingItem} onOpenChange={() => setEditingItem(null)}>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle>Edit Menu Item</DialogTitle>
-            </DialogHeader>
-            <MenuItemModal
-              open={!!editingItem}
-              onOpenChange={(open) => !open && setEditingItem(null)}
-              item={editingItem}
-              menuCategories={categories}
-              menuAllergens={allergens}
-              isAddingCategoryOrAllergen={
-                isCategoriesLoading || isAllergensLoading
-              }
-              onSubmit={handleEditSubmit}
-              onAddCategory={async (name: string, description: string) => {
-                const formData = new FormData();
-                formData.append("name", name);
-                formData.append("description", description);
-                const result = await createCategory(formData);
+      <MenuItemModal
+        open={!!editingItem}
+        onOpenChange={(open) => !open && setEditingItem(null)}
+        item={editingItem}
+        menuCategories={categories}
+        menuAllergens={allergens}
+        isAddingCategoryOrAllergen={isCategoriesLoading || isAllergensLoading}
+        onSubmit={handleEditSubmit}
+        onAddCategory={async (name: string, description: string) => {
+          const formData = new FormData();
+          formData.append("name", name);
+          formData.append("description", description);
+          const result = await createCategory(formData);
 
-                if (result.success && result.data) {
-                  // Return the new category data - WebSocket will handle the refresh
-                  return result.data;
-                }
-                throw new Error(result.error || "Failed to create category");
-              }}
-              onAddAllergen={async (name: string, icon: string) => {
-                const formData = new FormData();
-                formData.append("name", name);
-                formData.append("icon", icon);
-                const result = await createAllergen(formData);
+          if (result.success && result.data) {
+            // Return the new category data - WebSocket will handle the refresh
+            return result.data;
+          }
+          throw new Error(result.error || "Failed to create category");
+        }}
+        onAddAllergen={async (name: string, icon: string) => {
+          const formData = new FormData();
+          formData.append("name", name);
+          formData.append("icon", icon);
+          const result = await createAllergen(formData);
 
-                if (result.success && result.data) {
-                  // Return the new allergen data - WebSocket will handle the refresh
-                  return result.data;
-                }
-                throw new Error(result.error || "Failed to create allergen");
-              }}
-              currencySymbol={currencySymbol}
-            />
-            {editError && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-600">{editError}</p>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-      )}
+          if (result.success && result.data) {
+            // Return the new allergen data - WebSocket will handle the refresh
+            return result.data;
+          }
+          throw new Error(result.error || "Failed to create allergen");
+        }}
+        currencySymbol={currencySymbol}
+      />
 
       {/* Bulk Confirmation Dialog */}
       <Dialog open={bulkConfirmOpen} onOpenChange={setBulkConfirmOpen}>

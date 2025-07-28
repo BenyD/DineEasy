@@ -521,6 +521,59 @@ export interface Database {
           updated_at?: string;
         };
       };
+      restaurant_elements: {
+        Row: {
+          id: string;
+          restaurant_id: string;
+          type: string;
+          name: string;
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          rotation: number;
+          color: string;
+          icon: string;
+          locked: boolean;
+          visible: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          restaurant_id: string;
+          type: string;
+          name: string;
+          x?: number;
+          y?: number;
+          width?: number;
+          height?: number;
+          rotation?: number;
+          color?: string;
+          icon?: string;
+          locked?: boolean;
+          visible?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          restaurant_id?: string;
+          type?: string;
+          name?: string;
+          x?: number;
+          y?: number;
+          width?: number;
+          height?: number;
+          rotation?: number;
+          color?: string;
+          icon?: string;
+          locked?: boolean;
+          visible?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       tables: {
         Row: {
           id: string;
@@ -530,6 +583,11 @@ export interface Database {
           status: Database["public"]["Enums"]["table_status"];
           qr_code: string | null;
           is_active: boolean;
+          layout_x: number | null;
+          layout_y: number | null;
+          layout_rotation: number | null;
+          layout_width: number | null;
+          layout_height: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -541,6 +599,11 @@ export interface Database {
           status?: Database["public"]["Enums"]["table_status"];
           qr_code?: string | null;
           is_active?: boolean;
+          layout_x?: number | null;
+          layout_y?: number | null;
+          layout_rotation?: number | null;
+          layout_width?: number | null;
+          layout_height?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -552,6 +615,11 @@ export interface Database {
           status?: Database["public"]["Enums"]["table_status"];
           qr_code?: string | null;
           is_active?: boolean;
+          layout_x?: number | null;
+          layout_y?: number | null;
+          layout_rotation?: number | null;
+          layout_width?: number | null;
+          layout_height?: number | null;
           created_at?: string;
           updated_at?: string;
         };
