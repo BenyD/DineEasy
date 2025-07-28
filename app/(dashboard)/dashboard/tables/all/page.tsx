@@ -104,14 +104,14 @@ import {
 
 import { BulkActions } from "@/components/dashboard/common/BulkActions";
 import { TableQRCode } from "@/components/dashboard/tables/TableQRCode";
-import { UnifiedQRSettingsModal } from "@/components/dashboard/tables/UnifiedQRSettingsModal";
+
 import { TablesErrorBoundary } from "@/components/dashboard/tables/TablesErrorBoundary";
 import {
   generateTableQRData,
   isQRCodeEnvironmentCorrect,
 } from "@/lib/utils/qr-code";
 import { QR_CONFIG } from "@/lib/constants";
-import { useQRSettings } from "@/lib/store/qr-settings";
+
 import { useTablesOptimized } from "@/hooks/useTablesOptimized";
 import { useTablesWebSocket } from "@/hooks/useTablesWebSocket";
 import { retryWithConditions } from "@/lib/utils/retry";
@@ -243,9 +243,6 @@ function TablesPage() {
       removeTable(table.id);
     },
   });
-
-  // QR Settings
-  const { openSettingsModal } = useQRSettings();
 
   // Search function without debounce to prevent random refreshes
   const handleSearchChange = useCallback((query: string) => {
@@ -519,15 +516,15 @@ function TablesPage() {
             table.qr_code ||
             `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${table.id}`;
 
-          // Get QR settings from store
-          const { getQRCodeOptions, settings } = useQRSettings();
-          const qrOptions = getQRCodeOptions();
-
-          // Generate QR code as data URL
+          // Generate QR code as data URL with default options
           const QRCode = (await import("qrcode")).default;
           const qrDataUrl = await QRCode.toDataURL(qrUrl, {
-            ...qrOptions,
-            width: settings.defaultExportSize,
+            width: 256,
+            margin: 2,
+            color: {
+              dark: "#000000",
+              light: "#FFFFFF",
+            },
           });
 
           // Create download link
@@ -731,14 +728,8 @@ function TablesPage() {
           return;
         }
 
-        // Check for duplicate table number (only for new tables or when number changed)
-        if (!table || table.number !== tableNumber) {
-          const existingTable = tables.find((t) => t.number === tableNumber);
-          if (existingTable) {
-            toast.error(`Table ${tableNumber} already exists`);
-            return;
-          }
-        }
+        // Note: Server-side validation will handle duplicate table numbers,
+        // including checking for inactive tables that can be reactivated
 
         const formDataObj = new FormData();
         formDataObj.append("number", tableNumber);
@@ -753,7 +744,10 @@ function TablesPage() {
 
         if (result.success) {
           toast.success(
-            table ? "Table updated successfully" : "Table created successfully"
+            (result as any).message ||
+              (table
+                ? "Table updated successfully"
+                : "Table created successfully")
           );
 
           // Close the dialog first
@@ -1248,35 +1242,8 @@ function TablesPage() {
                         <Upload className="w-4 h-4 mr-2" />
                         Import Tables
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          // Open QR setup for the first table if available
-                          if (tables.length > 0) {
-                            openSettingsModal();
-                          } else {
-                            toast.error("No tables available for QR setup");
-                          }
-                        }}
-                        className="w-full justify-start"
-                      >
-                        <QrCode className="w-4 h-4 mr-2" />
-                        QR Code Setup
-                      </Button>
                     </>
                   )}
-
-                  {/* Always show these options */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={openSettingsModal}
-                    className="w-full justify-start"
-                  >
-                    <Settings className="w-4 h-4 mr-2" />
-                    QR Settings
-                  </Button>
 
                   <Button
                     variant="ghost"
@@ -1829,18 +1796,17 @@ function TablesPage() {
                                           table.qr_code ||
                                           `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${table.id}`;
 
-                                        // Get QR settings from store
-                                        const { getQRCodeOptions, settings } =
-                                          useQRSettings();
-                                        const qrOptions = getQRCodeOptions();
-
-                                        // Generate QR code as data URL
+                                        // Generate QR code as data URL with default options
                                         const QRCode = (await import("qrcode"))
                                           .default;
                                         const qrDataUrl =
                                           await QRCode.toDataURL(qrUrl, {
-                                            ...qrOptions,
-                                            width: settings.defaultExportSize,
+                                            width: 256,
+                                            margin: 2,
+                                            color: {
+                                              dark: "#000000",
+                                              light: "#FFFFFF",
+                                            },
                                           });
 
                                         // Create download link
@@ -1935,19 +1901,18 @@ function TablesPage() {
                                         table.qr_code ||
                                         `${QR_CONFIG.BASE_URL}${QR_CONFIG.PATH_PREFIX}/${table.id}`;
 
-                                      // Get QR settings from store
-                                      const { getQRCodeOptions, settings } =
-                                        useQRSettings();
-                                      const qrOptions = getQRCodeOptions();
-
-                                      // Generate QR code as data URL
+                                      // Generate QR code as data URL with default options
                                       const QRCode = (await import("qrcode"))
                                         .default;
                                       const qrDataUrl = await QRCode.toDataURL(
                                         qrUrl,
                                         {
-                                          ...qrOptions,
-                                          width: settings.defaultExportSize,
+                                          width: 256,
+                                          margin: 2,
+                                          color: {
+                                            dark: "#000000",
+                                            light: "#FFFFFF",
+                                          },
                                         }
                                       );
 
@@ -2174,9 +2139,6 @@ function TablesPage() {
           </div>
         </motion.div>
       )}
-
-      {/* Unified QR Settings Modal */}
-      <UnifiedQRSettingsModal />
 
       {/* Export Dialog */}
       <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>

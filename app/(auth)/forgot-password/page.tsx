@@ -35,8 +35,10 @@ export default function ForgotPasswordPage() {
 
       const result = await requestPasswordReset(email);
 
-      if (result.error) {
-        throw new Error(result.error);
+      // The function always returns { success: true } for security reasons
+      // (to not reveal whether a user exists)
+      if (!result.success) {
+        throw new Error("Failed to process password reset request");
       }
 
       // Always show success message even if email doesn't exist (security best practice)

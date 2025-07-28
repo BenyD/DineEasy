@@ -78,17 +78,82 @@ export async function createTable(formData: FormData) {
       return { error: "Capacity must be between 1 and 20" };
     }
 
-    // Check if table number already exists
+    // Check if table number already exists (including inactive tables)
     const { data: existingTable } = await supabase
       .from("tables")
-      .select("id")
+      .select("id, is_active")
       .eq("restaurant_id", restaurantId)
       .eq("number", number)
-      .eq("is_active", true)
       .single();
 
     if (existingTable) {
-      return { error: `Table ${number} already exists` };
+      if (existingTable.is_active) {
+        return { error: `Table ${number} already exists` };
+      } else {
+        // Reactivate the existing inactive table
+        const { data: reactivatedTable, error: reactivateError } =
+          await supabase
+            .from("tables")
+            .update({
+              capacity,
+              status: "available" as TableStatus,
+              is_active: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingTable.id)
+            .select()
+            .single();
+
+        if (reactivateError) {
+          console.error("Error reactivating table:", reactivateError);
+          return { error: reactivateError.message };
+        }
+
+        // Generate QR code URL for reactivated table
+        const baseUrl =
+          process.env.NEXT_PUBLIC_APP_URL || "https://dineeasy.ch";
+        const qrCodeUrl = `${baseUrl}/qr/${reactivatedTable.id}`;
+
+        // Update with QR code
+        const { data: updatedTable, error: updateError } = await supabase
+          .from("tables")
+          .update({
+            qr_code: qrCodeUrl,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", reactivatedTable.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error(
+            "Error updating reactivated table with QR code:",
+            updateError
+          );
+        }
+
+        // Log activity
+        await supabase.from("activity_logs").insert({
+          restaurant_id: restaurantId,
+          user_id: (await supabase.auth.getUser()).data.user?.id,
+          type: "table",
+          action: "reactivated",
+          description: `Reactivated table ${number} with capacity ${capacity}`,
+          metadata: {
+            table_id: reactivatedTable.id,
+            table_number: number,
+            capacity: capacity,
+            qr_code: qrCodeUrl,
+          },
+        });
+
+        revalidatePath("/dashboard/tables");
+        return {
+          success: true,
+          data: updatedTable || reactivatedTable,
+          message: `Table ${number} reactivated successfully`,
+        };
+      }
     }
 
     // Create table first to get the ID
@@ -286,6 +351,9 @@ export async function deleteTable(id: string) {
       .eq("id", id)
       .eq("restaurant_id", restaurantId);
 
+    // Verify cleanup was successful
+    await verifyTableCleanup(id, restaurantId);
+
     if (error) {
       console.error("Error deleting table:", error);
       return { error: error.message };
@@ -362,6 +430,9 @@ export async function bulkDeleteTables(tableIds: string[]) {
           .eq("id", tableId)
           .eq("restaurant_id", restaurantId);
 
+        // Verify cleanup was successful
+        await verifyTableCleanup(tableId, restaurantId);
+
         if (error) {
           errors.push({ id: tableId, error: error.message });
           continue;
@@ -437,9 +508,118 @@ async function cleanupTableData(tableId: string, restaurantId: string) {
       .delete()
       .eq("restaurant_id", restaurantId)
       .is("order_id", null);
+
+    // 7. Clean up table layout positions (reset to null)
+    await supabase
+      .from("tables")
+      .update({
+        layout_x: null,
+        layout_y: null,
+        layout_rotation: null,
+        layout_width: null,
+        layout_height: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", tableId)
+      .eq("restaurant_id", restaurantId);
+
+    // 8. Clean up activity logs related to this table
+    await supabase
+      .from("activity_logs")
+      .delete()
+      .eq("restaurant_id", restaurantId)
+      .eq("type", "table")
+      .contains("metadata", { table_id: tableId });
+
+    // 9. Clean up any notifications related to this table
+    await supabase
+      .from("notifications")
+      .delete()
+      .eq("restaurant_id", restaurantId)
+      .contains("message", `table ${tableId}`);
+
+    // 10. Clean up any orphaned activity logs (safety check)
+    await supabase
+      .from("activity_logs")
+      .delete()
+      .eq("restaurant_id", restaurantId)
+      .eq("type", "table")
+      .contains("metadata", { table_id: tableId });
+
+    // 11. Clean up any orphaned feedback (final safety check)
+    await supabase
+      .from("feedback")
+      .delete()
+      .eq("restaurant_id", restaurantId)
+      .is("order_id", null);
+
+    console.log(`Successfully cleaned up all data for table ${tableId}`);
   } catch (error) {
     console.error("Error cleaning up table data:", error);
     throw error;
+  }
+}
+
+// Verify that table cleanup was successful
+async function verifyTableCleanup(tableId: string, restaurantId: string) {
+  const supabase = createClient();
+
+  try {
+    // Check for any remaining orders
+    const { data: remainingOrders } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("table_id", tableId)
+      .eq("restaurant_id", restaurantId);
+
+    if (remainingOrders && remainingOrders.length > 0) {
+      console.warn(
+        `Warning: ${remainingOrders.length} orders still exist for table ${tableId}`
+      );
+    }
+
+    // Check for any remaining payments
+    const { data: remainingPayments } = await supabase
+      .from("payments")
+      .select("id")
+      .eq("restaurant_id", restaurantId)
+      .in("order_id", remainingOrders?.map((o) => o.id) || []);
+
+    if (remainingPayments && remainingPayments.length > 0) {
+      console.warn(
+        `Warning: ${remainingPayments.length} payments still exist for table ${tableId}`
+      );
+    }
+
+    // Check for any remaining order items
+    const { data: remainingOrderItems } = await supabase
+      .from("order_items")
+      .select("id")
+      .in("order_id", remainingOrders?.map((o) => o.id) || []);
+
+    if (remainingOrderItems && remainingOrderItems.length > 0) {
+      console.warn(
+        `Warning: ${remainingOrderItems.length} order items still exist for table ${tableId}`
+      );
+    }
+
+    // Check for any remaining feedback
+    const { data: remainingFeedback } = await supabase
+      .from("feedback")
+      .select("id")
+      .eq("restaurant_id", restaurantId)
+      .in("order_id", remainingOrders?.map((o) => o.id) || []);
+
+    if (remainingFeedback && remainingFeedback.length > 0) {
+      console.warn(
+        `Warning: ${remainingFeedback.length} feedback entries still exist for table ${tableId}`
+      );
+    }
+
+    console.log(`Verification complete for table ${tableId}`);
+  } catch (error) {
+    console.error("Error verifying table cleanup:", error);
+    // Don't throw error as this is just verification
   }
 }
 

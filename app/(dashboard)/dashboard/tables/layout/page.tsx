@@ -588,19 +588,38 @@ export default function TableLayoutEditor() {
           // Use the first matching template as default
           const defaultTemplate = matchingTemplates[0];
 
-          // Check if we have tables but no saved layout data
-          const hasTables = tables.length > 0;
-          const hasSavedLayout = tables.some(
-            (table) =>
-              table.layout_x !== null &&
-              table.layout_y !== null &&
-              table.layout_width !== null &&
-              table.layout_height !== null
-          );
+          // Always load the default template since we've already checked for saved layout
+          await loadTemplate(defaultTemplate);
 
-          // Load default template if no tables exist OR if tables exist but no layout data
-          if (!hasTables || (hasTables && !hasSavedLayout)) {
-            await loadTemplate(defaultTemplate);
+          // Automatically save the template after loading
+          try {
+            // Save table positions
+            if (tables.length > 0) {
+              const tablePromises = Array.from(tablePositions.entries()).map(
+                ([tableId, position]) => {
+                  return updateTableLayout(
+                    tableId,
+                    position.x,
+                    position.y,
+                    position.rotation,
+                    position.width,
+                    position.height
+                  );
+                }
+              );
+              await Promise.all(tablePromises);
+            }
+
+            // Save restaurant elements
+            if (restaurantElements.length > 0) {
+              await saveRestaurantElements(restaurantElements);
+            }
+
+            toast.success(
+              `Loaded and saved ${defaultTemplate.name} template for your ${restaurantType}`
+            );
+          } catch (error) {
+            console.error("Error auto-saving template:", error);
             toast.success(
               `Loaded ${defaultTemplate.name} template for your ${restaurantType}`
             );
@@ -615,23 +634,19 @@ export default function TableLayoutEditor() {
       }
     };
 
-    // Load default template if no tables exist or if tables exist but no saved layout
-    if (tables.length > 0) {
-      const hasSavedLayout = tables.some(
-        (table) =>
-          table.layout_x !== null &&
-          table.layout_y !== null &&
-          table.layout_width !== null &&
-          table.layout_height !== null
-      );
+    // Always load default template if no saved layout exists
+    const hasSavedLayout = tables.some(
+      (table) =>
+        table.layout_x !== null &&
+        table.layout_y !== null &&
+        table.layout_width !== null &&
+        table.layout_height !== null
+    );
 
-      if (!hasSavedLayout) {
-        loadDefaultTemplate();
-      } else {
-        setDefaultTemplateLoaded(true); // Mark as loaded if we have saved layout
-      }
-    } else if (tables.length === 0) {
+    if (!hasSavedLayout) {
       loadDefaultTemplate();
+    } else {
+      setDefaultTemplateLoaded(true); // Mark as loaded if we have saved layout
     }
   }, [tables, loading, defaultTemplateLoaded]);
 

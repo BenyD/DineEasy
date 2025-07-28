@@ -12,7 +12,6 @@ import {
   downloadQRCodeSVG,
   type TableQRData,
 } from "@/lib/utils/qr-code";
-import { useQRSettings } from "@/lib/store/qr-settings";
 
 interface TableQRCodeProps {
   tableData: TableQRData;
@@ -29,7 +28,6 @@ export function TableQRCode({
   className = "",
   onRegenerate,
 }: TableQRCodeProps) {
-  const { getQRCodeOptions, settings } = useQRSettings();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [isVisible, setIsVisible] = useState(true);
@@ -45,18 +43,22 @@ export function TableQRCode({
 
   const config = sizeConfig[size];
 
-  // Generate QR code on mount and when settings change
+  // Generate QR code on mount and when tableData changes
   useEffect(() => {
     generateQRCode();
-  }, [tableData, settings]);
+  }, [tableData]);
 
   const generateQRCode = async () => {
     try {
       setIsLoading(true);
-      const qrOptions = getQRCodeOptions();
       const qrDataUrl = await generateStyledTableQR(tableData, {
-        ...qrOptions,
         width: config.qrSize,
+        margin: 2,
+        color: {
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
+        errorCorrectionLevel: "M",
       });
       setQrCodeDataUrl(qrDataUrl);
     } catch (error) {
@@ -69,7 +71,6 @@ export function TableQRCode({
 
   const handleDownloadPNG = async () => {
     try {
-      const qrOptions = getQRCodeOptions();
       await downloadQRCode(
         JSON.stringify({
           tableId: tableData.tableId,
@@ -79,8 +80,13 @@ export function TableQRCode({
         }),
         `table-${tableData.tableNumber}-qr`,
         {
-          ...qrOptions,
-          width: settings.defaultExportSize,
+          width: 256,
+          margin: 2,
+          color: {
+            dark: "#000000",
+            light: "#FFFFFF",
+          },
+          errorCorrectionLevel: "M",
         }
       );
       toast.success("QR code downloaded as PNG");
@@ -91,7 +97,6 @@ export function TableQRCode({
 
   const handleDownloadSVG = async () => {
     try {
-      const qrOptions = getQRCodeOptions();
       await downloadQRCodeSVG(
         JSON.stringify({
           tableId: tableData.tableId,
@@ -101,8 +106,13 @@ export function TableQRCode({
         }),
         `table-${tableData.tableNumber}-qr`,
         {
-          ...qrOptions,
-          width: settings.defaultExportSize,
+          width: 256,
+          margin: 2,
+          color: {
+            dark: "#000000",
+            light: "#FFFFFF",
+          },
+          errorCorrectionLevel: "M",
         }
       );
       toast.success("QR code downloaded as SVG");
@@ -242,11 +252,9 @@ export function TableQRCode({
       )}
 
       {/* URL Display */}
-      {settings.showQRCodeInfo && (
-        <div className="mt-2">
-          <p className="text-xs text-gray-500 break-all">{tableData.qrUrl}</p>
-        </div>
-      )}
+      <div className="mt-2">
+        <p className="text-xs text-gray-500 break-all">{tableData.qrUrl}</p>
+      </div>
     </div>
   );
 }

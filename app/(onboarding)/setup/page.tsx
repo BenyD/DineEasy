@@ -51,6 +51,14 @@ const RESTAURANT_TYPES = [
   { value: "cafe", label: "Cafe" },
   { value: "bar", label: "Bar" },
   { value: "food-truck", label: "Food Truck" },
+  { value: "pizzeria", label: "Pizzeria" },
+  { value: "sushi", label: "Sushi Restaurant" },
+  { value: "steakhouse", label: "Steakhouse" },
+  { value: "bakery", label: "Bakery" },
+  { value: "brewery", label: "Brewery" },
+  { value: "food-court", label: "Food Court" },
+  { value: "catering", label: "Catering Service" },
+  { value: "ghost-kitchen", label: "Ghost Kitchen" },
 ] as const;
 
 const CUISINE_TYPES = [
