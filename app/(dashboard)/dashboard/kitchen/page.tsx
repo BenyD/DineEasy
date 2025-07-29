@@ -2,13 +2,27 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, CheckCircle, AlertCircle, Timer, Bell } from "lucide-react";
+import {
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Timer,
+  Bell,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
 import { KitchenDndContext } from "@/components/dashboard/kitchen/KitchenDndContext";
+import {
+  getRestaurantOrders,
+  updateOrderStatus,
+  type Order as DBOrder,
+} from "@/lib/actions/orders";
+import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 
 interface OrderItem {
@@ -30,87 +44,6 @@ interface Order {
   priority: string;
   total: number;
 }
-
-// Mock orders for demonstration
-const mockOrders: Order[] = [
-  {
-    id: "ORD-001",
-    tableNumber: "5",
-    customerName: "John D.",
-    items: [
-      {
-        name: "Margherita Pizza",
-        quantity: 1,
-        price: 24.0,
-        modifiers: ["Extra cheese", "Thin crust"],
-      },
-      {
-        name: "Caesar Salad",
-        quantity: 1,
-        price: 12.5,
-        modifiers: ["No croutons"],
-      },
-      { name: "House Wine", quantity: 2, price: 8.0, modifiers: [] },
-    ],
-    status: "new",
-    time: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-    estimatedTime: 15,
-    notes: "Please bring extra napkins",
-    priority: "normal",
-    total: 42.5,
-  },
-  {
-    id: "ORD-002",
-    tableNumber: "3",
-    customerName: "Sarah M.",
-    items: [
-      {
-        name: "Grilled Salmon",
-        quantity: 1,
-        price: 32.0,
-        modifiers: ["Medium rare", "No vegetables"],
-      },
-      {
-        name: "Risotto",
-        quantity: 1,
-        price: 26.0,
-        modifiers: ["Extra parmesan"],
-      },
-    ],
-    status: "preparing",
-    time: new Date(Date.now() - 12 * 60 * 1000), // 12 minutes ago
-    estimatedTime: 20,
-    notes: "",
-    priority: "high",
-    total: 58.0,
-  },
-  {
-    id: "ORD-003",
-    tableNumber: "8",
-    customerName: "Mike R.",
-    items: [
-      {
-        name: "Beef Burger",
-        quantity: 2,
-        price: 22.0,
-        modifiers: ["Medium", "Extra bacon"],
-      },
-      {
-        name: "French Fries",
-        quantity: 2,
-        price: 8.5,
-        modifiers: ["Extra crispy"],
-      },
-      { name: "Coca Cola", quantity: 2, price: 4.0, modifiers: [] },
-    ],
-    status: "ready",
-    time: new Date(Date.now() - 2 * 60 * 1000), // 2 minutes ago
-    estimatedTime: 12,
-    notes: "Table is in a hurry",
-    priority: "high",
-    total: 65.0,
-  },
-];
 
 const formatTime = (date: Date) => {
   return new Intl.DateTimeFormat("en-US", {
@@ -171,34 +104,149 @@ const iconVariants = {
 export default function KitchenPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isSoundMuted, setIsSoundMuted] = useState(false);
+  const [previousOrdersCount, setPreviousOrdersCount] = useState(0);
+  const { restaurant } = useRestaurantSettings();
   const router = useRouter();
 
-  // Initialize orders and time after mount
+  // Load sound preference from localStorage
   useEffect(() => {
-    setOrders(mockOrders);
-    setCurrentTime(new Date());
+    const savedMutePreference = localStorage.getItem("kitchen-sound-muted");
+    if (savedMutePreference) {
+      setIsSoundMuted(JSON.parse(savedMutePreference));
+    }
   }, []);
+
+  // Save sound preference to localStorage
+  const toggleSound = () => {
+    const newMuteState = !isSoundMuted;
+    setIsSoundMuted(newMuteState);
+    localStorage.setItem("kitchen-sound-muted", JSON.stringify(newMuteState));
+  };
+
+  // Fetch orders from DB
+  useEffect(() => {
+    if (!restaurant?.id) return;
+    setLoading(true);
+    getRestaurantOrders(restaurant.id)
+      .then((result) => {
+        if (result.success && result.data) {
+          const mappedOrders = result.data.map((order: DBOrder) => ({
+            id: order.id,
+            tableNumber: order.tableNumber,
+            customerName: order.customerName || "",
+            items: order.items.map((item) => ({
+              name: item.name,
+              quantity: item.quantity,
+              price: item.price,
+              modifiers: item.modifiers || [],
+            })),
+            status: order.status,
+            time: new Date(order.time),
+            estimatedTime: order.estimatedTime || 15,
+            notes: order.notes || "",
+            priority: order.priority || "normal",
+            total: order.total,
+          }));
+          setOrders(mappedOrders);
+          // Set initial count after first load
+          if (previousOrdersCount === 0) {
+            setPreviousOrdersCount(mappedOrders.length);
+          }
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [restaurant?.id]);
+
+  // WebSocket for real-time updates
+  useOrdersWebSocket({
+    restaurantId: restaurant?.id,
+    onOrderAdded: (order) => {
+      setOrders((prev) => [
+        {
+          id: order.id,
+          tableNumber: order.table_number || "Unknown",
+          customerName: order.customer_name || "",
+          items: [], // Optionally fetch items if needed
+          status: order.status,
+          time: new Date(order.created_at),
+          estimatedTime: 15,
+          notes: order.notes || "",
+          priority: "normal",
+          total: order.total_amount,
+        },
+        ...prev,
+      ]);
+    },
+    onOrderUpdated: (updatedOrder) => {
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === updatedOrder.id
+            ? {
+                ...order,
+                status: updatedOrder.status,
+                notes: updatedOrder.notes || "",
+                updated_at: updatedOrder.updated_at,
+              }
+            : order
+        )
+      );
+    },
+    onOrderDeleted: (deletedOrder) => {
+      setOrders((prev) => prev.filter((order) => order.id !== deletedOrder.id));
+    },
+  });
 
   // Update current time every minute
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 60000);
-
+    setCurrentTime(new Date());
     return () => clearInterval(timer);
   }, []);
 
-  // Play sound for new orders
+  // Play sound for new orders (only when count increases)
   useEffect(() => {
-    if (orders.length === 0) return; // Skip if orders not initialized
+    if (orders.length === 0 || previousOrdersCount === 0) return;
 
-    const audio = new Audio("/notification-sound.mp3");
-    const newOrders = orders.filter((order) => order.status === "new");
+    const currentNewOrdersCount = orders.filter(
+      (order) => order.status === "new"
+    ).length;
+    const previousNewOrdersCount = Math.max(
+      0,
+      previousOrdersCount -
+        orders.filter((order) => order.status !== "new").length
+    );
 
-    if (newOrders.length > 0) {
+    // Only play sound if we have more new orders than before and sound is not muted
+    if (currentNewOrdersCount > previousNewOrdersCount && !isSoundMuted) {
+      const audio = new Audio("/notification-sound.mp3");
       audio.play().catch((error) => console.log("Audio play failed:", error));
     }
-  }, [orders]);
+
+    // Update previous count
+    setPreviousOrdersCount(orders.length);
+  }, [orders.length, previousOrdersCount, isSoundMuted]);
+
+  // Persist status changes to DB
+  const handleOrdersChange = async (newOrders: typeof orders) => {
+    // Find changed statuses and update in DB
+    for (const newOrder of newOrders) {
+      const oldOrder = orders.find((o) => o.id === newOrder.id);
+      if (oldOrder && oldOrder.status !== newOrder.status) {
+        await updateOrderStatus(newOrder.id, newOrder.status);
+      }
+    }
+    setOrders(newOrders);
+  };
+
+  if (loading || !currentTime) {
+    return (
+      <div className="p-6 text-center text-gray-500">Loading orders...</div>
+    );
+  }
 
   const getTimeSinceOrder = (orderTime: Date) => {
     if (!currentTime) return ""; // Return empty string if time not initialized
@@ -232,21 +280,6 @@ export default function KitchenPage() {
     }
   };
 
-  const handleOrdersChange = (newOrders: typeof orders) => {
-    // Sort orders by time within each status (newest first)
-    const sortedOrders = [...newOrders].sort((a, b) => {
-      if (a.status !== b.status) return 0; // Don't sort across different statuses
-      return b.time.getTime() - a.time.getTime(); // Sort by time within same status
-    });
-
-    setOrders(sortedOrders);
-  };
-
-  // Only show content after time is initialized
-  if (!currentTime) {
-    return null; // Or return a loading skeleton
-  }
-
   return (
     <motion.div
       className="p-4 md:p-6 space-y-4 md:space-y-6"
@@ -275,12 +308,33 @@ export default function KitchenPage() {
               {formatTime(currentTime)}
             </span>
           </motion.div>
+
+          {/* Sound Toggle Button */}
           <motion.div variants={cardVariants}>
             <Button
               variant="outline"
               size="sm"
               className="flex items-center gap-2"
-              onClick={() => router.push("/dashboard/orders")}
+              onClick={toggleSound}
+              title={
+                isSoundMuted ? "Unmute notifications" : "Mute notifications"
+              }
+            >
+              {isSoundMuted ? (
+                <VolumeX className="h-4 w-4" />
+              ) : (
+                <Volume2 className="h-4 w-4" />
+              )}
+              {isSoundMuted ? "Unmute" : "Mute"}
+            </Button>
+          </motion.div>
+
+          <motion.div variants={cardVariants}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+              onClick={() => router.push("/dashboard/orders/active")}
             >
               Orders View
             </Button>

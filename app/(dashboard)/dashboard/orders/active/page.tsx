@@ -20,6 +20,8 @@ import {
   Download,
   Ban,
   ChevronRight,
+  Loader2,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,113 +62,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
+import {
+  getRestaurantOrders,
+  updateOrderStatus,
+  cancelOrder,
+  type Order,
+  type OrderFilters,
+} from "@/lib/actions/orders";
+import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
+import { toast } from "sonner";
 
-// Mock orders data
-const mockOrders = [
-  {
-    id: "ORD-001",
-    tableNumber: "5",
-    customerName: "John D.",
-    items: [
-      {
-        name: "Margherita Pizza",
-        quantity: 1,
-        price: 24.0,
-        modifiers: ["Extra cheese", "Thin crust"],
-      },
-      {
-        name: "Caesar Salad",
-        quantity: 1,
-        price: 12.5,
-        modifiers: ["No croutons"],
-      },
-      { name: "House Wine", quantity: 2, price: 8.0, modifiers: [] },
-    ],
-    status: "new",
-    time: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-    estimatedTime: 15,
-    notes: "Please bring extra napkins",
-    total: 42.5,
-    paymentStatus: "pending",
-  },
-  {
-    id: "ORD-002",
-    tableNumber: "3",
-    customerName: "Sarah M.",
-    items: [
-      {
-        name: "Grilled Salmon",
-        quantity: 1,
-        price: 32.0,
-        modifiers: ["Medium rare", "No vegetables"],
-      },
-      {
-        name: "Risotto",
-        quantity: 1,
-        price: 26.0,
-        modifiers: ["Extra parmesan"],
-      },
-    ],
-    status: "preparing",
-    time: new Date(Date.now() - 12 * 60 * 1000), // 12 minutes ago
-    estimatedTime: 20,
-    notes: "",
-    total: 58.0,
-    paymentStatus: "paid",
-  },
-  {
-    id: "ORD-003",
-    tableNumber: "8",
-    customerName: "Mike R.",
-    items: [
-      {
-        name: "Beef Burger",
-        quantity: 2,
-        price: 22.0,
-        modifiers: ["Medium", "Extra bacon"],
-      },
-      {
-        name: "French Fries",
-        quantity: 2,
-        price: 8.5,
-        modifiers: ["Extra crispy"],
-      },
-      { name: "Coca Cola", quantity: 2, price: 4.0, modifiers: [] },
-    ],
-    status: "ready",
-    time: new Date(Date.now() - 2 * 60 * 1000), // 2 minutes ago
-    estimatedTime: 12,
-    notes: "Table is in a hurry",
-    total: 65.0,
-    paymentStatus: "pending",
-  },
-];
-
-const orderStatuses = [
-  { id: "all", name: "All Orders", count: mockOrders.length },
-  {
-    id: "new",
-    name: "New",
-    count: mockOrders.filter((o) => o.status === "new").length,
-  },
-  {
-    id: "preparing",
-    name: "Preparing",
-    count: mockOrders.filter((o) => o.status === "preparing").length,
-  },
-  {
-    id: "ready",
-    name: "Ready",
-    count: mockOrders.filter((o) => o.status === "ready").length,
-  },
-  {
-    id: "completed",
-    name: "Completed",
-    count: mockOrders.filter((o) => o.status === "completed").length,
-  },
-];
-
-type OrderStatus = "new" | "preparing" | "ready" | "refunded";
+type OrderStatus = "new" | "preparing" | "ready" | "refunded" | "all";
 
 const formatTime = (date: Date) => {
   let hours = date.getHours();
@@ -237,13 +143,131 @@ const iconVariants = {
 
 export default function ActiveOrdersPage() {
   const router = useRouter();
-  const { currency } = useRestaurantSettings();
-  const [orders, setOrders] = useState(mockOrders);
+  const { currencySymbol, restaurant } = useRestaurantSettings();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | null>(null);
   const [timeFilter, setTimeFilter] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set());
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+
+  // WebSocket for real-time updates
+  const { isConnected } = useOrdersWebSocket({
+    restaurantId: restaurant?.id,
+    onOrderAdded: (newOrder) => {
+      // Add new order to the list if it matches current filters
+      const orderData: Order = {
+        id: newOrder.id,
+        orderNumber:
+          (newOrder as any).order_number ||
+          `ORD-${newOrder.id.slice(-8).toUpperCase()}`,
+        tableNumber: "Unknown", // Will be fetched with full data
+        customerName: undefined,
+        items: [],
+        status: newOrder.status,
+        time: new Date(newOrder.created_at),
+        estimatedTime: 15,
+        notes: newOrder.notes || undefined,
+        total: newOrder.total_amount,
+        paymentStatus: "pending",
+        priority: "normal",
+        restaurant_id: newOrder.restaurant_id,
+        table_id: newOrder.table_id || "",
+        total_amount: newOrder.total_amount,
+        tax_amount: newOrder.tax_amount,
+        tip_amount: newOrder.tip_amount,
+        created_at: newOrder.created_at,
+        updated_at: newOrder.updated_at,
+        stripe_payment_intent_id: (newOrder as any).stripe_payment_intent_id,
+      };
+
+      setOrders((prev) => [orderData, ...prev]);
+    },
+    onOrderUpdated: (updatedOrder, oldOrder) => {
+      // If order is cancelled or completed, remove it from active orders
+      if (
+        updatedOrder.status === "cancelled" ||
+        updatedOrder.status === "completed"
+      ) {
+        setOrders((prev) =>
+          prev.filter((order) => order.id !== updatedOrder.id)
+        );
+        toast.success(
+          `Order ${(updatedOrder as any).order_number || updatedOrder.id.slice(-6)} moved to history (${updatedOrder.status})`,
+          {
+            duration: 3000,
+          }
+        );
+      } else {
+        // Update the order in the list
+        setOrders((prev) =>
+          prev.map((order) =>
+            order.id === updatedOrder.id
+              ? {
+                  ...order,
+                  status: updatedOrder.status,
+                  total_amount: updatedOrder.total_amount,
+                  tax_amount: updatedOrder.tax_amount,
+                  tip_amount: updatedOrder.tip_amount,
+                  notes: updatedOrder.notes || undefined,
+                  updated_at: updatedOrder.updated_at,
+                }
+              : order
+          )
+        );
+
+        // Show toast for status changes
+        if (oldOrder && updatedOrder.status !== oldOrder.status) {
+          toast.success(
+            `Order ${(updatedOrder as any).order_number || updatedOrder.id.slice(-6)} status updated to ${updatedOrder.status}`,
+            {
+              duration: 3000,
+            }
+          );
+        }
+      }
+    },
+    onOrderDeleted: (deletedOrder) => {
+      setOrders((prev) => prev.filter((order) => order.id !== deletedOrder.id));
+    },
+  });
+
+  // Fetch orders data
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!restaurant?.id) return;
+
+      setLoading(true);
+      try {
+        const filters: OrderFilters = {};
+        if (statusFilter && statusFilter !== "all") {
+          filters.status = statusFilter;
+        }
+        if (searchQuery) {
+          filters.search = searchQuery;
+        }
+
+        const result = await getRestaurantOrders(restaurant.id, filters);
+
+        if (result.success && result.data) {
+          setOrders(result.data);
+        } else {
+          console.error("Failed to fetch orders:", result.error);
+          toast.error("Failed to load orders");
+        }
+      } catch (error) {
+        console.error("Error fetching orders:", error);
+        toast.error("Failed to load orders");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [restaurant?.id, statusFilter, searchQuery]);
 
   // Update current time every minute
   useEffect(() => {
@@ -302,7 +326,8 @@ export default function ActiveOrdersPage() {
     const matchesSearch =
       searchQuery === "" ||
       order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (order.customerName &&
+        order.customerName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       order.tableNumber.toString().includes(searchQuery);
 
     const matchesStatus = !statusFilter || order.status === statusFilter;
@@ -324,6 +349,7 @@ export default function ActiveOrdersPage() {
     setTimeFilter("all");
   };
 
+  // Filter orders by status for display (these are already filtered at database level)
   const newOrders = filteredOrders.filter((order) => order.status === "new");
   const preparingOrders = filteredOrders.filter(
     (order) => order.status === "preparing"
@@ -362,13 +388,95 @@ export default function ActiveOrdersPage() {
     return `${hours}h ${diffInMinutes % 60}m ago`;
   };
 
-  const updateOrderStatus = (orderId: string, newStatus: string) => {
-    console.log(`Updating order ${orderId} to ${newStatus}`);
-    // In real app, this would update the order status
+  const handleUpdateOrderStatus = async (
+    orderId: string,
+    newStatus: string
+  ) => {
+    try {
+      // Set loading state for this specific order
+      setUpdatingOrders((prev) => new Set(prev).add(orderId));
+
+      // Optimistically update the UI immediately
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === orderId
+            ? {
+                ...order,
+                status: newStatus,
+                updated_at: new Date().toISOString(),
+              }
+            : order
+        )
+      );
+
+      const result = await updateOrderStatus(orderId, newStatus);
+
+      if (result.success) {
+        toast.success(`Order status updated to ${newStatus}`);
+        // WebSocket will handle the real-time update, so we don't need to refresh
+      } else {
+        // Revert the optimistic update on error
+        setOrders((prev) =>
+          prev.map((order) =>
+            order.id === orderId
+              ? { ...order, status: order.status, updated_at: order.updated_at }
+              : order
+          )
+        );
+        toast.error(result.error || "Failed to update order status");
+      }
+    } catch (error) {
+      // Revert the optimistic update on error
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === orderId
+            ? { ...order, status: order.status, updated_at: order.updated_at }
+            : order
+        )
+      );
+      console.error("Error updating order status:", error);
+      toast.error("Failed to update order status");
+    } finally {
+      // Clear loading state for this order
+      setUpdatingOrders((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
   };
 
-  const formatCurrency = (amount: number) => {
-    return `${currency.symbol} ${amount.toFixed(2)}`;
+  const handleCancelOrder = async (orderId: string) => {
+    try {
+      setUpdatingOrders((prev) => new Set(prev).add(orderId));
+
+      const result = await cancelOrder(orderId);
+
+      if (result.success) {
+        toast.success("Order cancelled successfully");
+        setCancelOrderId(null);
+      } else {
+        toast.error(result.error || "Failed to cancel order");
+      }
+    } catch (error) {
+      console.error("Error cancelling order:", error);
+      toast.error("Failed to cancel order");
+    } finally {
+      setUpdatingOrders((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
+  };
+
+  const formatCurrency = (amount: number): string => {
+    return `${currencySymbol} ${amount.toFixed(2)}`;
+  };
+
+  // Get order number from order object
+  const getOrderNumber = (order: Order) => {
+    return order.orderNumber || `#${order.id.slice(-8).toUpperCase()}`;
   };
 
   return (
@@ -401,6 +509,7 @@ export default function ActiveOrdersPage() {
               {formatTime(currentTime)}
             </span>
           </motion.div>
+
           <Button
             variant="outline"
             size="sm"
@@ -637,7 +746,22 @@ export default function ActiveOrdersPage() {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
               >
-                {filteredOrders.length === 0 ? (
+                {loading ? (
+                  <motion.div
+                    className="text-center py-8"
+                    variants={itemVariants}
+                  >
+                    <motion.div variants={iconVariants}>
+                      <div className="w-8 h-8 border-2 border-gray-300 border-t-green-600 rounded-full animate-spin mx-auto mb-4" />
+                    </motion.div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      Loading orders...
+                    </h3>
+                    <p className="text-gray-500">
+                      Please wait while we fetch your orders
+                    </p>
+                  </motion.div>
+                ) : filteredOrders.length === 0 ? (
                   <motion.div
                     className="text-center py-8"
                     variants={itemVariants}
@@ -661,7 +785,14 @@ export default function ActiveOrdersPage() {
                       animate="visible"
                       transition={{ delay: index * 0.1 }}
                     >
-                      <Card key={order.id} className="overflow-hidden">
+                      <Card
+                        key={order.id}
+                        className={`overflow-hidden ${
+                          updatingOrders.has(order.id)
+                            ? "ring-2 ring-green-200 ring-opacity-50"
+                            : ""
+                        }`}
+                      >
                         <CardContent className="p-6">
                           {/* Order Header */}
                           <div className="flex items-center justify-between mb-4">
@@ -669,12 +800,20 @@ export default function ActiveOrdersPage() {
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-3">
                                   <span className="text-lg font-semibold">
-                                    {order.id}
+                                    {getOrderNumber(order)}
                                   </span>
                                   <Badge
-                                    className={getStatusColor(order.status)}
+                                    className={`${getStatusColor(order.status)} ${
+                                      updatingOrders.has(order.id)
+                                        ? "animate-pulse"
+                                        : ""
+                                    }`}
                                   >
-                                    {getStatusIcon(order.status)}
+                                    {updatingOrders.has(order.id) ? (
+                                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                    ) : (
+                                      getStatusIcon(order.status)
+                                    )}
                                     <span className="ml-1 capitalize">
                                       {order.status}
                                     </span>
@@ -683,11 +822,20 @@ export default function ActiveOrdersPage() {
                                 <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
                                   <span>Table {order.tableNumber}</span>
                                   <span>•</span>
-                                  <span>{order.customerName}</span>
+                                  <span>{order.customerName || "Guest"}</span>
                                   <span>•</span>
                                   <span>
                                     {getTimeAgo(order.time.toISOString())}
                                   </span>
+                                  {order.notes && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="flex items-center gap-1 text-blue-600 font-medium">
+                                        <MessageSquare className="h-3 w-3" />
+                                        Special Instructions
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -700,6 +848,20 @@ export default function ActiveOrdersPage() {
                               >
                                 {order.paymentStatus.charAt(0).toUpperCase() +
                                   order.paymentStatus.slice(1)}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {order.paymentMethod === "card"
+                                  ? "Card"
+                                  : order.paymentMethod === "cash"
+                                    ? "Cash"
+                                    : order.paymentMethod === "other"
+                                      ? "Other"
+                                      : order.paymentMethod
+                                        ? order.paymentMethod
+                                            .charAt(0)
+                                            .toUpperCase() +
+                                          order.paymentMethod.slice(1)
+                                        : "Unknown"}
                               </Badge>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -727,29 +889,9 @@ export default function ActiveOrdersPage() {
                                     Print Order
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  {order.paymentStatus === "paid" && (
-                                    <DropdownMenuItem
-                                      className="text-purple-600"
-                                      onClick={() => {
-                                        // Update order status to refunded
-                                        const updatedOrders = orders.map((o) =>
-                                          o.id === order.id
-                                            ? { ...o, status: "refunded" }
-                                            : o
-                                        );
-                                        setOrders(updatedOrders);
-                                      }}
-                                    >
-                                      <RefreshCcw className="h-4 w-4 mr-2" />
-                                      Refund Order
-                                    </DropdownMenuItem>
-                                  )}
                                   <DropdownMenuItem
                                     className="text-red-600"
-                                    onClick={() => {
-                                      // Implement cancel functionality
-                                      console.log("Cancel order:", order.id);
-                                    }}
+                                    onClick={() => setCancelOrderId(order.id)}
                                   >
                                     <Ban className="h-4 w-4 mr-2" />
                                     Cancel Order
@@ -773,11 +915,12 @@ export default function ActiveOrdersPage() {
                                     </span>
                                     <span className="ml-2">{item.name}</span>
                                   </div>
-                                  {item.modifiers.length > 0 && (
-                                    <p className="text-sm text-gray-500 mt-0.5">
-                                      {item.modifiers.join(", ")}
-                                    </p>
-                                  )}
+                                  {item.modifiers &&
+                                    item.modifiers.length > 0 && (
+                                      <p className="text-sm text-gray-500 mt-0.5">
+                                        {item.modifiers.join(", ")}
+                                      </p>
+                                    )}
                                 </div>
                                 <span className="text-gray-600">
                                   {formatCurrency(item.quantity * item.price)}
@@ -802,6 +945,7 @@ export default function ActiveOrdersPage() {
                                 variant="default"
                                 size="sm"
                                 className="bg-green-600 hover:bg-green-700 text-white"
+                                disabled={updatingOrders.has(order.id)}
                                 onClick={() => {
                                   const nextStatus = {
                                     new: "preparing",
@@ -809,18 +953,28 @@ export default function ActiveOrdersPage() {
                                     ready: "completed",
                                   }[order.status];
                                   if (nextStatus) {
-                                    const updatedOrders = orders.map((o) =>
-                                      o.id === order.id
-                                        ? { ...o, status: nextStatus }
-                                        : o
+                                    handleUpdateOrderStatus(
+                                      order.id,
+                                      nextStatus
                                     );
-                                    setOrders(updatedOrders);
                                   }
                                 }}
                               >
-                                {order.status === "new" && "Start Preparing"}
-                                {order.status === "preparing" && "Mark Ready"}
-                                {order.status === "ready" && "Complete Order"}
+                                {updatingOrders.has(order.id) ? (
+                                  <div className="flex items-center gap-2">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Updating...
+                                  </div>
+                                ) : (
+                                  <>
+                                    {order.status === "new" &&
+                                      "Start Preparing"}
+                                    {order.status === "preparing" &&
+                                      "Mark Ready"}
+                                    {order.status === "ready" &&
+                                      "Complete Order"}
+                                  </>
+                                )}
                               </Button>
                             </div>
                           </div>
@@ -842,152 +996,240 @@ export default function ActiveOrdersPage() {
             open={!!selectedOrder}
             onOpenChange={() => setSelectedOrder(null)}
           >
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
+                className="p-2"
               >
-                <DialogHeader className="space-y-2">
-                  <DialogTitle>Order {selectedOrder.id}</DialogTitle>
-                  <div className="flex items-center gap-2">
+                <DialogHeader className="space-y-4 pb-6">
+                  <DialogTitle className="text-2xl font-bold text-gray-900">
+                    Order {getOrderNumber(selectedOrder)}
+                  </DialogTitle>
+                  <div className="flex items-center gap-3">
                     <Badge className={getStatusColor(selectedOrder.status)}>
                       {getStatusIcon(selectedOrder.status)}
-                      <span className="ml-1 capitalize">
+                      <span className="ml-2 capitalize font-medium">
                         {selectedOrder.status}
                       </span>
                     </Badge>
-                    <span className="text-sm text-gray-500">•</span>
-                    <span className="text-sm text-gray-500">
+                    <span className="text-gray-400">•</span>
+                    <span className="text-sm text-gray-600 font-medium">
                       {getTimeAgo(selectedOrder.time.toISOString())}
                     </span>
                   </div>
                 </DialogHeader>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-500">Table</p>
-                      <p className="font-semibold">
-                        Table {selectedOrder.tableNumber}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Customer</p>
-                      <p className="font-semibold">
-                        {selectedOrder.customerName}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Payment</p>
-                      <Badge
-                        variant="outline"
-                        className={
-                          selectedOrder.paymentStatus === "paid"
-                            ? "text-green-600"
-                            : "text-amber-600"
-                        }
-                      >
-                        {selectedOrder.paymentStatus.charAt(0).toUpperCase() +
-                          selectedOrder.paymentStatus.slice(1)}
-                      </Badge>
+
+                <div className="space-y-6">
+                  {/* Order Information */}
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Order Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                          Table
+                        </p>
+                        <p className="text-lg font-semibold text-gray-900">
+                          Table {selectedOrder.tableNumber}
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                          Customer
+                        </p>
+                        <p className="text-lg font-semibold text-gray-900">
+                          {selectedOrder.customerName || "Guest"}
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                          Payment Status
+                        </p>
+                        <Badge
+                          variant="outline"
+                          className={
+                            selectedOrder.paymentStatus === "paid"
+                              ? "text-green-600 border-green-200 bg-green-50"
+                              : "text-amber-600 border-amber-200 bg-amber-50"
+                          }
+                        >
+                          {selectedOrder.paymentStatus.charAt(0).toUpperCase() +
+                            selectedOrder.paymentStatus.slice(1)}
+                        </Badge>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                          Payment Method
+                        </p>
+                        <Badge
+                          variant="outline"
+                          className="text-blue-600 border-blue-200 bg-blue-50"
+                        >
+                          {selectedOrder.paymentMethod === "card"
+                            ? "Card"
+                            : selectedOrder.paymentMethod === "cash"
+                              ? "Cash"
+                              : selectedOrder.paymentMethod === "other"
+                                ? "Other"
+                                : selectedOrder.paymentMethod
+                                  ? selectedOrder.paymentMethod
+                                      .charAt(0)
+                                      .toUpperCase() +
+                                    selectedOrder.paymentMethod.slice(1)
+                                  : "Unknown"}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
 
-                  <Separator />
-
-                  <div>
-                    <h4 className="font-semibold mb-2">Items</h4>
-                    <div className="space-y-3">
+                  {/* Order Items */}
+                  <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Order Items
+                    </h3>
+                    <div className="space-y-4">
                       {selectedOrder.items.map((item: any, index: number) => (
-                        <div key={index} className="flex justify-between">
-                          <div>
-                            <div className="flex items-center">
-                              <span className="font-medium">
-                                {item.quantity}x {item.name}
+                        <div
+                          key={index}
+                          className="flex justify-between items-start py-3 border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3">
+                              <span className="font-bold text-gray-900 text-lg">
+                                {item.quantity}x
+                              </span>
+                              <span className="font-semibold text-gray-900 text-lg">
+                                {item.name}
                               </span>
                             </div>
-                            {item.modifiers.length > 0 && (
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                ({item.modifiers.join(", ")})
+                            {item.modifiers && item.modifiers.length > 0 && (
+                              <p className="text-sm text-gray-600 mt-2 ml-8">
+                                Modifiers: {item.modifiers.join(", ")}
                               </p>
                             )}
                           </div>
-                          <span>
+                          <span className="font-bold text-gray-900 text-lg">
                             {formatCurrency(item.quantity * item.price)}
                           </span>
                         </div>
                       ))}
                     </div>
-                    <div className="border-t mt-3 pt-2 flex justify-between font-semibold">
-                      <span>Total</span>
-                      <span>{formatCurrency(selectedOrder.total)}</span>
+
+                    {/* Order Totals */}
+                    <div className="mt-6 pt-4 border-t border-gray-200">
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm text-gray-600">
+                          <span>Subtotal</span>
+                          <span>{formatCurrency(selectedOrder.total)}</span>
+                        </div>
+                        {selectedOrder.tax_amount > 0 && (
+                          <div className="flex justify-between text-sm text-gray-600">
+                            <span>Tax</span>
+                            <span>
+                              {formatCurrency(selectedOrder.tax_amount)}
+                            </span>
+                          </div>
+                        )}
+                        {selectedOrder.tip_amount > 0 && (
+                          <div className="flex justify-between text-sm text-gray-600">
+                            <span>Tip</span>
+                            <span>
+                              {formatCurrency(selectedOrder.tip_amount)}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-lg font-bold text-gray-900 pt-2 border-t border-gray-200">
+                          <span>Total</span>
+                          <span>{formatCurrency(selectedOrder.total)}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
+                  {/* Customer Notes */}
                   {selectedOrder.notes && (
-                    <>
-                      <Separator />
-                      <div>
-                        <h4 className="font-semibold mb-2">Customer Notes</h4>
-                        <p className="text-sm bg-gray-50 p-2 rounded">
-                          {selectedOrder.notes}
-                        </p>
-                      </div>
-                    </>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                        Customer Notes
+                      </h3>
+                      <p className="text-gray-700 leading-relaxed">
+                        {selectedOrder.notes}
+                      </p>
+                    </div>
                   )}
 
-                  <div className="flex justify-end gap-2 pt-2">
+                  {/* Action Buttons */}
+                  <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                     {selectedOrder.status === "new" && (
                       <Button
+                        disabled={updatingOrders.has(selectedOrder.id)}
                         onClick={() => {
-                          const updatedOrders = orders.map((o) =>
-                            o.id === selectedOrder.id
-                              ? { ...o, status: "preparing" }
-                              : o
+                          handleUpdateOrderStatus(
+                            selectedOrder.id,
+                            "preparing"
                           );
-                          setOrders(updatedOrders);
                           setSelectedOrder(null);
                         }}
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
                       >
-                        Start Preparing
+                        {updatingOrders.has(selectedOrder.id) ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Updating...
+                          </div>
+                        ) : (
+                          "Start Preparing"
+                        )}
                       </Button>
                     )}
                     {selectedOrder.status === "preparing" && (
                       <Button
+                        disabled={updatingOrders.has(selectedOrder.id)}
                         onClick={() => {
-                          const updatedOrders = orders.map((o) =>
-                            o.id === selectedOrder.id
-                              ? { ...o, status: "ready" }
-                              : o
-                          );
-                          setOrders(updatedOrders);
+                          handleUpdateOrderStatus(selectedOrder.id, "ready");
                           setSelectedOrder(null);
                         }}
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
                       >
-                        Mark Ready
+                        {updatingOrders.has(selectedOrder.id) ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Updating...
+                          </div>
+                        ) : (
+                          "Mark Ready"
+                        )}
                       </Button>
                     )}
                     {selectedOrder.status === "ready" && (
                       <Button
+                        disabled={updatingOrders.has(selectedOrder.id)}
                         onClick={() => {
-                          const updatedOrders = orders.map((o) =>
-                            o.id === selectedOrder.id
-                              ? { ...o, status: "completed" }
-                              : o
+                          handleUpdateOrderStatus(
+                            selectedOrder.id,
+                            "completed"
                           );
-                          setOrders(updatedOrders);
                           setSelectedOrder(null);
                         }}
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
                       >
-                        Complete
+                        {updatingOrders.has(selectedOrder.id) ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Updating...
+                          </div>
+                        ) : (
+                          "Complete Order"
+                        )}
                       </Button>
                     )}
                     <Button
                       variant="outline"
                       onClick={() => setSelectedOrder(null)}
+                      className="px-6 py-2"
                     >
                       Close
                     </Button>
@@ -998,6 +1240,55 @@ export default function ActiveOrdersPage() {
           </Dialog>
         )}
       </AnimatePresence>
+
+      {/* Cancel Confirmation Dialog */}
+      <Dialog
+        open={!!cancelOrderId}
+        onOpenChange={() => setCancelOrderId(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Cancellation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Are you sure you want to cancel this order? This action will:
+            </p>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li>• Process a refund through Stripe (if card payment)</li>
+              <li>• Update the order status to cancelled</li>
+              <li>• Update the payment status to cancelled</li>
+              <li>• Move the order to history</li>
+            </ul>
+            <p className="text-sm font-medium text-gray-900">
+              This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setCancelOrderId(null)}
+              disabled={updatingOrders.has(cancelOrderId || "")}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => cancelOrderId && handleCancelOrder(cancelOrderId)}
+              disabled={updatingOrders.has(cancelOrderId || "")}
+            >
+              {updatingOrders.has(cancelOrderId || "") ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Processing...
+                </div>
+              ) : (
+                "Cancel Order"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

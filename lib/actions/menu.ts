@@ -65,6 +65,8 @@ export async function createMenuItem(formData: FormData) {
     const popular = formData.get("popular") === "true";
     const allergens = formData.getAll("allergens") as string[];
     const imageUrl = formData.get("imageUrl") as string;
+    const tagsJson = formData.get("tags") as string;
+    const tags = tagsJson ? JSON.parse(tagsJson) : [];
 
     // Validate required fields
     if (!name || !price || !categoryId) {
@@ -84,6 +86,7 @@ export async function createMenuItem(formData: FormData) {
         preparation_time: `${preparationTime} minutes`,
         is_available: available,
         is_popular: popular,
+        tags: tags.length > 0 ? tags : null,
       })
       .select()
       .single();
@@ -132,18 +135,20 @@ export async function updateMenuItem(id: string, formData: FormData) {
     const popularStr = formData.get("popular") as string;
     const allergens = formData.getAll("allergens") as string[];
     const imageUrl = formData.get("imageUrl") as string;
+    const tagsJson = formData.get("tags") as string;
+    const tags = tagsJson ? JSON.parse(tagsJson) : [];
 
-    // Get current menu item to check if it has an existing image
+    // Get current menu item to check existing values and image
     const { data: currentMenuItem, error: fetchError } = await supabase
       .from("menu_items")
-      .select("image_url")
+      .select("name, price, category_id, image_url")
       .eq("id", id)
       .eq("restaurant_id", restaurantId)
       .single();
 
     if (fetchError) {
       console.warn(
-        "Failed to fetch current menu item for image cleanup:",
+        "Failed to fetch current menu item for validation:",
         fetchError
       );
     }
@@ -241,6 +246,10 @@ export async function updateMenuItem(id: string, formData: FormData) {
         updateData.image_url = null; // Clear image if placeholder is provided
       }
     }
+    // Add tags to update data
+    if (tagsJson !== null && tagsJson !== undefined) {
+      updateData.tags = tags.length > 0 ? tags : null;
+    }
 
     // Validate that we have at least one field to update
     if (Object.keys(updateData).length === 0) {
@@ -248,10 +257,22 @@ export async function updateMenuItem(id: string, formData: FormData) {
     }
 
     // For full updates (name, price, category), validate required fields
-    if (name !== null || priceStr !== null || categoryId !== null) {
+    // Only require all three if we're actually changing any of them
+    const isChangingName =
+      name !== null && name !== undefined && name !== currentMenuItem?.name;
+    const isChangingPrice =
+      priceStr !== null &&
+      priceStr !== undefined &&
+      parseFloat(priceStr) !== currentMenuItem?.price;
+    const isChangingCategory =
+      categoryId !== null &&
+      categoryId !== undefined &&
+      categoryId !== currentMenuItem?.category_id;
+
+    if (isChangingName || isChangingPrice || isChangingCategory) {
       if (!name || !priceStr || !categoryId) {
         throw new Error(
-          "Name, price, and category are required for full updates"
+          "Name, price, and category are required when updating any of these fields"
         );
       }
     }
@@ -616,6 +637,7 @@ export async function getMenuItemsPaginated({
             })) || [],
           allergenIds: item.allergens?.map((a: any) => a.allergen?.id) || [],
           popular: item.is_popular || false,
+          tags: item.tags || [],
           restaurantId: item.restaurant_id,
           createdAt: item.created_at,
           updatedAt: item.updated_at,

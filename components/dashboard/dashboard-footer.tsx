@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMenuWebSocket } from "@/hooks/useMenuWebSocket";
 import { useTablesWebSocket } from "@/hooks/useTablesWebSocket";
+import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 import {
   Tooltip,
   TooltipContent,
@@ -18,23 +19,32 @@ export function DashboardFooter() {
   // Determine which WebSocket hook to use based on the current page
   const isMenuPage = pathname.includes("/menu");
   const isTablesPage = pathname.includes("/tables");
+  const isOrdersPage = pathname.includes("/orders");
+  const isKitchenPage = pathname.includes("/kitchen");
 
   // Use appropriate WebSocket hook based on page
   const menuWebSocket = useMenuWebSocket({ enabled: isMenuPage });
   const tablesWebSocket = useTablesWebSocket({ enabled: isTablesPage });
+  const ordersWebSocket = useOrdersWebSocket({
+    enabled: isOrdersPage || isKitchenPage,
+  });
 
   // Get the active WebSocket connection
   const activeWebSocket = isMenuPage
     ? menuWebSocket
     : isTablesPage
       ? tablesWebSocket
-      : menuWebSocket;
+      : isOrdersPage || isKitchenPage
+        ? ordersWebSocket
+        : menuWebSocket;
   const { isConnected, reconnectAttempts } = activeWebSocket;
 
   // Get page-specific connection label
   const getConnectionLabel = () => {
     if (isMenuPage) return "Menu Live";
     if (isTablesPage) return "Tables Live";
+    if (isOrdersPage) return "Orders Live";
+    if (isKitchenPage) return "Kitchen Live";
     return "Live";
   };
 

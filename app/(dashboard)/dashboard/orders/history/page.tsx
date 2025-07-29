@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Download,
@@ -16,8 +16,9 @@ import {
   AlertCircle,
   CheckCircle,
   DollarSign,
+  MoreHorizontal,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
@@ -60,331 +61,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
-
-// Mock historical orders data
-const mockHistoricalOrders = [
-  {
-    id: "ORD-001",
-    tableNumber: "3",
-    items: [
-      {
-        id: "1",
-        name: "Margherita Pizza",
-        quantity: 1,
-        price: 22.0,
-        notes: "Extra cheese",
-      },
-      { id: "2", name: "Caesar Salad", quantity: 1, price: 16.5, notes: "" },
-      { id: "3", name: "Sparkling Water", quantity: 2, price: 4.5, notes: "" },
-    ],
-    total: 47.5,
-    status: "completed",
-    orderTime: "2025-06-01T18:30:00.000Z",
-    completedTime: "2025-06-01T19:15:00.000Z",
-    paymentMethod: "stripe",
-    paymentStatus: "paid",
-    customerNotes: "Extra cheese on pizza please",
-    transactionId: "txn_1234567890",
-    customer: {
-      name: "John Smith",
-      email: "john@example.com",
-    },
-  },
-  {
-    id: "ORD-002",
-    tableNumber: "7",
-    items: [
-      { id: "4", name: "House Wine Red", quantity: 2, price: 8.5, notes: "" },
-      { id: "5", name: "Tiramisu", quantity: 1, price: 9.5, notes: "" },
-    ],
-    total: 26.5,
-    status: "completed",
-    orderTime: "2025-06-01T19:45:00.000Z",
-    completedTime: "2025-06-01T20:20:00.000Z",
-    paymentMethod: "stripe",
-    paymentStatus: "paid",
-    customerNotes: "",
-    transactionId: "txn_0987654321",
-    customer: {
-      name: "Sarah Johnson",
-      email: "sarah@example.com",
-    },
-  },
-  {
-    id: "ORD-003",
-    tableNumber: "2",
-    items: [
-      {
-        id: "6",
-        name: "Spaghetti Carbonara",
-        quantity: 1,
-        price: 24.5,
-        notes: "No pepper",
-      },
-    ],
-    total: 24.5,
-    status: "completed",
-    orderTime: "2025-06-01T20:15:00.000Z",
-    completedTime: "2025-06-01T20:45:00.000Z",
-    paymentMethod: "cash",
-    paymentStatus: "paid",
-    customerNotes: "No pepper",
-    transactionId: "",
-    customer: {
-      name: "Michael Brown",
-      email: "",
-    },
-  },
-  {
-    id: "ORD-004",
-    tableNumber: "5",
-    items: [
-      {
-        id: "7",
-        name: "Beef Burger",
-        quantity: 2,
-        price: 18.0,
-        notes: "Medium well",
-      },
-      {
-        id: "8",
-        name: "French Fries",
-        quantity: 1,
-        price: 6.5,
-        notes: "Extra salt",
-      },
-      { id: "9", name: "Cola", quantity: 2, price: 4.0, notes: "" },
-    ],
-    total: 50.5,
-    status: "refunded",
-    orderTime: "2025-05-31T18:30:00.000Z",
-    completedTime: "2025-05-31T19:10:00.000Z",
-    refundedTime: "2025-05-31T19:45:00.000Z",
-    paymentMethod: "stripe",
-    paymentStatus: "refunded",
-    customerNotes: "Extra ketchup on the side",
-    refundReason: "Customer dissatisfied with food temperature",
-    transactionId: "txn_5678901234",
-    refundId: "ref_1234567890",
-    customer: {
-      name: "Emma Wilson",
-      email: "emma@example.com",
-    },
-  },
-  {
-    id: "ORD-005",
-    tableNumber: "10",
-    items: [
-      {
-        id: "10",
-        name: "Vegetable Risotto",
-        quantity: 1,
-        price: 19.5,
-        notes: "",
-      },
-      { id: "11", name: "Garlic Bread", quantity: 1, price: 5.5, notes: "" },
-    ],
-    total: 25.0,
-    status: "completed",
-    orderTime: "2025-05-31T19:15:00.000Z",
-    completedTime: "2025-05-31T19:50:00.000Z",
-    paymentMethod: "stripe",
-    paymentStatus: "paid",
-    customerNotes: "",
-    transactionId: "txn_1357924680",
-    customer: {
-      name: "David Lee",
-      email: "david@example.com",
-    },
-  },
-  {
-    id: "ORD-006",
-    tableNumber: "4",
-    items: [
-      {
-        id: "12",
-        name: "Chicken Curry",
-        quantity: 1,
-        price: 21.0,
-        notes: "Spicy",
-      },
-      { id: "13", name: "Naan Bread", quantity: 2, price: 3.5, notes: "" },
-      { id: "14", name: "Mango Lassi", quantity: 1, price: 5.0, notes: "" },
-    ],
-    total: 33.0,
-    status: "cancelled",
-    orderTime: "2025-05-30T20:00:00.000Z",
-    cancelledTime: "2025-05-30T20:10:00.000Z",
-    paymentMethod: "stripe",
-    paymentStatus: "refunded",
-    customerNotes: "Extra spicy curry",
-    cancellationReason: "Customer left restaurant",
-    transactionId: "txn_2468013579",
-    refundId: "ref_0987654321",
-    customer: {
-      name: "Lisa Chen",
-      email: "lisa@example.com",
-    },
-  },
-  {
-    id: "ORD-007",
-    tableNumber: "8",
-    items: [
-      { id: "15", name: "Seafood Paella", quantity: 2, price: 26.0, notes: "" },
-      {
-        id: "16",
-        name: "Green Salad",
-        quantity: 1,
-        price: 8.5,
-        notes: "No onions",
-      },
-      { id: "17", name: "Sparkling Water", quantity: 2, price: 4.5, notes: "" },
-    ],
-    total: 69.5,
-    status: "completed",
-    orderTime: "2025-05-30T19:30:00.000Z",
-    completedTime: "2025-05-30T20:15:00.000Z",
-    paymentMethod: "stripe",
-    paymentStatus: "paid",
-    customerNotes: "No onions in salad",
-    transactionId: "txn_3692581470",
-    customer: {
-      name: "Robert Taylor",
-      email: "robert@example.com",
-    },
-  },
-  {
-    id: "ORD-008",
-    tableNumber: "6",
-    items: [
-      {
-        id: "18",
-        name: "Mushroom Risotto",
-        quantity: 1,
-        price: 18.5,
-        notes: "",
-      },
-      { id: "19", name: "Bruschetta", quantity: 1, price: 9.0, notes: "" },
-      { id: "20", name: "White Wine", quantity: 1, price: 7.5, notes: "" },
-    ],
-    total: 35.0,
-    status: "completed",
-    orderTime: "2025-05-29T18:45:00.000Z",
-    completedTime: "2025-05-29T19:20:00.000Z",
-    paymentMethod: "cash",
-    paymentStatus: "paid",
-    customerNotes: "",
-    transactionId: "",
-    customer: {
-      name: "Jennifer Adams",
-      email: "",
-    },
-  },
-  {
-    id: "ORD-009",
-    tableNumber: "9",
-    items: [
-      {
-        id: "21",
-        name: "Steak Frites",
-        quantity: 2,
-        price: 28.0,
-        notes: "Medium rare",
-      },
-      {
-        id: "22",
-        name: "Chocolate Mousse",
-        quantity: 2,
-        price: 8.0,
-        notes: "",
-      },
-      { id: "23", name: "Red Wine", quantity: 1, price: 9.5, notes: "" },
-    ],
-    total: 81.5,
-    status: "completed",
-    orderTime: "2025-05-29T20:00:00.000Z",
-    completedTime: "2025-05-29T20:45:00.000Z",
-    paymentMethod: "stripe",
-    paymentStatus: "paid",
-    customerNotes: "Medium rare steaks",
-    transactionId: "txn_4815162342",
-    customer: {
-      name: "Thomas Wilson",
-      email: "thomas@example.com",
-    },
-  },
-  {
-    id: "ORD-010",
-    tableNumber: "1",
-    items: [
-      {
-        id: "24",
-        name: "Vegetarian Pizza",
-        quantity: 1,
-        price: 20.0,
-        notes: "No olives",
-      },
-      { id: "25", name: "Garlic Bread", quantity: 1, price: 5.5, notes: "" },
-      { id: "26", name: "Tiramisu", quantity: 1, price: 9.5, notes: "" },
-      { id: "27", name: "Sparkling Water", quantity: 1, price: 4.5, notes: "" },
-    ],
-    total: 39.5,
-    status: "completed",
-    orderTime: "2025-05-28T19:15:00.000Z",
-    completedTime: "2025-05-28T19:55:00.000Z",
-    paymentMethod: "stripe",
-    paymentStatus: "paid",
-    customerNotes: "No olives on pizza",
-    transactionId: "txn_9876543210",
-    customer: {
-      name: "Anna Martinez",
-      email: "anna@example.com",
-    },
-  },
-  {
-    id: "ORD-011",
-    tableNumber: "3",
-    items: [
-      { id: "28", name: "Lasagna", quantity: 1, price: 19.0, notes: "" },
-      { id: "29", name: "Caprese Salad", quantity: 1, price: 12.5, notes: "" },
-      { id: "30", name: "Cheesecake", quantity: 1, price: 8.5, notes: "" },
-      { id: "31", name: "Coffee", quantity: 1, price: 4.0, notes: "" },
-    ],
-    total: 44.0,
-    status: "completed",
-    orderTime: "2025-05-28T18:30:00.000Z",
-    completedTime: "2025-05-28T19:10:00.000Z",
-    paymentMethod: "stripe",
-    paymentStatus: "paid",
-    customerNotes: "",
-    transactionId: "txn_1029384756",
-    customer: {
-      name: "James Johnson",
-      email: "james@example.com",
-    },
-  },
-  {
-    id: "ORD-012",
-    tableNumber: "7",
-    items: [
-      { id: "32", name: "Fish & Chips", quantity: 2, price: 22.0, notes: "" },
-      { id: "33", name: "Coleslaw", quantity: 1, price: 5.0, notes: "" },
-      { id: "34", name: "Beer", quantity: 2, price: 6.5, notes: "" },
-    ],
-    total: 62.0,
-    status: "completed",
-    orderTime: "2025-05-27T19:45:00.000Z",
-    completedTime: "2025-05-27T20:20:00.000Z",
-    paymentMethod: "cash",
-    paymentStatus: "paid",
-    customerNotes: "",
-    transactionId: "",
-    customer: {
-      name: "Daniel Brown",
-      email: "",
-    },
-  },
-];
+import {
+  getRestaurantOrders,
+  type Order,
+  type OrderFilters,
+} from "@/lib/actions/orders";
+import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
+import { toast } from "sonner";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 // Status color mapping
 const getStatusColor = (status: string) => {
@@ -531,9 +219,38 @@ const iconVariants = {
   },
 };
 
+// Safe date formatting function
+const safeFormat = (
+  date: Date | string | null | undefined,
+  formatString: string,
+  fallback: string = "Invalid Date"
+) => {
+  if (!date) return fallback;
+
+  let dateObj: Date;
+  if (typeof date === "string") {
+    dateObj = new Date(date);
+  } else {
+    dateObj = date;
+  }
+
+  if (!isValid(dateObj)) {
+    return fallback;
+  }
+
+  try {
+    return format(dateObj, formatString);
+  } catch (error) {
+    console.error("Date formatting error:", error, date);
+    return fallback;
+  }
+};
+
 export default function OrderHistoryPage() {
   const router = useRouter();
-  const { currency } = useRestaurantSettings();
+  const { currencySymbol, restaurant } = useRestaurantSettings();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentMethodFilter, setPaymentMethodFilter] = useState("all");
@@ -543,18 +260,151 @@ export default function OrderHistoryPage() {
   const [sortDirection, setSortDirection] = useState("desc");
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
+  // WebSocket for real-time updates
+  const { isConnected } = useOrdersWebSocket({
+    restaurantId: restaurant?.id,
+    onOrderAdded: (newOrder) => {
+      // Add new order to the list if it matches current filters
+      const orderData: Order = {
+        id: newOrder.id,
+        orderNumber:
+          (newOrder as any).order_number ||
+          `ORD-${newOrder.id.slice(-8).toUpperCase()}`,
+        tableNumber: "Unknown", // Will be fetched with full data
+        customerName: undefined,
+        items: [],
+        status: newOrder.status,
+        time: new Date(newOrder.created_at),
+        estimatedTime: 15,
+        notes: newOrder.notes || undefined,
+        total: newOrder.total_amount,
+        paymentStatus: "pending",
+        priority: "normal",
+        restaurant_id: newOrder.restaurant_id,
+        table_id: newOrder.table_id || "",
+        total_amount: newOrder.total_amount,
+        tax_amount: newOrder.tax_amount,
+        tip_amount: newOrder.tip_amount,
+        created_at: newOrder.created_at,
+        updated_at: newOrder.updated_at,
+        stripe_payment_intent_id: (newOrder as any).stripe_payment_intent_id,
+      };
+
+      setOrders((prev) => [orderData, ...prev]);
+    },
+    onOrderUpdated: (updatedOrder, oldOrder) => {
+      // If order becomes cancelled or completed, add it to history
+      if (
+        (updatedOrder.status === "cancelled" ||
+          updatedOrder.status === "completed") &&
+        oldOrder &&
+        oldOrder.status !== "cancelled" &&
+        oldOrder.status !== "completed"
+      ) {
+        // Add the order to history list
+        const orderData: Order = {
+          id: updatedOrder.id,
+          orderNumber:
+            (updatedOrder as any).order_number ||
+            `ORD-${updatedOrder.id.slice(-8).toUpperCase()}`,
+          tableNumber: "Unknown", // Will be fetched with full data
+          customerName: undefined,
+          items: [],
+          status: updatedOrder.status,
+          time: new Date(updatedOrder.created_at),
+          estimatedTime: 15,
+          notes: updatedOrder.notes || undefined,
+          total: updatedOrder.total_amount,
+          paymentStatus: "pending",
+          priority: "normal",
+          restaurant_id: updatedOrder.restaurant_id,
+          table_id: updatedOrder.table_id || "",
+          total_amount: updatedOrder.total_amount,
+          tax_amount: updatedOrder.tax_amount,
+          tip_amount: updatedOrder.tip_amount,
+          created_at: updatedOrder.created_at,
+          updated_at: updatedOrder.updated_at,
+          stripe_payment_intent_id: (updatedOrder as any)
+            .stripe_payment_intent_id,
+        };
+        setOrders((prev) => [orderData, ...prev]);
+      } else {
+        // Update existing order in history
+        setOrders((prev) =>
+          prev.map((order) =>
+            order.id === updatedOrder.id
+              ? {
+                  ...order,
+                  status: updatedOrder.status,
+                  total_amount: updatedOrder.total_amount,
+                  tax_amount: updatedOrder.tax_amount,
+                  tip_amount: updatedOrder.tip_amount,
+                  notes: updatedOrder.notes || undefined,
+                  updated_at: updatedOrder.updated_at,
+                }
+              : order
+          )
+        );
+      }
+    },
+    onOrderDeleted: (deletedOrder) => {
+      setOrders((prev) => prev.filter((order) => order.id !== deletedOrder.id));
+    },
+  });
+
+  // Fetch orders data
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!restaurant?.id) return;
+
+      setLoading(true);
+      try {
+        const filters: OrderFilters = {
+          historyOnly: true, // Only fetch completed, cancelled, or refunded orders
+        };
+        if (statusFilter && statusFilter !== "all") {
+          filters.status = statusFilter;
+        }
+        if (searchTerm) {
+          filters.search = searchTerm;
+        }
+
+        const result = await getRestaurantOrders(restaurant.id, filters);
+
+        if (result.success && result.data) {
+          setOrders(result.data);
+        } else {
+          console.error("Failed to fetch orders:", result.error);
+          toast.error("Failed to load orders");
+        }
+      } catch (error) {
+        console.error("Error fetching orders:", error);
+        toast.error("Failed to load orders");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [restaurant?.id, statusFilter, searchTerm]);
+
   // Get unique table numbers for filter dropdown
   const uniqueTables = Array.from(
-    new Set(mockHistoricalOrders.map((order) => order.tableNumber))
+    new Set(orders.map((order) => order.tableNumber))
   ).sort();
 
   // Format currency with the restaurant's settings
-  const formatCurrency = (amount: number) => {
-    return `${currency.symbol} ${amount.toFixed(2)}`;
+  const formatCurrency = (amount: number): string => {
+    return `${currencySymbol} ${amount.toFixed(2)}`;
+  };
+
+  // Generate order number from order ID and index
+  const getOrderNumber = (order: Order) => {
+    return order.orderNumber || `#${order.id.slice(-8).toUpperCase()}`;
   };
 
   // Apply filters and sorting
-  const filteredOrders = mockHistoricalOrders
+  const filteredOrders = orders
     .filter((order) => {
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
@@ -566,14 +416,14 @@ export default function OrderHistoryPage() {
           item.name.toLowerCase().includes(searchLower)
         );
         const matchesNotes =
-          order.customerNotes?.toLowerCase().includes(searchLower) || false;
+          order.notes?.toLowerCase().includes(searchLower) || false;
         if (!(matchesId || matchesTable || matchesItems || matchesNotes))
           return false;
       }
       if (statusFilter !== "all" && order.status !== statusFilter) return false;
       if (
         paymentMethodFilter !== "all" &&
-        order.paymentMethod !== paymentMethodFilter
+        order.paymentStatus !== paymentMethodFilter
       )
         return false;
       if (
@@ -593,8 +443,8 @@ export default function OrderHistoryPage() {
           ? fieldA.localeCompare(fieldB)
           : fieldB.localeCompare(fieldA);
       }
-      const dateA = new Date(a.orderTime).getTime();
-      const dateB = new Date(b.orderTime).getTime();
+      const dateA = new Date(a.time).getTime();
+      const dateB = new Date(b.time).getTime();
       return sortDirection === "asc" ? dateA - dateB : dateB - dateA;
     });
 
@@ -733,7 +583,7 @@ export default function OrderHistoryPage() {
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
                 <Input
-                  placeholder="Search orders by ID, table, items, or notes..."
+                  placeholder="Search orders by order number, table, customer, items, or notes..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8"
@@ -847,8 +697,7 @@ export default function OrderHistoryPage() {
           <CardHeader>
             <CardTitle className="text-lg">Orders</CardTitle>
             <CardDescription>
-              Showing {filteredOrders.length} of {mockHistoricalOrders.length}{" "}
-              orders
+              Showing {filteredOrders.length} of {orders.length} orders
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -880,6 +729,9 @@ export default function OrderHistoryPage() {
                     </th>
                     <th className="h-12 px-4 text-left align-middle font-medium text-gray-500">
                       Table
+                    </th>
+                    <th className="h-12 px-4 text-left align-middle font-medium text-gray-500">
+                      Customer
                     </th>
                     <th className="h-12 px-4 text-left align-middle font-medium text-gray-500">
                       Items
@@ -917,7 +769,7 @@ export default function OrderHistoryPage() {
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
                       >
-                        <td colSpan={8} className="h-24 text-center">
+                        <td colSpan={9} className="h-24 text-center">
                           <motion.div
                             className="flex flex-col items-center justify-center text-gray-500"
                             variants={itemVariants}
@@ -946,23 +798,23 @@ export default function OrderHistoryPage() {
                           onClick={() => setSelectedOrder(order)}
                         >
                           <td className="p-4 align-middle font-medium">
-                            {order.id}
+                            {getOrderNumber(order)}
                           </td>
                           <td className="p-4 align-middle">
                             <div className="flex flex-col">
                               <span>
-                                {format(
-                                  new Date(order.orderTime),
-                                  "MMM d, yyyy"
-                                )}
+                                {safeFormat(order.time, "MMM d, yyyy")}
                               </span>
                               <span className="text-xs text-gray-500">
-                                {format(new Date(order.orderTime), "h:mm a")}
+                                {safeFormat(order.time, "h:mm a")}
                               </span>
                             </div>
                           </td>
                           <td className="p-4 align-middle">
                             Table {order.tableNumber}
+                          </td>
+                          <td className="p-4 align-middle">
+                            {order.customerName || "Guest"}
                           </td>
                           <td className="p-4 align-middle">
                             <div className="max-w-[200px] truncate">
@@ -984,49 +836,59 @@ export default function OrderHistoryPage() {
                             </Badge>
                           </td>
                           <td className="p-4 align-middle">
-                            <div className="flex flex-col gap-1">
-                              <span
-                                className={`text-sm ${getPaymentMethodColor(
-                                  order.paymentMethod
-                                )}`}
-                              >
-                                {order.paymentMethod.toUpperCase()}
-                              </span>
-                              <Badge
-                                variant="outline"
-                                className={getPaymentStatusColor(
-                                  order.paymentStatus
-                                )}
-                              >
-                                {order.paymentStatus.toUpperCase()}
-                              </Badge>
-                            </div>
+                            <Badge
+                              variant="outline"
+                              className={getPaymentStatusColor(
+                                order.paymentStatus
+                              )}
+                            >
+                              {order.paymentStatus.toUpperCase()}
+                            </Badge>
                           </td>
                           <td className="p-4 align-middle text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  console.log("Print receipt for", order.id);
-                                }}
-                              >
-                                <Printer className="h-4 w-4" />
-                                <span className="sr-only">Print Receipt</span>
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrder(order);
-                                }}
-                              >
-                                <FileText className="h-4 w-4" />
-                                <span className="sr-only">View Details</span>
-                              </Button>
-                            </div>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                  <span className="sr-only">Open menu</span>
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-48" align="end">
+                                <div className="space-y-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      console.log(
+                                        "Print receipt for",
+                                        order.id
+                                      );
+                                    }}
+                                  >
+                                    <Printer className="h-4 w-4 mr-2" />
+                                    Print Receipt
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedOrder(order);
+                                    }}
+                                  >
+                                    <FileText className="h-4 w-4 mr-2" />
+                                    View Details
+                                  </Button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </td>
                         </motion.tr>
                       ))
@@ -1061,7 +923,7 @@ export default function OrderHistoryPage() {
                   <div className="flex-none px-6 py-4 border-b bg-gray-50">
                     <div className="flex items-center justify-between mb-1">
                       <h2 className="text-lg font-semibold text-gray-900">
-                        Order {selectedOrder.id}
+                        Order {getOrderNumber(selectedOrder)}
                       </h2>
                       <Badge className={getStatusColor(selectedOrder.status)}>
                         {selectedOrder.status.charAt(0).toUpperCase() +
@@ -1071,10 +933,7 @@ export default function OrderHistoryPage() {
                     <div className="flex items-center gap-3 text-sm text-gray-500">
                       <span className="flex items-center gap-1">
                         <Clock className="w-4 h-4" />
-                        {format(
-                          new Date(selectedOrder.orderTime),
-                          "MMM d, yyyy h:mm a"
-                        )}
+                        {safeFormat(selectedOrder.time, "MMM d, yyyy h:mm a")}
                       </span>
                       <span>•</span>
                       <span>Table {selectedOrder.tableNumber}</span>
@@ -1121,11 +980,12 @@ export default function OrderHistoryPage() {
                                   </span>
                                   <span className="text-sm">{item.name}</span>
                                 </div>
-                                {item.notes && (
-                                  <p className="text-xs text-gray-500">
-                                    {item.notes}
-                                  </p>
-                                )}
+                                {item.modifiers &&
+                                  item.modifiers.length > 0 && (
+                                    <p className="text-xs text-gray-500">
+                                      Modifiers: {item.modifiers.join(", ")}
+                                    </p>
+                                  )}
                               </div>
                               <span className="text-sm font-medium">
                                 {formatCurrency(item.price * item.quantity)}
@@ -1204,15 +1064,13 @@ export default function OrderHistoryPage() {
                       </div>
 
                       {/* Customer Notes */}
-                      {selectedOrder.customerNotes && (
+                      {selectedOrder.notes && (
                         <div>
                           <h3 className="text-sm font-medium text-gray-900 mb-3">
                             Customer Notes
                           </h3>
                           <div className="bg-gray-50 rounded-lg p-3">
-                            <p className="text-sm">
-                              {selectedOrder.customerNotes}
-                            </p>
+                            <p className="text-sm">{selectedOrder.notes}</p>
                           </div>
                         </div>
                       )}
@@ -1233,8 +1091,9 @@ export default function OrderHistoryPage() {
                                   Order Placed
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {format(
-                                    new Date(selectedOrder.orderTime),
+                                  {safeFormat(
+                                    selectedOrder.orderTime ||
+                                      selectedOrder.time,
                                     "MMM d, yyyy h:mm a"
                                   )}
                                 </p>
@@ -1251,8 +1110,8 @@ export default function OrderHistoryPage() {
                                     Order Completed
                                   </p>
                                   <p className="text-xs text-gray-500">
-                                    {format(
-                                      new Date(selectedOrder.completedTime),
+                                    {safeFormat(
+                                      selectedOrder.completedTime,
                                       "MMM d, yyyy h:mm a"
                                     )}
                                   </p>
@@ -1270,8 +1129,8 @@ export default function OrderHistoryPage() {
                                     Payment Refunded
                                   </p>
                                   <p className="text-xs text-gray-500">
-                                    {format(
-                                      new Date(selectedOrder.refundedTime),
+                                    {safeFormat(
+                                      selectedOrder.refundedTime,
                                       "MMM d, yyyy h:mm a"
                                     )}
                                   </p>
@@ -1294,8 +1153,8 @@ export default function OrderHistoryPage() {
                                     Order Cancelled
                                   </p>
                                   <p className="text-xs text-gray-500">
-                                    {format(
-                                      new Date(selectedOrder.cancelledTime),
+                                    {safeFormat(
+                                      selectedOrder.cancelledTime,
                                       "MMM d, yyyy h:mm a"
                                     )}
                                   </p>

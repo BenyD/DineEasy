@@ -317,10 +317,14 @@ export default function QRClientPage({
                   <p className="font-medium text-gray-900 mb-2">Contact</p>
                   <div className="space-y-1">
                     {restaurantData?.phone && (
-                      <p className="text-gray-600 text-sm">{restaurantData.phone}</p>
+                      <p className="text-gray-600 text-sm">
+                        {restaurantData.phone}
+                      </p>
                     )}
                     {restaurantData?.email && (
-                      <p className="text-gray-600 text-sm break-all">{restaurantData.email}</p>
+                      <p className="text-gray-600 text-sm break-all">
+                        {restaurantData.email}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -334,7 +338,9 @@ export default function QRClientPage({
                   <Clock className="w-4 h-4 text-orange-600" />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium text-gray-900 mb-1">Opening Hours</p>
+                  <p className="font-medium text-gray-900 mb-1">
+                    Opening Hours
+                  </p>
                   <p className="text-gray-600 leading-relaxed">
                     {restaurantData.opening_hours}
                   </p>
@@ -365,7 +371,9 @@ export default function QRClientPage({
         <div className="px-4 py-4 lg:px-6">
           {/* Category Header */}
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-900">Menu Categories</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Menu Categories
+            </h2>
             <span className="text-sm text-gray-500">
               {filteredCategories.length} categories
             </span>
@@ -394,16 +402,20 @@ export default function QRClientPage({
 
                   {/* Category Content */}
                   <div className="text-center">
-                    <h3 className={`font-semibold text-sm mb-1 ${
-                      isActive ? "text-green-700" : "text-gray-900"
-                    }`}>
+                    <h3
+                      className={`font-semibold text-sm mb-1 ${
+                        isActive ? "text-green-700" : "text-gray-900"
+                      }`}
+                    >
                       {category.name}
                     </h3>
-                    <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${
-                      isActive 
-                        ? "bg-green-500 text-white" 
-                        : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
-                    }`}>
+                    <div
+                      className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${
+                        isActive
+                          ? "bg-green-500 text-white"
+                          : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
+                      }`}
+                    >
                       {category.items.length}
                     </div>
                   </div>

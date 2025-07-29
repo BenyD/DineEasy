@@ -54,6 +54,13 @@ import { uploadImage } from "@/lib/actions/upload";
 import { bytesToSize } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { type MenuItemAllergen } from "@/types";
+import {
+  MENU_TAGS,
+  TAG_CATEGORIES,
+  TAG_INFO,
+  getTagInfo,
+  getTagsByCategory,
+} from "@/lib/constants/menu-tags";
 
 const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
 const ACCEPTED_IMAGE_TYPES = {
@@ -138,6 +145,68 @@ export function MenuItemModal({
   onSubmit,
   currencySymbol,
 }: MenuItemModalProps) {
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Handle modal close
+  const handleModalClose = () => {
+    onOpenChange(false);
+  };
+
+  // Handle image upload
+  const handleImageUpload = async (file: File) => {
+    return await uploadImage(file, "menu-item");
+  };
+
+  // Handle form submission
+  const handleFormSubmit = async (formData: any) => {
+    const formDataToSubmit = new FormData();
+    formDataToSubmit.append("name", formData.name);
+    formDataToSubmit.append("description", formData.description);
+    formDataToSubmit.append("price", formData.price.toString());
+    formDataToSubmit.append(
+      "preparationTime",
+      formData.preparationTime.toString()
+    );
+    formDataToSubmit.append("available", formData.available.toString());
+    formDataToSubmit.append("popular", formData.popular.toString());
+    formDataToSubmit.append("categoryId", formData.category);
+    formDataToSubmit.append("allergens", JSON.stringify(formData.allergens));
+    formDataToSubmit.append("tags", JSON.stringify(formData.tags || []));
+
+    if (imageFile) {
+      formDataToSubmit.append("image", imageFile);
+    }
+
+    if (formData.image) {
+      formDataToSubmit.append("existingImage", formData.image);
+    }
+
+    await onSubmit(formDataToSubmit);
+  };
+
+  const {
+    formState,
+    setFormState,
+    updateFormData,
+    handleTabChange,
+    handleSubmit,
+    handleImageUpload: hookHandleImageUpload,
+    handleAddCategory,
+    handleAddAllergen,
+    validateForm,
+  } = useMenuForm({
+    item,
+    onClose: handleModalClose,
+    onSubmit: handleFormSubmit,
+    onAddCategory,
+    onAddAllergen,
+    onUploadImage: handleImageUpload,
+  });
+
   // Local state for categories and allergens to avoid re-render issues
   const [localCategories, setLocalCategories] = useState(menuCategories);
   const [localAllergens, setLocalAllergens] = useState(menuAllergens);
@@ -158,45 +227,6 @@ export function MenuItemModal({
   const [newCategoryDescription, setNewCategoryDescription] = useState("");
   const [newAllergenName, setNewAllergenName] = useState("");
   const [newAllergenIcon, setNewAllergenIcon] = useState("");
-
-  const {
-    formState,
-    setFormState,
-    validateForm,
-    updateFormData,
-    handleTabChange,
-    handleSubmit,
-    handleImageUpload,
-    handleAddCategory,
-    handleAddAllergen,
-    hasResumed,
-  } = useMenuForm({
-    item,
-    onClose: () => onOpenChange(false),
-    onSubmit: async (formData) => {
-      // If the parent expects a browser FormData, convert if needed
-      if (formData instanceof window.FormData) {
-        await onSubmit(formData);
-      } else {
-        // Convert plain object to FormData
-        const fd = new window.FormData();
-        Object.entries(formData).forEach(([key, value]) => {
-          if (Array.isArray(value)) {
-            value.forEach((v) => fd.append(key, v));
-          } else {
-            fd.append(key, value as any);
-          }
-        });
-        await onSubmit(fd);
-      }
-    },
-    onAddCategory,
-    onAddAllergen,
-    onUploadImage: async (file) => {
-      // Use the uploadImage function imported above
-      return await uploadImage(file, "menu-item");
-    },
-  });
 
   // Auto-select last added category if present
   useEffect(() => {
@@ -221,46 +251,11 @@ export function MenuItemModal({
           isImageUploading: false,
           uploadProgress: 0,
         }));
-        console.log("Upload state reset due to timeout");
       }, 10000); // 10 seconds timeout
 
       return () => clearTimeout(timeout);
     }
   }, [formState.isUploading, setFormState]);
-
-  // Handle modal close with different behaviors
-  const handleModalClose = (shouldClear: boolean = false) => {
-    if (shouldClear) {
-      // Clear form data when Cancel is clicked
-      setFormState((prev) => ({
-        ...prev,
-        formData: {
-          name: "",
-          description: "",
-          price: "",
-          category: "",
-          preparationTime: "",
-          available: true,
-          popular: false,
-          allergens: [],
-          image: "",
-        },
-        formErrors: {},
-        activeTab: "basic",
-        visitedSteps: new Set(),
-        isSubmitting: false,
-        isUploading: false,
-      }));
-      // Clear local state
-      setShowAddCategory(false);
-      setShowAddAllergen(false);
-      setNewCategoryName("");
-      setNewCategoryDescription("");
-      setNewAllergenName("");
-      setNewAllergenIcon("");
-    }
-    onOpenChange(false);
-  };
 
   // Handle tab changes
   const handleNext = useCallback(() => {
@@ -271,134 +266,18 @@ export function MenuItemModal({
     }
   }, [formState.activeTab, handleTabChange]);
 
-  // Handle form submission
-  const handleSubmitForm = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
+  // Step completion logic
+  const isStep1Completed =
+    formState.formData.name.trim() !== "" &&
+    formState.formData.price !== "" &&
+    parseFloat(formState.formData.price) > 0 &&
+    formState.formData.preparationTime !== "" &&
+    parseInt(formState.formData.preparationTime) > 0;
 
-      // If not on the last tab, validate current tab and move to next
-      if (formState.activeTab !== "image") {
-        if (!validateForm()) {
-          return;
-        }
-        handleNext();
-        return;
-      }
+  const isStep2Completed =
+    isStep1Completed && formState.formData.category !== "";
 
-      // Final validation - validate all required fields
-      const errors: Record<string, string> = {};
-
-      if (!formState.formData.name.trim()) {
-        errors.name = "Name is required";
-      }
-
-      if (
-        !formState.formData.price ||
-        parseFloat(formState.formData.price) <= 0
-      ) {
-        errors.price = "Valid price is required";
-      }
-
-      if (
-        !formState.formData.preparationTime ||
-        parseInt(formState.formData.preparationTime) <= 0
-      ) {
-        errors.preparationTime = "Preparation time is required";
-      }
-
-      if (!formState.formData.category) {
-        errors.category = "Category is required";
-      }
-
-      if (Object.keys(errors).length > 0) {
-        setFormState((prev) => ({
-          ...prev,
-          formErrors: errors,
-        }));
-        toast.error("Please fix the errors before submitting");
-        return;
-      }
-
-      setFormState((prev) => ({ ...prev, isSubmitting: true }));
-
-      console.log("Submitting form with data:", formState.formData);
-
-      try {
-        // Create FormData
-        const formDataToSubmit = new FormData();
-        formDataToSubmit.append("name", formState.formData.name);
-        formDataToSubmit.append("description", formState.formData.description);
-        formDataToSubmit.append("price", formState.formData.price);
-        formDataToSubmit.append("category", formState.formData.category);
-        formDataToSubmit.append(
-          "preparationTime",
-          formState.formData.preparationTime
-        );
-        formDataToSubmit.append(
-          "available",
-          formState.formData.available.toString()
-        );
-        formDataToSubmit.append(
-          "popular",
-          formState.formData.popular.toString()
-        );
-
-        // Handle image URL properly for editing vs creating
-        if (item) {
-          // Editing existing item - only include imageUrl if it's different from the original
-          if (formState.formData.image !== item.image) {
-            formDataToSubmit.append("imageUrl", formState.formData.image);
-          }
-        } else {
-          // Creating new item - always include imageUrl
-          formDataToSubmit.append("imageUrl", formState.formData.image);
-        }
-
-        // Add allergens
-        if (
-          formState.formData.allergens &&
-          formState.formData.allergens.length > 0
-        ) {
-          formState.formData.allergens.forEach((allergen: MenuItemAllergen) => {
-            if (allergen && allergen.id) {
-              formDataToSubmit.append("allergens", allergen.id);
-            }
-          });
-        }
-
-        await onSubmit(formDataToSubmit);
-        handleModalClose(true); // Clear form after successful submission
-      } catch (error: any) {
-        console.error("Error submitting form:", error);
-        toast.error(error.message || "Failed to save menu item");
-      } finally {
-        setFormState((prev) => ({ ...prev, isSubmitting: false }));
-      }
-    },
-    [
-      formState.activeTab,
-      formState.formData,
-      validateForm,
-      handleNext,
-      setFormState,
-      onSubmit,
-      handleModalClose,
-      item,
-    ]
-  );
-
-  // Add local step completion logic
-  const isStep1Completed = Boolean(
-    formState.formData.name.trim() &&
-      formState.formData.price &&
-      parseFloat(formState.formData.price) > 0 &&
-      formState.formData.preparationTime &&
-      parseInt(formState.formData.preparationTime) > 0
-  );
-
-  const isStep2Completed = Boolean(formState.formData.category);
-
-  // In edit mode, only show steps as completed if we've visited them or are on a later step
+  // In edit mode, show steps as completed if we've visited them or are on a later step
   const shouldShowStep1Completed =
     isStep1Completed &&
     (!item ||
@@ -411,6 +290,30 @@ export function MenuItemModal({
     (!item ||
       formState.activeTab === "image" ||
       formState.visitedSteps.has("image"));
+
+  // Handle form submission with step progression
+  const handleSubmitForm = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // If not on the last tab, validate current tab and move to next
+    if (formState.activeTab !== "image") {
+      if (!validateForm()) {
+        toast.error("Please fix the errors before proceeding");
+        return;
+      }
+      handleTabChange(formState.activeTab === "basic" ? "details" : "image");
+      return;
+    }
+
+    // Final validation and submission
+    if (!validateForm()) {
+      toast.error("Please fix the errors before submitting");
+      return;
+    }
+
+    // Submit the form
+    handleSubmit(e);
+  };
 
   // Handle adding new category
   const handleAddNewCategory = async () => {
@@ -508,7 +411,6 @@ export function MenuItemModal({
             // Upload compressed file
             await handleImageUpload(compressedFile);
           } catch (error) {
-            console.error("Image compression failed:", error);
             toast.error("Failed to process image. Please try again.");
           }
         }
@@ -523,7 +425,7 @@ export function MenuItemModal({
       open={open}
       onOpenChange={(isOpen) => {
         if (!isOpen && !formState.isSubmitting && !formState.isUploading) {
-          handleModalClose(false);
+          handleModalClose();
         }
       }}
     >
@@ -1126,6 +1028,146 @@ export function MenuItemModal({
                   </div>
                 )}
 
+                {/* Tags Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium text-gray-700">
+                      Tags
+                    </Label>
+                    {(formState.formData.tags || []).length > 0 && (
+                      <span className="text-xs text-blue-600 font-medium">
+                        {formState.formData.tags.length} selected
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Selected Tags Summary */}
+                  {(formState.formData.tags || []).length > 0 && (
+                    <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-blue-800">
+                          Selected Tags
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateFormData({ tags: [] });
+                          }}
+                          className="text-xs text-blue-600 hover:text-red-600 transition-colors"
+                        >
+                          Clear all
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(formState.formData.tags || []).map((tag) => {
+                          const tagInfo = getTagInfo(tag);
+                          return (
+                            <span
+                              key={tag}
+                              className="inline-flex items-center px-2.5 py-1 rounded-full text-xs bg-white text-blue-700 border border-blue-200 shadow-sm hover:shadow-md transition-all duration-200"
+                            >
+                              <span className="mr-1.5">{tagInfo.icon}</span>
+                              {tagInfo.label}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const currentTags =
+                                    formState.formData.tags || [];
+                                  updateFormData({
+                                    tags: currentTags.filter((t) => t !== tag),
+                                  });
+                                }}
+                                className="ml-1.5 hover:text-red-600 transition-colors p-0.5 rounded-full hover:bg-red-50"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tag Categories */}
+                  <div className="space-y-4">
+                    {Object.entries(TAG_CATEGORIES).map(
+                      ([categoryKey, categoryName]) => (
+                        <div key={categoryKey} className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-medium text-gray-700">
+                              {categoryName}
+                            </h4>
+                            <span className="text-xs text-gray-500">
+                              {
+                                getTagsByCategory(
+                                  categoryKey as keyof typeof MENU_TAGS
+                                ).filter((tag) =>
+                                  (formState.formData.tags || []).includes(tag)
+                                ).length
+                              }{" "}
+                              selected
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            {getTagsByCategory(
+                              categoryKey as keyof typeof MENU_TAGS
+                            ).map((tag) => {
+                              const tagInfo = getTagInfo(tag);
+                              const isSelected = (
+                                formState.formData.tags || []
+                              ).includes(tag);
+
+                              return (
+                                <div
+                                  key={tag}
+                                  className="flex items-center space-x-2"
+                                >
+                                  <Checkbox
+                                    id={tag}
+                                    checked={isSelected}
+                                    onCheckedChange={(checked) => {
+                                      console.log(
+                                        "Tag checkbox clicked:",
+                                        tag,
+                                        "checked:",
+                                        checked
+                                      );
+                                      if (checked) {
+                                        updateFormData({
+                                          tags: [
+                                            ...(formState.formData.tags || []),
+                                            tag,
+                                          ],
+                                        });
+                                      } else {
+                                        updateFormData({
+                                          tags: (
+                                            formState.formData.tags || []
+                                          ).filter((t) => t !== tag),
+                                        });
+                                      }
+                                    }}
+                                    className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                  />
+                                  <Label
+                                    htmlFor={tag}
+                                    className="text-sm text-gray-700 cursor-pointer flex items-center gap-2"
+                                  >
+                                    <span className="text-sm">
+                                      {tagInfo.icon}
+                                    </span>
+                                    {tagInfo.label}
+                                  </Label>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-3">
                     <Label
@@ -1421,7 +1463,7 @@ export function MenuItemModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleModalClose(true)}
+              onClick={handleModalClose}
               disabled={formState.isSubmitting || formState.isUploading}
               className="px-6"
             >

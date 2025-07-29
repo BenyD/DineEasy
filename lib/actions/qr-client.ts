@@ -155,7 +155,10 @@ export async function getRestaurantMenu(restaurantId: string) {
             image: item.image_url || "/placeholder.svg",
             category: categoryName.toLowerCase(),
             available: item.is_available,
-            tags: item.is_popular ? ["Popular"] : [],
+            tags: [
+              ...(item.tags || []),
+              ...(item.is_popular ? ["popular"] : []),
+            ],
             allergens,
             preparationTime: item.preparation_time
               ? (() => {

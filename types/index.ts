@@ -10,10 +10,10 @@ export type SubscriptionStatus =
 export type SubscriptionPlan = "starter" | "pro" | "elite";
 export type SubscriptionInterval = "monthly" | "yearly";
 
-export type RestaurantType = 
-  | "restaurant" 
-  | "cafe" 
-  | "bar" 
+export type RestaurantType =
+  | "restaurant"
+  | "cafe"
+  | "bar"
   | "food-truck"
   | "pizzeria"
   | "sushi"
@@ -162,6 +162,7 @@ export interface MenuItem {
   available: boolean;
   popular: boolean;
   allergens: MenuItemAllergen[];
+  tags?: string[]; // Dietary and flavor tags
   categoryId: string;
   restaurantId: string;
   createdAt: string;

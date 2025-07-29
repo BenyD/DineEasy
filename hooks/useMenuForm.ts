@@ -12,6 +12,7 @@ interface FormData {
   preparationTime: string;
   available: boolean;
   allergens: MenuItemAllergen[];
+  tags: string[]; // Add tags field
   popular: boolean;
   image: string;
 }
@@ -100,6 +101,7 @@ export function useMenuForm({
         preparationTime: "",
         available: true,
         allergens: [],
+        tags: [],
         popular: false,
         image: "",
       },
@@ -140,6 +142,7 @@ export function useMenuForm({
           preparationTime: savedProgress.formData.preparationTime || "",
           available: savedProgress.formData.available ?? true,
           allergens: savedProgress.formData.allergens || [],
+          tags: savedProgress.formData.tags || [],
           popular: savedProgress.formData.popular || false,
           image: "",
         },
@@ -245,6 +248,7 @@ export function useMenuForm({
           preparationTime: item.preparationTime?.toString() || "",
           available: item.available ?? true,
           allergens: formattedAllergens,
+          tags: item.tags || [],
           popular: item.popular || false,
           image: item.image || "",
         },

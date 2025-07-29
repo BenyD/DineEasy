@@ -309,3 +309,9 @@ export function disconnectMenuWebSocket() {
     menuWebSocketInstance = null;
   }
 }
+
+// Re-export Orders WebSocket functions
+export {
+  getOrdersWebSocket,
+  disconnectOrdersWebSocket,
+} from "./websocket/orders";

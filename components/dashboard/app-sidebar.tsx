@@ -69,6 +69,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSidebarData } from "@/hooks/useSidebarData";
 import { setSidebarRefreshCallback } from "@/lib/actions/profile-client";
+import { useOrderCounts } from "@/hooks/useOrderCounts";
 
 // Mock data for notifications (can be replaced with real data later)
 const notifications = [
@@ -111,7 +112,7 @@ const navigationData = {
           name: "Active Orders",
           href: "/dashboard/orders/active",
           description: "View and manage current orders",
-          badge: "3",
+          badge: "3", // This will be replaced dynamically
         },
         {
           name: "Order History",
@@ -285,6 +286,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { restaurant, user, isLoading, error, refreshUserData } =
     useSidebarData();
 
+  // Get live order counts
+  const { counts: orderCounts, loading: orderCountsLoading } = useOrderCounts();
+
   React.useEffect(() => {
     setMounted(true);
   }, []);
@@ -311,6 +315,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const hasActiveChild = (item: any): boolean => {
     if (!item.subItems) return false;
     return item.subItems.some((subItem: any) => isActive(subItem.href));
+  };
+
+  // Get navigation data with live order counts
+  const getNavigationData = () => {
+    const data = { ...navigationData };
+
+    // Update the Active Orders badge with live count
+    if (data.main) {
+      const ordersItem = data.main.find((item) => item.name === "Orders");
+      if (ordersItem && ordersItem.subItems) {
+        const activeOrdersItem = ordersItem.subItems.find(
+          (subItem) => subItem.name === "Active Orders"
+        );
+        if (activeOrdersItem) {
+          if (orderCountsLoading) {
+            activeOrdersItem.badge = "...";
+          } else {
+            activeOrdersItem.badge = orderCounts.active.toString();
+          }
+        }
+      }
+    }
+
+    return data;
   };
 
   const renderNavItem = (item: any, isSubItem = false) => {
@@ -353,7 +381,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               variant={active || activeChild ? "default" : "secondary"}
               className={cn(
                 "ml-auto text-xs",
-                active && "bg-green-100 text-green-700"
+                active && "bg-green-100 text-green-700",
+                item.badge === "..." && "animate-pulse"
               )}
             >
               {item.badge}
@@ -582,9 +611,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarHeader>
 
         <SidebarContent>
-          {renderSection("Overview", navigationData.main)}
-          {renderSection("Management", navigationData.management)}
-          {renderSection("Settings", navigationData.settings)}
+          {renderSection("Overview", getNavigationData().main)}
+          {renderSection("Management", getNavigationData().management)}
+          {renderSection("Settings", getNavigationData().settings)}
         </SidebarContent>
 
         <SidebarFooter className="border-t p-3">

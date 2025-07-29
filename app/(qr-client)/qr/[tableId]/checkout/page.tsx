@@ -67,9 +67,11 @@ export default function CheckoutPage({
   const { cart, getTotalPrice, clearCart } = useCart();
   const [selectedPayment, setSelectedPayment] = useState("");
   const [email, setEmail] = useState("");
+  const [customerName, setCustomerName] = useState("");
   const [tip, setTip] = useState(0);
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isPaymentSuccessful, setIsPaymentSuccessful] = useState(false);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [restaurant, setRestaurant] = useState<RestaurantData | null>(null);
   const [tableData, setTableData] = useState<TableData | null>(null);
@@ -102,7 +104,9 @@ export default function CheckoutPage({
         }
 
         // Load special instructions from URL params
-        const specialInstructionsParam = searchParams.get("specialInstructions");
+        const specialInstructionsParam = searchParams.get(
+          "specialInstructions"
+        );
         if (specialInstructionsParam) {
           setSpecialInstructions(decodeURIComponent(specialInstructionsParam));
         }
@@ -125,6 +129,11 @@ export default function CheckoutPage({
 
     if (selectedPayment === "stripe" && !email) {
       toast.error("Please enter your email for the receipt");
+      return;
+    }
+
+    if (!customerName.trim()) {
+      toast.error("Please enter your name");
       return;
     }
 
@@ -157,6 +166,7 @@ export default function CheckoutPage({
           tip,
           total,
           email,
+          customerName,
           specialInstructions,
         };
 
@@ -188,6 +198,7 @@ export default function CheckoutPage({
           tip,
           total,
           email,
+          customerName,
           specialInstructions,
         };
 
@@ -197,6 +208,8 @@ export default function CheckoutPage({
           throw new Error(result.error);
         }
 
+        // Mark payment as successful to prevent empty cart flash
+        setIsPaymentSuccessful(true);
         // Clear cart and redirect to confirmation
         clearCart();
         router.push(
@@ -225,7 +238,18 @@ export default function CheckoutPage({
     );
   }
 
-  if (cart.length === 0) {
+  if (isPaymentSuccessful) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-gray-300 border-t-green-600 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Redirecting to confirmation...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (cart.length === 0 && !isPaymentSuccessful) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
@@ -354,10 +378,14 @@ export default function CheckoutPage({
           <div className="bg-white border border-gray-200 rounded-lg p-6">
             <div className="flex items-center gap-2 mb-3">
               <MessageSquare className="w-5 h-5 text-gray-600" />
-              <h3 className="font-semibold text-gray-900">Special Instructions</h3>
+              <h3 className="font-semibold text-gray-900">
+                Special Instructions
+              </h3>
             </div>
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <p className="text-gray-700 text-sm whitespace-pre-wrap">{specialInstructions}</p>
+              <p className="text-gray-700 text-sm whitespace-pre-wrap">
+                {specialInstructions}
+              </p>
             </div>
           </div>
         )}
@@ -457,25 +485,54 @@ export default function CheckoutPage({
           </div>
         </div>
 
-        {/* Email for Receipt */}
-        {selectedPayment === "stripe" && (
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <Label htmlFor="email" className="text-gray-700 font-medium mb-2">
-              Email for Receipt
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              className="h-12 text-lg border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              We'll send your receipt and order confirmation to this email
-            </p>
+        {/* Customer Information */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Customer Information
+          </h3>
+          <div className="space-y-4">
+            <div>
+              <Label
+                htmlFor="customerName"
+                className="text-gray-700 font-medium mb-2"
+              >
+                Your Name *
+              </Label>
+              <Input
+                id="customerName"
+                type="text"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Enter your full name"
+                className="h-12 text-lg border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                required
+              />
+            </div>
+
+            {selectedPayment === "stripe" && (
+              <div>
+                <Label
+                  htmlFor="email"
+                  className="text-gray-700 font-medium mb-2"
+                >
+                  Email for Receipt *
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="h-12 text-lg border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  We'll send your receipt and order confirmation to this email
+                </p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Security Notice */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

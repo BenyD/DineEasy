@@ -34,9 +34,11 @@ import {
   DollarSign,
   Sparkles,
   Image as ImageIcon,
+  Utensils,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type MenuItemAllergen } from "@/types";
+import { getTagInfo } from "@/lib/constants/menu-tags";
 
 interface MenuItemCardProps {
   item: {
@@ -50,6 +52,7 @@ interface MenuItemCardProps {
     popular: boolean;
     categoryId: string;
     allergens: MenuItemAllergen[];
+    tags?: string[];
   };
   category?: {
     id: string;
@@ -112,11 +115,11 @@ export function MenuItemCard({
     if (minutes >= 60) {
       const hours = Math.floor(minutes / 60);
       const remainingMinutes = minutes % 60;
-      
+
       if (remainingMinutes === 0) {
-        return `${hours} hour${hours > 1 ? 's' : ''}`;
+        return `${hours} hour${hours > 1 ? "s" : ""}`;
       } else {
-        return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} min`;
+        return `${hours} hour${hours > 1 ? "s" : ""} ${remainingMinutes} min`;
       }
     } else {
       return `${minutes} min`;
@@ -288,7 +291,7 @@ export function MenuItemCard({
           {/* Category badge */}
           <div className="absolute bottom-3 left-3 z-10">
             <Badge className="bg-white/90 text-gray-700 border border-gray-200 shadow-sm px-2 py-1 text-xs font-medium">
-              <Tag className="w-3 h-3 mr-1" />
+              <Utensils className="w-3 h-3 mr-1" />
               {category?.name || "Uncategorized"}
             </Badge>
           </div>
@@ -347,6 +350,33 @@ export function MenuItemCard({
           <p className="text-gray-600 text-sm line-clamp-2 min-h-[2.5rem] leading-relaxed">
             {item.description || "No description provided"}
           </p>
+
+          {/* Tags Display */}
+          {item.tags && item.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {item.tags.slice(0, 3).map((tag) => {
+                const tagInfo = getTagInfo(tag);
+                return (
+                  <Badge
+                    key={tag}
+                    variant="outline"
+                    className={cn("text-xs px-2 py-1 border", tagInfo.color)}
+                  >
+                    <span className="text-sm mr-1">{tagInfo.icon}</span>
+                    {tagInfo.label}
+                  </Badge>
+                );
+              })}
+              {item.tags.length > 3 && (
+                <Badge
+                  variant="outline"
+                  className="text-xs bg-gray-100 text-gray-700 border-gray-200 backdrop-blur-sm"
+                >
+                  +{item.tags.length - 3}
+                </Badge>
+              )}
+            </div>
+          )}
 
           {/* Big Price */}
           <div className="text-2xl font-bold text-green-600">
@@ -537,14 +567,40 @@ export function MenuItemCard({
                         variant="outline"
                         className="bg-gray-50/70 border-gray-200"
                       >
-                        <Tag className="w-3 h-3 mr-1" />
+                        <Utensils className="w-3 h-3 mr-1" />
                         {category?.name || "Uncategorized"}
                       </Badge>
                       <div className="flex items-center gap-1.5 text-gray-500">
                         <Clock className="w-4 h-4" />
-                        <span>{formatPreparationTime(item.preparationTime)}</span>
+                        <span>
+                          {formatPreparationTime(item.preparationTime)}
+                        </span>
                       </div>
                     </div>
+
+                    {/* Tags Display */}
+                    {item.tags && item.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {item.tags.map((tag) => {
+                          const tagInfo = getTagInfo(tag);
+                          return (
+                            <Badge
+                              key={tag}
+                              variant="outline"
+                              className={cn(
+                                "text-xs px-2 py-1 border",
+                                tagInfo.color
+                              )}
+                            >
+                              <span className="text-sm mr-1">
+                                {tagInfo.icon}
+                              </span>
+                              {tagInfo.label}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {item.allergens.length > 0 ? (
                       <HoverCard openDelay={200} closeDelay={100}>

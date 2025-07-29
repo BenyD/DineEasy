@@ -2745,6 +2745,8 @@ CREATE TABLE IF NOT EXISTS "public"."orders" (
     "tax_amount" numeric(10,2) NOT NULL,
     "tip_amount" numeric(10,2) DEFAULT 0,
     "notes" "text",
+    "customer_name" "text",
+    "customer_email" "text",
     "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
     "stripe_payment_intent_id" "text"

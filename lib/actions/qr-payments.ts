@@ -48,6 +48,15 @@ export async function createQRPaymentIntent(paymentData: QRPaymentData) {
     // Create a unique order ID
     const orderId = crypto.randomUUID();
 
+    // Generate unique order number
+    const { data: orderNumberResult, error: orderNumberError } =
+      await supabase.rpc("generate_order_number");
+
+    if (orderNumberError) {
+      console.error("Error generating order number:", orderNumberError);
+      return { error: "Failed to generate order number" };
+    }
+
     // Create order in database
     const { error: orderError } = await supabase.from("orders").insert({
       id: orderId,
@@ -57,9 +66,10 @@ export async function createQRPaymentIntent(paymentData: QRPaymentData) {
       total_amount: paymentData.total,
       tax_amount: paymentData.tax,
       tip_amount: paymentData.tip,
-      notes:
-        paymentData.specialInstructions ||
-        `QR Order - Table ${paymentData.tableId}`,
+      notes: paymentData.specialInstructions || null,
+      customer_name: paymentData.customerName || null,
+      customer_email: paymentData.email || null,
+      order_number: orderNumberResult,
     });
 
     if (orderError) {
@@ -262,6 +272,15 @@ export async function createCashOrder(paymentData: QRPaymentData) {
     // Create a unique order ID
     const orderId = crypto.randomUUID();
 
+    // Generate unique order number
+    const { data: orderNumberResult, error: orderNumberError } =
+      await supabase.rpc("generate_order_number");
+
+    if (orderNumberError) {
+      console.error("Error generating order number:", orderNumberError);
+      return { error: "Failed to generate order number" };
+    }
+
     // Create order in database
     const { error: orderError } = await supabase.from("orders").insert({
       id: orderId,
@@ -271,9 +290,10 @@ export async function createCashOrder(paymentData: QRPaymentData) {
       total_amount: paymentData.total,
       tax_amount: paymentData.tax,
       tip_amount: paymentData.tip,
-      notes:
-        paymentData.specialInstructions ||
-        `QR Cash Order - Table ${paymentData.tableId}`,
+      notes: paymentData.specialInstructions || null,
+      customer_name: paymentData.customerName || null,
+      customer_email: paymentData.email || null,
+      order_number: orderNumberResult,
     });
 
     if (orderError) {
