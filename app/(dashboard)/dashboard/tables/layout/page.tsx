@@ -502,6 +502,7 @@ export default function TableLayoutEditor() {
     const loadData = async () => {
       try {
         setLoading(true);
+        console.log("Loading layout data...");
 
         // Load tables and restaurant elements in parallel
         const [tablesResult, elementsResult] = await Promise.all([
@@ -509,8 +510,13 @@ export default function TableLayoutEditor() {
           getRestaurantElements(),
         ]);
 
+        console.log("Tables result:", tablesResult);
+        console.log("Elements result:", elementsResult);
+
         if (tablesResult.success && tablesResult.data) {
           setTables(tablesResult.data);
+          console.log("Loaded tables:", tablesResult.data.length);
+          
           // Initialize positions from database layout data
           setTablePositions((prev) => {
             const newPositions = new Map(prev);
@@ -534,16 +540,20 @@ export default function TableLayoutEditor() {
                 locked: false,
                 visible: true,
               });
+              
+              console.log(`Table ${table.id}: layout_x=${table.layout_x}, layout_y=${table.layout_y}, savedX=${savedX}, savedY=${savedY}`);
             });
             return newPositions;
           });
         } else {
+          console.error("Failed to load tables:", tablesResult.error);
           setError(tablesResult.error || "Failed to load tables");
         }
 
         // Load restaurant elements
         if (elementsResult.success && elementsResult.data) {
           setRestaurantElements(elementsResult.data);
+          console.log("Loaded restaurant elements:", elementsResult.data.length);
         } else {
           console.warn(
             "Failed to load restaurant elements:",
@@ -552,6 +562,7 @@ export default function TableLayoutEditor() {
           // Don't set error for elements as they're optional
         }
       } catch (err) {
+        console.error("Error loading data:", err);
         setError("Failed to load data");
       } finally {
         setLoading(false);
@@ -573,10 +584,12 @@ export default function TableLayoutEditor() {
         const restaurantType = await getCurrentRestaurantType();
 
         if (!restaurantType) {
-          setDefaultTemplateLoaded(true); // Mark as loaded to prevent retries
+          console.log("No restaurant type found, skipping template loading");
+          setDefaultTemplateLoaded(true);
           return;
         }
 
+        console.log("Loading default template for restaurant type:", restaurantType);
         setRestaurantType(restaurantType);
 
         // Find templates that match the restaurant type
@@ -584,11 +597,14 @@ export default function TableLayoutEditor() {
           (template) => template.restaurantType === restaurantType
         );
 
+        console.log("Found matching templates:", matchingTemplates.length);
+
         if (matchingTemplates.length > 0) {
           // Use the first matching template as default
           const defaultTemplate = matchingTemplates[0];
+          console.log("Loading template:", defaultTemplate.name);
 
-          // Always load the default template since we've already checked for saved layout
+          // Load the template
           await loadTemplate(defaultTemplate);
 
           // Automatically save the template after loading
@@ -624,6 +640,8 @@ export default function TableLayoutEditor() {
               `Loaded ${defaultTemplate.name} template for your ${restaurantType}`
             );
           }
+        } else {
+          console.log("No matching templates found for restaurant type:", restaurantType);
         }
 
         // Mark as loaded regardless of outcome to prevent retries
@@ -634,21 +652,39 @@ export default function TableLayoutEditor() {
       }
     };
 
-    // Always load default template if no saved layout exists
-    const hasSavedLayout = tables.some(
+    // Check if we should load a default template
+    // We should load if:
+    // 1. We have tables but no proper saved layout
+    // 2. We have no restaurant elements (indicating first time setup)
+    const hasProperSavedLayout = tables.some(
       (table) =>
         table.layout_x !== null &&
         table.layout_y !== null &&
         table.layout_width !== null &&
-        table.layout_height !== null
+        table.layout_height !== null &&
+        // Check if positions are not just random values
+        table.layout_x > 0 &&
+        table.layout_y > 0
     );
 
-    if (!hasSavedLayout) {
+    const hasRestaurantElements = restaurantElements.length > 0;
+    const shouldLoadTemplate = tables.length > 0 && (!hasProperSavedLayout || !hasRestaurantElements);
+
+    console.log("Template loading check:", {
+      tablesCount: tables.length,
+      hasProperSavedLayout,
+      hasRestaurantElements,
+      shouldLoadTemplate
+    });
+
+    if (shouldLoadTemplate) {
+      console.log("Loading default template...");
       loadDefaultTemplate();
     } else {
-      setDefaultTemplateLoaded(true); // Mark as loaded if we have saved layout
+      console.log("Skipping template loading - user has saved layout or no tables");
+      setDefaultTemplateLoaded(true);
     }
-  }, [tables, loading, defaultTemplateLoaded]);
+  }, [tables, loading, defaultTemplateLoaded, restaurantElements.length]);
 
   // Update canvas size on window resize
   useEffect(() => {
@@ -1121,10 +1157,21 @@ export default function TableLayoutEditor() {
   // Load layout template
   const loadTemplate = useCallback(
     async (template: (typeof LAYOUT_TEMPLATES)[0]) => {
+      console.log("Loading template:", template.name, "with", template.tables.length, "tables");
+      console.log("Available tables:", tables.length);
+      
       const newPositions = new Map<string, TablePosition>();
 
-      template.tables.forEach((tableConfig, index) => {
-        const table = tables[index];
+      // Match template tables with actual tables by capacity
+      const sortedTables = [...tables].sort((a, b) => a.capacity - b.capacity);
+      const sortedTemplateTables = [...template.tables].sort((a, b) => a.capacity - b.capacity);
+
+      console.log("Sorted tables by capacity:", sortedTables.map(t => ({ id: t.id, capacity: t.capacity })));
+      console.log("Sorted template tables by capacity:", sortedTemplateTables.map(t => ({ capacity: t.capacity, x: t.x, y: t.y })));
+
+      // Apply template positions to tables, matching by capacity
+      sortedTemplateTables.forEach((tableConfig, index) => {
+        const table = sortedTables[index];
         if (table) {
           const tableSize = getTableSize(table.capacity);
           newPositions.set(table.id, {
@@ -1138,11 +1185,38 @@ export default function TableLayoutEditor() {
             locked: false,
             visible: true,
           });
+          console.log(`Positioned table ${table.id} (capacity: ${table.capacity}) at (${tableConfig.x}, ${tableConfig.y})`);
+        }
+      });
+
+      // For any remaining tables that don't have template positions, place them in a grid
+      const remainingTables = sortedTables.slice(sortedTemplateTables.length);
+      let gridX = 100;
+      let gridY = 400;
+      remainingTables.forEach((table) => {
+        const tableSize = getTableSize(table.capacity);
+        newPositions.set(table.id, {
+          id: table.id,
+          x: gridX,
+          y: gridY,
+          rotation: 0,
+          scale: 1,
+          width: tableSize.width,
+          height: tableSize.height,
+          locked: false,
+          visible: true,
+        });
+        console.log(`Positioned remaining table ${table.id} at grid position (${gridX}, ${gridY})`);
+        gridX += 120;
+        if (gridX > 600) {
+          gridX = 100;
+          gridY += 100;
         }
       });
 
       // Load template elements if they exist
-      if (template.elements) {
+      if (template.elements && template.elements.length > 0) {
+        console.log("Loading template elements:", template.elements.length);
         setRestaurantElements(template.elements as RestaurantElement[]);
 
         // Save template elements to database
@@ -1150,9 +1224,12 @@ export default function TableLayoutEditor() {
           await saveRestaurantElements(
             template.elements as RestaurantElement[]
           );
+          console.log("Template elements saved to database");
         } catch (error) {
           console.warn("Failed to save template elements to database:", error);
         }
+      } else {
+        console.log("No template elements to load");
       }
 
       setTablePositions(newPositions);

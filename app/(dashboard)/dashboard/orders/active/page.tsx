@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Loader2,
   MessageSquare,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,8 +72,17 @@ import {
 } from "@/lib/actions/orders";
 import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 import { toast } from "sonner";
+import { completeCashOrder } from "@/lib/actions/qr-payments";
+import { cn } from "@/lib/utils";
 
-type OrderStatus = "new" | "preparing" | "ready" | "refunded" | "all";
+type OrderStatus =
+  | "pending"
+  | "preparing"
+  | "ready"
+  | "served"
+  | "completed"
+  | "cancelled"
+  | "all";
 
 const formatTime = (date: Date) => {
   let hours = date.getHours();
@@ -153,6 +163,7 @@ export default function ActiveOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set());
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+  const [markingAsPaid, setMarkingAsPaid] = useState<Set<string>>(new Set());
 
   // WebSocket for real-time updates
   const { isConnected } = useOrdersWebSocket({
@@ -287,14 +298,18 @@ export default function ActiveOrdersPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "new":
+      case "pending":
         return "bg-red-100 text-red-800 border-red-200";
       case "preparing":
         return "bg-amber-100 text-amber-800 border-amber-200";
       case "ready":
         return "bg-green-100 text-green-800 border-green-200";
-      case "refunded":
+      case "served":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "completed":
         return "bg-purple-100 text-purple-800 border-purple-200";
+      case "cancelled":
+        return "bg-gray-100 text-gray-800 border-gray-200";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
     }
@@ -313,13 +328,48 @@ export default function ActiveOrdersPage() {
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
-      case "paid":
-        return "bg-green-100 text-green-800";
+      case "completed":
+        return "bg-green-100 text-green-700 border-green-200";
       case "pending":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "failed":
+        return "bg-red-100 text-red-800 border-red-200";
+      case "refunded":
+        return "bg-gray-100 text-gray-800 border-gray-200";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 border-gray-200";
     }
+  };
+
+  const getPaymentStatusText = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "Paid";
+      case "pending":
+        return "Pending";
+      case "failed":
+        return "Failed";
+      case "refunded":
+        return "Refunded";
+      default:
+        return "Pending";
+    }
+  };
+
+  const isOrderPaid = (order: Order) => {
+    return order.paymentStatus === "completed";
+  };
+
+  const canMarkAsPaid = (order: Order) => {
+    // Can mark as paid if:
+    // 1. Order is not already paid
+    // 2. Order has no stripe payment intent (cash order)
+    // 3. Order status is not cancelled
+    return (
+      !isOrderPaid(order) &&
+      !order.stripe_payment_intent_id &&
+      order.status !== "cancelled"
+    );
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -350,26 +400,39 @@ export default function ActiveOrdersPage() {
   };
 
   // Filter orders by status for display (these are already filtered at database level)
-  const newOrders = filteredOrders.filter((order) => order.status === "new");
+  const pendingOrders = filteredOrders.filter(
+    (order) => order.status === "pending"
+  );
   const preparingOrders = filteredOrders.filter(
     (order) => order.status === "preparing"
   );
   const readyOrders = filteredOrders.filter(
     (order) => order.status === "ready"
   );
+  const servedOrders = filteredOrders.filter(
+    (order) => order.status === "served"
+  );
+  const completedOrders = filteredOrders.filter(
+    (order) => order.status === "completed"
+  );
+  const cancelledOrders = filteredOrders.filter(
+    (order) => order.status === "cancelled"
+  );
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "new":
+      case "pending":
         return <AlertCircle className="w-4 h-4" />;
       case "preparing":
         return <Clock className="w-4 h-4" />;
       case "ready":
         return <CheckCircle className="w-4 h-4" />;
+      case "served":
+        return <Eye className="w-4 h-4" />;
       case "completed":
         return <CheckCircle className="w-4 h-4" />;
-      case "refunded":
-        return <RefreshCcw className="w-4 h-4" />;
+      case "cancelled":
+        return <Ban className="w-4 h-4" />;
       default:
         return <Clock className="w-4 h-4" />;
     }
@@ -470,6 +533,41 @@ export default function ActiveOrdersPage() {
     }
   };
 
+  const handleMarkAsPaid = async (orderId: string) => {
+    try {
+      setMarkingAsPaid((prev) => new Set(prev).add(orderId));
+
+      const result = await completeCashOrder(orderId);
+
+      if (result.success) {
+        toast.success("Order marked as paid successfully");
+        // Update the order in the list to reflect the payment status change
+        setOrders((prev) =>
+          prev.map((order) =>
+            order.id === orderId
+              ? {
+                  ...order,
+                  paymentStatus: "completed",
+                  updated_at: new Date().toISOString(),
+                }
+              : order
+          )
+        );
+      } else {
+        toast.error(result.error || "Failed to mark order as paid");
+      }
+    } catch (error) {
+      console.error("Error marking order as paid:", error);
+      toast.error("Failed to mark order as paid");
+    } finally {
+      setMarkingAsPaid((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
+  };
+
   const formatCurrency = (amount: number): string => {
     return `${currencySymbol} ${amount.toFixed(2)}`;
   };
@@ -532,10 +630,10 @@ export default function ActiveOrdersPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs md:text-sm font-medium text-red-800">
-                    New Orders
+                    Pending Orders
                   </p>
                   <p className="text-xl md:text-2xl font-bold text-red-900">
-                    {newOrders.length}
+                    {pendingOrders.length}
                   </p>
                 </div>
                 <motion.div variants={iconVariants}>
@@ -682,17 +780,17 @@ export default function ActiveOrdersPage() {
                 All Status
               </Button>
               <Button
-                variant={statusFilter === "new" ? "default" : "outline"}
+                variant={statusFilter === "pending" ? "default" : "outline"}
                 onClick={() =>
-                  setStatusFilter(statusFilter === "new" ? null : "new")
+                  setStatusFilter(statusFilter === "pending" ? null : "pending")
                 }
                 className={
-                  statusFilter === "new"
+                  statusFilter === "pending"
                     ? "bg-green-600 hover:bg-green-700 text-white"
                     : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
                 }
               >
-                New Orders
+                Pending Orders
               </Button>
               <Button
                 variant={statusFilter === "preparing" ? "default" : "outline"}
@@ -721,6 +819,49 @@ export default function ActiveOrdersPage() {
                 }
               >
                 Ready
+              </Button>
+              <Button
+                variant={statusFilter === "served" ? "default" : "outline"}
+                onClick={() =>
+                  setStatusFilter(statusFilter === "served" ? null : "served")
+                }
+                className={
+                  statusFilter === "served"
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
+                }
+              >
+                Served
+              </Button>
+              <Button
+                variant={statusFilter === "completed" ? "default" : "outline"}
+                onClick={() =>
+                  setStatusFilter(
+                    statusFilter === "completed" ? null : "completed"
+                  )
+                }
+                className={
+                  statusFilter === "completed"
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
+                }
+              >
+                Completed
+              </Button>
+              <Button
+                variant={statusFilter === "cancelled" ? "default" : "outline"}
+                onClick={() =>
+                  setStatusFilter(
+                    statusFilter === "cancelled" ? null : "cancelled"
+                  )
+                }
+                className={
+                  statusFilter === "cancelled"
+                    ? "bg-red-600 hover:bg-red-700 text-white"
+                    : "hover:bg-red-50 hover:text-red-600 hover:border-red-600"
+                }
+              >
+                Cancelled
               </Button>
             </motion.div>
           </CardContent>
@@ -842,27 +983,31 @@ export default function ActiveOrdersPage() {
                             <div className="flex items-center gap-2">
                               <Badge
                                 variant="outline"
-                                className={getPaymentStatusColor(
-                                  order.paymentStatus
+                                className={cn(
+                                  "text-xs",
+                                  getPaymentStatusColor(order.paymentStatus)
                                 )}
                               >
-                                {order.paymentStatus.charAt(0).toUpperCase() +
-                                  order.paymentStatus.slice(1)}
+                                {getPaymentStatusText(order.paymentStatus)}
                               </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                {order.paymentMethod === "card"
-                                  ? "Card"
-                                  : order.paymentMethod === "cash"
-                                    ? "Cash"
-                                    : order.paymentMethod === "other"
-                                      ? "Other"
-                                      : order.paymentMethod
-                                        ? order.paymentMethod
-                                            .charAt(0)
-                                            .toUpperCase() +
-                                          order.paymentMethod.slice(1)
-                                        : "Unknown"}
-                              </Badge>
+                              {canMarkAsPaid(order) && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs h-7 px-3 bg-white text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400 hover:text-green-800 shadow-sm"
+                                  disabled={markingAsPaid.has(order.id)}
+                                  onClick={() => handleMarkAsPaid(order.id)}
+                                >
+                                  {markingAsPaid.has(order.id) ? (
+                                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                  ) : (
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                  )}
+                                  {markingAsPaid.has(order.id)
+                                    ? "Marking..."
+                                    : "Mark Paid"}
+                                </Button>
+                              )}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" size="sm">
@@ -931,11 +1076,30 @@ export default function ActiveOrdersPage() {
 
                           {/* Order Footer */}
                           <div className="flex items-center justify-between pt-4 border-t">
-                            <div className="flex items-center gap-2">
-                              <Timer className="h-4 w-4 text-gray-500" />
-                              <span className="text-sm text-gray-600">
-                                Est. Time: {order.estimatedTime} mins
-                              </span>
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-2">
+                                <Timer className="h-4 w-4 text-gray-500" />
+                                <span className="text-sm text-gray-600">
+                                  Est. Time: {order.estimatedTime} mins
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <CreditCard className="h-4 w-4 text-gray-500" />
+                                <span className="text-sm text-gray-600">
+                                  {order.paymentMethod === "card"
+                                    ? "Card Payment"
+                                    : order.paymentMethod === "cash"
+                                      ? "Cash Payment"
+                                      : order.paymentMethod === "other"
+                                        ? "Other Payment"
+                                        : order.paymentMethod
+                                          ? order.paymentMethod
+                                              .charAt(0)
+                                              .toUpperCase() +
+                                            order.paymentMethod.slice(1)
+                                          : "Unknown Payment"}
+                                </span>
+                              </div>
                             </div>
                             <div className="flex items-center gap-3">
                               <span className="font-medium">
@@ -948,9 +1112,10 @@ export default function ActiveOrdersPage() {
                                 disabled={updatingOrders.has(order.id)}
                                 onClick={() => {
                                   const nextStatus = {
-                                    new: "preparing",
+                                    pending: "preparing",
                                     preparing: "ready",
-                                    ready: "completed",
+                                    ready: "served",
+                                    served: "completed",
                                   }[order.status];
                                   if (nextStatus) {
                                     handleUpdateOrderStatus(
@@ -967,11 +1132,12 @@ export default function ActiveOrdersPage() {
                                   </div>
                                 ) : (
                                   <>
-                                    {order.status === "new" &&
+                                    {order.status === "pending" &&
                                       "Start Preparing"}
                                     {order.status === "preparing" &&
                                       "Mark Ready"}
-                                    {order.status === "ready" &&
+                                    {order.status === "ready" && "Mark Served"}
+                                    {order.status === "served" &&
                                       "Complete Order"}
                                   </>
                                 )}
@@ -1051,7 +1217,7 @@ export default function ActiveOrdersPage() {
                         <Badge
                           variant="outline"
                           className={
-                            selectedOrder.paymentStatus === "paid"
+                            selectedOrder.paymentStatus === "completed"
                               ? "text-green-600 border-green-200 bg-green-50"
                               : "text-amber-600 border-amber-200 bg-amber-50"
                           }
@@ -1163,7 +1329,7 @@ export default function ActiveOrdersPage() {
 
                   {/* Action Buttons */}
                   <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                    {selectedOrder.status === "new" && (
+                    {selectedOrder.status === "pending" && (
                       <Button
                         disabled={updatingOrders.has(selectedOrder.id)}
                         onClick={() => {
@@ -1205,6 +1371,25 @@ export default function ActiveOrdersPage() {
                       </Button>
                     )}
                     {selectedOrder.status === "ready" && (
+                      <Button
+                        disabled={updatingOrders.has(selectedOrder.id)}
+                        onClick={() => {
+                          handleUpdateOrderStatus(selectedOrder.id, "served");
+                          setSelectedOrder(null);
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
+                      >
+                        {updatingOrders.has(selectedOrder.id) ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Updating...
+                          </div>
+                        ) : (
+                          "Mark Served"
+                        )}
+                      </Button>
+                    )}
+                    {selectedOrder.status === "served" && (
                       <Button
                         disabled={updatingOrders.has(selectedOrder.id)}
                         onClick={() => {

@@ -20,6 +20,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
+import { formatAmountWithCurrency } from "@/lib/utils/currency";
 
 // Mock notification type
 interface Notification {
@@ -33,13 +35,13 @@ interface Notification {
 }
 
 // Move initial notifications to a function to prevent hydration issues
-const getInitialNotifications = (): Notification[] => {
+const getInitialNotifications = (currency: string): Notification[] => {
   const now = Date.now();
   return [
     {
       id: "1",
       title: "New Order #1234",
-      message: "Table 5 placed a new order - 3 items ($45.90)",
+      message: `Table 5 placed a new order - 3 items (${formatAmountWithCurrency(45.9, currency)})`,
       timestamp: now,
       read: false,
       type: "order",
@@ -48,7 +50,7 @@ const getInitialNotifications = (): Notification[] => {
     {
       id: "2",
       title: "Payment Received",
-      message: "Payment of $52.40 received from Table 3 via Credit Card",
+      message: `Payment of ${formatAmountWithCurrency(52.4, currency)} received from Table 3 via Credit Card`,
       timestamp: now - 1000 * 60 * 30, // 30 mins ago
       read: false,
       type: "payment",
@@ -58,6 +60,7 @@ const getInitialNotifications = (): Notification[] => {
 };
 
 export function NotificationPopover() {
+  const { currency } = useRestaurantSettings();
   const [mounted, setMounted] = React.useState(false);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [isOpen, setIsOpen] = React.useState(false);
@@ -65,9 +68,9 @@ export function NotificationPopover() {
 
   React.useEffect(() => {
     setMounted(true);
-    setNotifications(getInitialNotifications());
+    setNotifications(getInitialNotifications(currency));
     audioRef.current = new Audio("/notification-sound.mp3");
-  }, []);
+  }, [currency]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 

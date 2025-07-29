@@ -30,7 +30,8 @@ export async function getTableInfo(tableId: string) {
           description,
           stripe_account_enabled,
           stripe_account_id,
-          payment_methods
+          payment_methods,
+          tax_rate
         )
       `
       )

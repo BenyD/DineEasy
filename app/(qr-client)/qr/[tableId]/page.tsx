@@ -43,14 +43,41 @@ export default function QRClientPage({
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
 
   const { cart, addToCart, updateQuantity, getTotalItems, getTotalPrice } =
-    useCart();
+    useCart(tableData?.id);
+
+  // Monitor network status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    setIsOnline(navigator.onLine);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
       try {
+        setLoading(true);
+        setError(null);
+
         const { tableId } = await params;
+
+        // Validate table ID format
+        if (!tableId || tableId.length < 10) {
+          setError("Invalid table QR code. Please scan again.");
+          return;
+        }
 
         // Get table info
         const tableResult = await getTableInfo(tableId);
@@ -137,7 +164,7 @@ export default function QRClientPage({
         );
       } catch (error: any) {
         console.error("Error fetching menu items:", error);
-        setError("Failed to load menu items");
+        setError("Failed to load menu items. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -163,12 +190,86 @@ export default function QRClientPage({
     (cat) => cat.id === activeCategory
   );
 
+  // Performance optimization: Only render visible items
+  const [visibleItems, setVisibleItems] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const itemId = entry.target.getAttribute("data-item-id");
+          if (itemId) {
+            setVisibleItems((prev) => {
+              const newSet = new Set(prev);
+              if (entry.isIntersecting) {
+                newSet.add(itemId);
+              } else {
+                newSet.delete(itemId);
+              }
+              return newSet;
+            });
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    // Observe all menu item cards
+    document.querySelectorAll("[data-item-id]").forEach((el) => {
+      observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [filteredCategories]);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-gray-300 border-t-green-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Loading menu...</p>
+      <div className="min-h-screen bg-white">
+        {/* Header Skeleton */}
+        <div className="bg-white border-b border-gray-200">
+          <div className="px-4 py-4 lg:px-6 lg:py-6">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-16 h-16 lg:w-20 lg:h-20 bg-gray-200 rounded-2xl animate-pulse" />
+              <div className="flex-1">
+                <div className="h-6 bg-gray-200 rounded animate-pulse mb-2" />
+                <div className="h-4 bg-gray-200 rounded animate-pulse w-24" />
+              </div>
+              <div className="w-10 h-10 bg-gray-200 rounded-xl animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        {/* Categories Skeleton */}
+        <div className="px-4 py-4">
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="w-20 h-20 bg-gray-200 rounded-2xl animate-pulse flex-shrink-0"
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Menu Items Skeleton */}
+        <div className="px-4 py-6 lg:px-6 lg:py-8">
+          <div className="space-y-6">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="bg-white rounded-xl border border-gray-200 p-4"
+              >
+                <div className="flex gap-4">
+                  <div className="w-24 h-24 bg-gray-200 rounded-lg animate-pulse" />
+                  <div className="flex-1">
+                    <div className="h-5 bg-gray-200 rounded animate-pulse mb-2" />
+                    <div className="h-4 bg-gray-200 rounded animate-pulse mb-3 w-3/4" />
+                    <div className="h-6 bg-gray-200 rounded animate-pulse w-16" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -185,13 +286,25 @@ export default function QRClientPage({
             Unable to load menu
           </h2>
           <p className="text-gray-600 mb-6">{error}</p>
-          <Button
-            onClick={() => window.location.reload()}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Try Again
-          </Button>
+          <div className="space-y-3">
+            <Button
+              onClick={() => {
+                setError(null);
+                setRetryCount((prev) => prev + 1);
+                window.location.reload();
+              }}
+              className="bg-green-600 hover:bg-green-700"
+              disabled={retryCount >= maxRetries}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              {retryCount >= maxRetries ? "Max retries reached" : "Try Again"}
+            </Button>
+            {retryCount >= maxRetries && (
+              <p className="text-sm text-gray-500">
+                Please contact restaurant staff for assistance
+              </p>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -226,6 +339,19 @@ export default function QRClientPage({
       <div className="bg-white border-b border-gray-200">
         {/* Restaurant Header */}
         <div className="px-4 py-4 lg:px-6 lg:py-6">
+          {/* Network Status Indicator */}
+          {!isOnline && (
+            <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-amber-700">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm font-medium">You're offline</span>
+              </div>
+              <p className="text-xs text-amber-600 mt-1">
+                Some features may be limited. Please check your connection.
+              </p>
+            </div>
+          )}
+
           {/* Restaurant Logo and Name */}
           <div className="flex items-center gap-4 mb-4">
             <div className="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-green-100 to-green-200 rounded-2xl flex items-center justify-center border border-green-200">
@@ -469,6 +595,7 @@ export default function QRClientPage({
                       }
                       onUpdateQuantity={updateQuantity}
                       index={index}
+                      isVisible={visibleItems.has(item.id)}
                     />
                   ))}
                 </div>
@@ -483,7 +610,8 @@ export default function QRClientPage({
         <CartButton
           totalItems={getTotalItems()}
           totalPrice={getTotalPrice()}
-          tableId={tableData?.id}
+          tableId={tableData.id}
+          currency={restaurantData?.currency || "CHF"}
         />
       )}
     </div>

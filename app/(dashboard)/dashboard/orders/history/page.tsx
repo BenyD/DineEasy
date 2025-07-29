@@ -103,14 +103,31 @@ const getPaymentMethodColor = (method: string) => {
 // Payment status color mapping
 const getPaymentStatusColor = (status: string) => {
   switch (status) {
-    case "paid":
+    case "completed":
       return "bg-green-100 text-green-800";
-    case "refunded":
-      return "bg-amber-100 text-amber-800";
+    case "pending":
+      return "bg-yellow-100 text-yellow-800";
     case "failed":
       return "bg-red-100 text-red-800";
+    case "refunded":
+      return "bg-amber-100 text-amber-800";
     default:
       return "bg-gray-100 text-gray-800";
+  }
+};
+
+const getPaymentStatusText = (status: string) => {
+  switch (status) {
+    case "completed":
+      return "Paid";
+    case "pending":
+      return "Pending";
+    case "failed":
+      return "Failed";
+    case "refunded":
+      return "Refunded";
+    default:
+      return "Pending";
   }
 };
 
@@ -254,10 +271,9 @@ export default function OrderHistoryPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentMethodFilter, setPaymentMethodFilter] = useState("all");
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
   const [tableFilter, setTableFilter] = useState("all");
-  const [sortField, setSortField] = useState("orderTime");
-  const [sortDirection, setSortDirection] = useState("desc");
+  const [sortField, setSortField] = useState("time");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
   // WebSocket for real-time updates
@@ -423,12 +439,7 @@ export default function OrderHistoryPage() {
       if (statusFilter !== "all" && order.status !== statusFilter) return false;
       if (
         paymentMethodFilter !== "all" &&
-        order.paymentStatus !== paymentMethodFilter
-      )
-        return false;
-      if (
-        paymentStatusFilter !== "all" &&
-        order.paymentStatus !== paymentStatusFilter
+        order.paymentMethod !== paymentMethodFilter
       )
         return false;
       if (tableFilter !== "all" && order.tableNumber !== tableFilter)
@@ -473,7 +484,6 @@ export default function OrderHistoryPage() {
     setSearchTerm("");
     setStatusFilter("all");
     setPaymentMethodFilter("all");
-    setPaymentStatusFilter("all");
     setTableFilter("all");
   };
 
@@ -600,8 +610,8 @@ export default function OrderHistoryPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Methods</SelectItem>
-                  <SelectItem value="stripe">Stripe</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="card">Card Payment</SelectItem>
+                  <SelectItem value="cash">Cash Payment</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -721,7 +731,7 @@ export default function OrderHistoryPage() {
                         variant="ghost"
                         size="sm"
                         className="font-medium -ml-3"
-                        onClick={() => toggleSort("orderTime")}
+                        onClick={() => toggleSort("time")}
                       >
                         Date
                         <ArrowUpDown className="ml-2 h-3 w-3" />
@@ -842,7 +852,7 @@ export default function OrderHistoryPage() {
                                 order.paymentStatus
                               )}
                             >
-                              {order.paymentStatus.toUpperCase()}
+                              {getPaymentStatusText(order.paymentStatus)}
                             </Badge>
                           </td>
                           <td className="p-4 align-middle text-right">
@@ -1030,7 +1040,9 @@ export default function OrderHistoryPage() {
                                   selectedOrder.paymentStatus
                                 )}
                               >
-                                {selectedOrder.paymentStatus.toUpperCase()}
+                                {getPaymentStatusText(
+                                  selectedOrder.paymentStatus
+                                )}
                               </Badge>
                             </div>
                           </div>

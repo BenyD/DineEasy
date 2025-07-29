@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Bell, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
+import { cn } from "@/lib/utils";
 
 interface OrderItem {
   name: string;
@@ -151,8 +152,8 @@ export function OrderCard({
         status === "new"
           ? "border-l-red-500"
           : status === "preparing"
-          ? "border-l-amber-500"
-          : "border-l-green-500"
+            ? "border-l-amber-500"
+            : "border-l-green-500"
       } shadow-md hover:shadow-lg transition-shadow`}
       {...attributes}
       {...listeners}
@@ -168,8 +169,21 @@ export function OrderCard({
             <h3 className="text-base md:text-lg font-semibold">
               Table {tableNumber}
             </h3>
-            <Badge className={getStatusColor(status)}>
-              {status === "new" && <Bell className="w-3 h-3 mr-1" />}
+            <Badge
+              className={cn(
+                "text-xs font-medium px-2 py-1 rounded-full",
+                status === "pending"
+                  ? "bg-red-100 text-red-800"
+                  : status === "preparing"
+                    ? "bg-amber-100 text-amber-800"
+                    : status === "ready"
+                      ? "bg-green-100 text-green-800"
+                      : status === "served"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-gray-100 text-gray-800"
+              )}
+            >
+              {status === "pending" && <Bell className="w-3 h-3 mr-1" />}
               {status === "preparing" && <Timer className="w-3 h-3 mr-1" />}
               {status.toUpperCase()}
             </Badge>
@@ -233,4 +247,3 @@ export function OrderCard({
     </Card>
   );
 }
- 

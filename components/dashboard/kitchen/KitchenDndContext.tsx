@@ -48,9 +48,11 @@ interface KitchenDndContextProps {
 }
 
 const COLUMN_TITLES: { [key: string]: string } = {
-  new: "New Orders",
+  pending: "Pending",
   preparing: "Preparing",
   ready: "Ready",
+  served: "Served",
+  completed: "Completed",
 };
 
 export function KitchenDndContext({
@@ -114,9 +116,10 @@ export function KitchenDndContext({
 
       // Only allow dropping in adjacent status columns
       const validTransitions: { [key: string]: string[] } = {
-        new: ["preparing"],
-        preparing: ["new", "ready"],
-        ready: ["preparing", "delivered"],
+        pending: ["preparing"],
+        preparing: ["ready", "served"],
+        ready: ["served", "completed"],
+        served: ["completed"],
       };
 
       if (!validTransitions[activeStatus]?.includes(overStatus)) return;
@@ -131,14 +134,17 @@ export function KitchenDndContext({
       onOrdersChange(updatedOrders);
     }
     // If dropping directly in a status column
-    else if (["new", "preparing", "ready"].includes(over.id as string)) {
+    else if (
+      ["pending", "preparing", "ready", "served"].includes(over.id as string)
+    ) {
       const newStatus = over.id as string;
 
       // Check if the status transition is valid
       const validTransitions: { [key: string]: string[] } = {
-        new: ["preparing"],
-        preparing: ["new", "ready"],
-        ready: ["preparing", "delivered"],
+        pending: ["preparing"],
+        preparing: ["ready", "served"],
+        ready: ["served", "completed"],
+        served: ["completed"],
       };
 
       if (!validTransitions[activeOrder.status]?.includes(newStatus)) return;
@@ -184,7 +190,7 @@ export function KitchenDndContext({
   if (!mounted) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {["new", "preparing", "ready"].map((status) => (
+        {["pending", "preparing", "ready", "served"].map((status) => (
           <div key={status} className="bg-gray-50 p-4 rounded-lg">
             <h3 className="text-lg font-semibold mb-4 capitalize">
               {COLUMN_TITLES[status]}
@@ -197,7 +203,7 @@ export function KitchenDndContext({
                   onStatusChange={handleStatusChange}
                 />
               ))}
-                </div>
+            </div>
           </div>
         ))}
       </div>
@@ -213,7 +219,7 @@ export function KitchenDndContext({
       onDragEnd={handleDragEnd}
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {["new", "preparing", "ready"].map((status) => (
+        {["pending", "preparing", "ready", "served"].map((status) => (
           <div
             key={status}
             className="bg-gray-50 p-4 rounded-lg"
@@ -249,8 +255,8 @@ export function KitchenDndContext({
                   {...activeOrder}
                   onStatusChange={handleStatusChange}
                 />
-          </div>
-        ) : null}
+              </div>
+            ) : null}
           </DragOverlay>,
           document.body
         )}

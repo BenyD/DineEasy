@@ -36,7 +36,7 @@ function validateAvatarFile(file: File): string | null {
   }
 
   // Check file size limit
-  const maxSize = 2 * 1024 * 1024; // 2MB for avatars
+  const maxSize = 1 * 1024 * 1024; // 1MB for avatars
   if (file.size > maxSize) {
     return `File size too large. Maximum size: ${maxSize / 1024 / 1024}MB`;
   }

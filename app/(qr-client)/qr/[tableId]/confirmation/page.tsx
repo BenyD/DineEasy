@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { getQROrderDetails } from "@/lib/actions/qr-payments";
 import { getTableInfo } from "@/lib/actions/qr-client";
 import { Separator } from "@/components/ui/separator";
+import { OrderStatusTracker } from "@/components/qr/OrderStatusTracker";
 
 interface OrderItem {
   id: string;
@@ -56,6 +57,7 @@ interface RestaurantData {
   phone?: string;
   email?: string;
   currency?: string;
+  tax_rate?: number; // Added tax_rate to RestaurantData
 }
 
 interface TableData {
@@ -84,7 +86,6 @@ export default function ConfirmationPage({
   const [restaurant, setRestaurant] = useState<RestaurantData | null>(null);
   const [tableData, setTableData] = useState<TableData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [estimatedTime] = useState(() => Math.floor(Math.random() * 20) + 15); // 15-35 minutes
 
   const paymentMethod = resolvedSearchParams.payment || "stripe";
   const orderId = resolvedSearchParams.order_id;
@@ -157,7 +158,8 @@ export default function ConfirmationPage({
             id: cashOrder.orderId,
             status: "pending",
             total_amount: parseFloat(cashOrder.total),
-            tax_amount: parseFloat(cashOrder.total) * 0.077,
+            tax_amount:
+              (parseFloat(cashOrder.total) * (restaurant?.tax_rate || 0)) / 100,
             tip_amount: parseFloat(cashOrder.tip),
             created_at: new Date().toISOString(),
             order_items: cashOrder.items.map((item: any) => ({
@@ -292,12 +294,6 @@ export default function ConfirmationPage({
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Status</span>
-                <span className="text-green-600 font-medium capitalize">
-                  {order.status}
-                </span>
-              </div>
-              <div className="flex justify-between">
                 <span className="text-gray-600">Payment Method</span>
                 <span className="text-gray-900 font-medium">
                   {getPaymentMethodName(paymentMethod)}
@@ -316,6 +312,21 @@ export default function ConfirmationPage({
                 </span>
               </div>
             </div>
+          </motion.div>
+        )}
+
+        {/* Order Status Tracker */}
+        {order && orderId && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.65 }}
+            className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
+          >
+            <OrderStatusTracker
+              orderId={orderId}
+              initialStatus={order.status}
+            />
           </motion.div>
         )}
 
@@ -358,7 +369,9 @@ export default function ConfirmationPage({
                 </span>
               </div>
               <div className="flex justify-between text-base">
-                <span className="text-gray-600">Tax (7.7%)</span>
+                <span className="text-gray-600">
+                  Tax ({(restaurant?.tax_rate || 0).toFixed(1)}%)
+                </span>
                 <span className="text-gray-900 font-medium">
                   {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
                   {order.tax_amount.toFixed(2)}
@@ -383,31 +396,6 @@ export default function ConfirmationPage({
             </div>
           </motion.div>
         )}
-
-        {/* Estimated Time */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8 }}
-          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <Clock className="w-5 h-5 text-gray-600" />
-            <h3 className="font-bold text-gray-900 text-lg">Estimated Time</h3>
-          </div>
-          <p className="text-gray-600">
-            Your order will be ready in approximately{" "}
-            <span className="font-semibold text-gray-900">
-              {estimatedTime} minutes
-            </span>
-          </p>
-          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm text-blue-700">
-              💡 <strong>Tip:</strong> You can track your order status in the
-              restaurant's kitchen display system.
-            </p>
-          </div>
-        </motion.div>
 
         {/* Restaurant Contact Info */}
         {restaurant && (restaurant.address || restaurant.phone) && (
@@ -470,20 +458,25 @@ export default function ConfirmationPage({
           </Link>
         </motion.div>
 
+        {/* Separator */}
+        <div className="my-6">
+          <Separator />
+        </div>
+
         {/* Action Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.1 }}
-          className="space-y-3"
+          className="space-y-6"
         >
           <Link href={`/qr/${resolvedParams.tableId}`}>
-            <Button className="w-full bg-green-600 hover:bg-green-700">
+            <Button className="w-full mb-4 bg-green-600 hover:bg-green-700 h-12 text-base">
               Order More
             </Button>
           </Link>
           <Link href="/">
-            <Button variant="outline" className="w-full">
+            <Button variant="outline" className="w-full h-12 text-base">
               Back to Home
             </Button>
           </Link>

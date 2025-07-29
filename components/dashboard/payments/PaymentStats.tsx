@@ -44,6 +44,15 @@ const PaymentStats = memo(
         transactionGrowth: stats?.transactionGrowth ?? 0,
         refundedAmount: stats?.refundedAmount ?? 0,
         refundedTransactions: stats?.refundedTransactions ?? 0,
+        // Payment method specific stats
+        cardRevenue: stats?.cardRevenue ?? 0,
+        cardTransactions: stats?.cardTransactions ?? 0,
+        cashRevenue: stats?.cashRevenue ?? 0,
+        cashTransactions: stats?.cashTransactions ?? 0,
+        cardRevenueThisMonth: stats?.cardRevenueThisMonth ?? 0,
+        cardTransactionsThisMonth: stats?.cardTransactionsThisMonth ?? 0,
+        cashRevenueThisMonth: stats?.cashRevenueThisMonth ?? 0,
+        cashTransactionsThisMonth: stats?.cashTransactionsThisMonth ?? 0,
       }),
       [stats]
     );
@@ -78,20 +87,20 @@ const PaymentStats = memo(
           bgColor: "bg-blue-100",
         },
         {
-          title: "Average Order",
-          value: formatCurrency(safeStats.averageOrderValue, currency),
-          subtitle: "Per transaction",
-          icon: Banknote,
-          color: "text-purple-600",
-          bgColor: "bg-purple-100",
+          title: "Card Payments",
+          value: formatCurrency(safeStats.cardRevenue, currency),
+          subtitle: `${safeStats.cardTransactions} transactions`,
+          icon: CreditCard,
+          color: "text-blue-600",
+          bgColor: "bg-blue-100",
         },
         {
-          title: "This Month",
-          value: formatCurrency(safeStats.thisMonthRevenue, currency),
-          subtitle: "Current month",
-          icon: CreditCard,
-          color: "text-orange-600",
-          bgColor: "bg-orange-100",
+          title: "Cash Payments",
+          value: formatCurrency(safeStats.cashRevenue, currency),
+          subtitle: `${safeStats.cashTransactions} transactions`,
+          icon: Banknote,
+          color: "text-green-600",
+          bgColor: "bg-green-100",
         },
       ],
       [safeStats, currency]
@@ -174,6 +183,112 @@ const PaymentStats = memo(
         >
           <Card>
             <CardHeader>
+              <CardTitle className="text-lg">
+                Payment Method Breakdown
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <CreditCard className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Card Payments</p>
+                    <p className="text-sm text-gray-500">
+                      {formatCurrency(safeStats.cardRevenue, currency)} total
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="secondary">
+                  {safeStats.cardTransactions} transactions
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <Banknote className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Cash Payments</p>
+                    <p className="text-sm text-gray-500">
+                      {formatCurrency(safeStats.cashRevenue, currency)} total
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="secondary">
+                  {safeStats.cashTransactions} transactions
+                </Badge>
+              </div>
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Average Order Value</span>
+                  <span className="font-medium">
+                    {formatCurrency(safeStats.averageOrderValue, currency)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">This Month Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <CreditCard className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Card Revenue</p>
+                    <p className="text-sm text-gray-500">
+                      {formatCurrency(safeStats.cardRevenueThisMonth, currency)}
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="secondary">
+                  {safeStats.cardTransactionsThisMonth} transactions
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <Banknote className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Cash Revenue</p>
+                    <p className="text-sm text-gray-500">
+                      {formatCurrency(safeStats.cashRevenueThisMonth, currency)}
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="secondary">
+                  {safeStats.cashTransactionsThisMonth} transactions
+                </Badge>
+              </div>
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Total This Month</span>
+                  <span className="font-medium">
+                    {formatCurrency(safeStats.thisMonthRevenue, currency)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Monthly Comparison */}
+        <motion.div
+          variants={cardVariants}
+          initial="hidden"
+          animate="show"
+          className="grid gap-6 md:grid-cols-2"
+        >
+          <Card>
+            <CardHeader>
               <CardTitle className="text-lg">Monthly Comparison</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -211,6 +326,29 @@ const PaymentStats = memo(
                   {safeStats.lastMonthTransactions} transactions
                 </Badge>
               </div>
+              {(safeStats.revenueGrowth !== 0 ||
+                safeStats.transactionGrowth !== 0) && (
+                <div className="pt-2 border-t space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Revenue Growth</span>
+                    <span
+                      className={`font-medium ${safeStats.revenueGrowth >= 0 ? "text-green-600" : "text-red-600"}`}
+                    >
+                      {safeStats.revenueGrowth >= 0 ? "+" : ""}
+                      {safeStats.revenueGrowth.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Transaction Growth</span>
+                    <span
+                      className={`font-medium ${safeStats.transactionGrowth >= 0 ? "text-green-600" : "text-red-600"}`}
+                    >
+                      {safeStats.transactionGrowth >= 0 ? "+" : ""}
+                      {safeStats.transactionGrowth.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

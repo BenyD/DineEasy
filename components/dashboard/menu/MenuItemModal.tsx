@@ -173,16 +173,22 @@ export function MenuItemModal({
     );
     formDataToSubmit.append("available", formData.available.toString());
     formDataToSubmit.append("popular", formData.popular.toString());
-    formDataToSubmit.append("categoryId", formData.category);
-    formDataToSubmit.append("allergens", JSON.stringify(formData.allergens));
+    formDataToSubmit.append("category", formData.category); // Changed from categoryId to category
     formDataToSubmit.append("tags", JSON.stringify(formData.tags || []));
+
+    // Add allergens as individual entries (not JSON string)
+    if (formData.allergens && formData.allergens.length > 0) {
+      formData.allergens.forEach((allergen: any) => {
+        formDataToSubmit.append("allergens", allergen.id);
+      });
+    }
 
     if (imageFile) {
       formDataToSubmit.append("image", imageFile);
     }
 
     if (formData.image) {
-      formDataToSubmit.append("existingImage", formData.image);
+      formDataToSubmit.append("imageUrl", formData.image); // Changed from existingImage to imageUrl
     }
 
     await onSubmit(formDataToSubmit);
@@ -408,8 +414,8 @@ export function MenuItemModal({
               );
             }
 
-            // Upload compressed file
-            await handleImageUpload(compressedFile);
+            // Upload compressed file using the hook's function
+            await hookHandleImageUpload(compressedFile);
           } catch (error) {
             toast.error("Failed to process image. Please try again.");
           }

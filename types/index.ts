@@ -10,19 +10,7 @@ export type SubscriptionStatus =
 export type SubscriptionPlan = "starter" | "pro" | "elite";
 export type SubscriptionInterval = "monthly" | "yearly";
 
-export type RestaurantType =
-  | "restaurant"
-  | "cafe"
-  | "bar"
-  | "food-truck"
-  | "pizzeria"
-  | "sushi"
-  | "steakhouse"
-  | "bakery"
-  | "brewery"
-  | "food-court"
-  | "catering"
-  | "ghost-kitchen";
+export type RestaurantType = "restaurant" | "cafe" | "bar" | "food-truck";
 export type Currency = "CHF";
 // | "USD"
 // | "EUR"

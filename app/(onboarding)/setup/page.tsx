@@ -51,14 +51,6 @@ const RESTAURANT_TYPES = [
   { value: "cafe", label: "Cafe" },
   { value: "bar", label: "Bar" },
   { value: "food-truck", label: "Food Truck" },
-  { value: "pizzeria", label: "Pizzeria" },
-  { value: "sushi", label: "Sushi Restaurant" },
-  { value: "steakhouse", label: "Steakhouse" },
-  { value: "bakery", label: "Bakery" },
-  { value: "brewery", label: "Brewery" },
-  { value: "food-court", label: "Food Court" },
-  { value: "catering", label: "Catering Service" },
-  { value: "ghost-kitchen", label: "Ghost Kitchen" },
 ] as const;
 
 const CUISINE_TYPES = [
@@ -74,24 +66,9 @@ const CUISINE_TYPES = [
   { value: "greek", label: "Greek" },
   { value: "spanish", label: "Spanish" },
   { value: "korean", label: "Korean" },
-  { value: "vietnamese", label: "Vietnamese" },
-  { value: "lebanese", label: "Lebanese" },
-  { value: "turkish", label: "Turkish" },
-  { value: "moroccan", label: "Moroccan" },
-  { value: "brazilian", label: "Brazilian" },
-  { value: "peruvian", label: "Peruvian" },
-  { value: "caribbean", label: "Caribbean" },
-  { value: "african", label: "African" },
-  { value: "middle-eastern", label: "Middle Eastern" },
   { value: "seafood", label: "Seafood" },
-  { value: "steakhouse", label: "Steakhouse" },
-  { value: "pizza", label: "Pizza" },
-  { value: "burger", label: "Burgers" },
-  { value: "sushi", label: "Sushi" },
-  { value: "bbq", label: "BBQ" },
   { value: "vegetarian", label: "Vegetarian" },
   { value: "vegan", label: "Vegan" },
-  { value: "gluten-free", label: "Gluten-Free" },
   { value: "fusion", label: "Fusion" },
   { value: "other", label: "Other" },
 ] as const;
@@ -523,10 +500,10 @@ export default function SetupPage() {
       }
 
       // Validate file size based on field type
-      const maxSize = field === "logo" ? 5 * 1024 * 1024 : 5 * 1024 * 1024; // 5MB for both
+      const maxSize = 1 * 1024 * 1024; // 1MB for both logo and cover
       if (file.size > maxSize) {
         toast.error(
-          `${field === "logo" ? "Logo" : "Cover photo"} file size must be less than 5MB`
+          `${field === "logo" ? "Logo" : "Cover photo"} file size must be less than 1MB`
         );
         return;
       }
@@ -745,9 +722,9 @@ export default function SetupPage() {
         else if (formData.logo.size < 10) {
           validationErrors.push("Logo file appears to be corrupted");
         }
-        // Check file size
-        else if (formData.logo.size > 5 * 1024 * 1024) {
-          validationErrors.push("Logo file size must be less than 5MB");
+        // Validate logo file size
+        else if (formData.logo.size > 1 * 1024 * 1024) {
+          validationErrors.push("Logo file size must be less than 1MB");
         }
         // Check file type
         else {
@@ -788,9 +765,9 @@ export default function SetupPage() {
         else if (formData.coverPhoto.size < 10) {
           validationErrors.push("Cover photo file appears to be corrupted");
         }
-        // Check file size
-        else if (formData.coverPhoto.size > 5 * 1024 * 1024) {
-          validationErrors.push("Cover photo file size must be less than 5MB");
+        // Validate cover photo file size
+        else if (formData.coverPhoto.size > 1 * 1024 * 1024) {
+          validationErrors.push("Cover photo file size must be less than 1MB");
         }
         // Check file type
         else {
@@ -1421,7 +1398,7 @@ export default function SetupPage() {
                               </button>
                             </p>
                             <p className="text-xs text-gray-400">
-                              PNG, JPG, WebP up to 5MB
+                              PNG, JPG, WebP up to 1MB
                             </p>
                           </div>
                         )}
@@ -1493,7 +1470,7 @@ export default function SetupPage() {
                               </button>
                             </p>
                             <p className="text-xs text-gray-400">
-                              PNG, JPG, WebP up to 5MB
+                              PNG, JPG, WebP up to 1MB
                             </p>
                           </div>
                         )}

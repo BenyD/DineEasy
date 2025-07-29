@@ -1003,25 +1003,34 @@ export async function POST(req: Request) {
             amount: paymentIntent.amount / 100,
           });
 
-          // Update order status to failed
+          // Update order status to cancelled (not failed, as it's not in enum)
           if (paymentIntent.metadata.orderId) {
             const { error: updateError } = await adminSupabase
               .from("orders")
               .update({
-                status: "failed",
+                status: "cancelled",
                 updated_at: new Date().toISOString(),
               })
               .eq("id", paymentIntent.metadata.orderId);
 
             if (updateError) {
-              console.error("Error updating QR order status to failed:", updateError);
+              console.error(
+                "Error updating QR order status to cancelled:",
+                updateError
+              );
             } else {
-              console.log("QR order status updated to failed:", paymentIntent.metadata.orderId);
+              console.log(
+                "QR order status updated to cancelled:",
+                paymentIntent.metadata.orderId
+              );
             }
           }
 
           // Create payment record for failed QR payment
-          if (paymentIntent.metadata.restaurantId && paymentIntent.metadata.orderId) {
+          if (
+            paymentIntent.metadata.restaurantId &&
+            paymentIntent.metadata.orderId
+          ) {
             const { error: createError } = await adminSupabase.rpc(
               "create_payment_with_fallback",
               [
@@ -1036,7 +1045,10 @@ export async function POST(req: Request) {
             );
 
             if (createError) {
-              console.error("Error creating failed QR payment record:", createError);
+              console.error(
+                "Error creating failed QR payment record:",
+                createError
+              );
             } else {
               console.log("Failed QR payment record created successfully");
             }
@@ -1099,6 +1111,161 @@ export async function POST(req: Request) {
         if (createError) {
           console.error("Error creating payment:", createError);
           return new NextResponse("Error creating payment", { status: 500 });
+        }
+
+        break;
+      }
+
+      case "payment_intent.canceled": {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+
+        console.log("Processing payment_intent.canceled:", {
+          id: paymentIntent.id,
+          amount: paymentIntent.amount,
+          metadata: paymentIntent.metadata,
+        });
+
+        // Check if this is a QR payment
+        if (paymentIntent.metadata.isQRPayment === "true") {
+          console.log("Processing QR payment cancellation:", {
+            orderId: paymentIntent.metadata.orderId,
+            restaurantId: paymentIntent.metadata.restaurantId,
+            tableId: paymentIntent.metadata.tableId,
+            amount: paymentIntent.amount / 100,
+          });
+
+          // Update order status to cancelled
+          if (paymentIntent.metadata.orderId) {
+            const { error: updateError } = await adminSupabase
+              .from("orders")
+              .update({
+                status: "cancelled",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", paymentIntent.metadata.orderId);
+
+            if (updateError) {
+              console.error(
+                "Error updating QR order status to cancelled:",
+                updateError
+              );
+            } else {
+              console.log(
+                "QR order status updated to cancelled:",
+                paymentIntent.metadata.orderId
+              );
+            }
+          }
+
+          // Create payment record for cancelled QR payment
+          if (
+            paymentIntent.metadata.restaurantId &&
+            paymentIntent.metadata.orderId
+          ) {
+            const { error: createError } = await adminSupabase.rpc(
+              "create_payment_with_fallback",
+              [
+                paymentIntent.metadata.restaurantId,
+                paymentIntent.metadata.orderId,
+                paymentIntent.amount / 100, // Convert from cents
+                "failed",
+                "card",
+                paymentIntent.id,
+                paymentIntent.currency.toUpperCase(),
+              ]
+            );
+
+            if (createError) {
+              console.error(
+                "Error creating cancelled QR payment record:",
+                createError
+              );
+            } else {
+              console.log("Cancelled QR payment record created successfully");
+            }
+          }
+
+          break;
+        }
+
+        break;
+      }
+
+      case "payment_intent.processing": {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+
+        console.log("Processing payment_intent.processing:", {
+          id: paymentIntent.id,
+          amount: paymentIntent.amount,
+          metadata: paymentIntent.metadata,
+        });
+
+        // Check if this is a QR payment
+        if (paymentIntent.metadata.isQRPayment === "true") {
+          console.log("Processing QR payment processing:", {
+            orderId: paymentIntent.metadata.orderId,
+            restaurantId: paymentIntent.metadata.restaurantId,
+            tableId: paymentIntent.metadata.tableId,
+            amount: paymentIntent.amount / 100,
+          });
+
+          // Update order status to pending (payment is being processed)
+          if (paymentIntent.metadata.orderId) {
+            const { error: updateError } = await adminSupabase
+              .from("orders")
+              .update({
+                status: "pending",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", paymentIntent.metadata.orderId);
+
+            if (updateError) {
+              console.error(
+                "Error updating QR order status to pending:",
+                updateError
+              );
+            } else {
+              console.log(
+                "QR order status updated to pending:",
+                paymentIntent.metadata.orderId
+              );
+            }
+          }
+
+          break;
+        }
+
+        break;
+      }
+
+      case "payment_intent.requires_action": {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+
+        console.log("Processing payment_intent.requires_action:", {
+          id: paymentIntent.id,
+          amount: paymentIntent.amount,
+          metadata: paymentIntent.metadata,
+          next_action: paymentIntent.next_action,
+        });
+
+        // Check if this is a QR payment
+        if (paymentIntent.metadata.isQRPayment === "true") {
+          console.log("Processing QR payment requires action:", {
+            orderId: paymentIntent.metadata.orderId,
+            restaurantId: paymentIntent.metadata.restaurantId,
+            tableId: paymentIntent.metadata.tableId,
+            amount: paymentIntent.amount / 100,
+            actionType: paymentIntent.next_action?.type,
+          });
+
+          // Keep order status as pending (waiting for customer action)
+          // No database update needed as order should already be pending
+          console.log(
+            "QR order waiting for customer action:",
+            paymentIntent.metadata.orderId
+          );
+
+          break;
         }
 
         break;

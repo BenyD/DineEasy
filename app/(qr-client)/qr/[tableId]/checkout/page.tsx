@@ -29,6 +29,7 @@ import {
   type QRPaymentData,
 } from "@/lib/actions/qr-payments";
 import { getTableInfo } from "@/lib/actions/qr-client";
+import { formatAmountWithCurrency } from "@/lib/utils/currency";
 
 interface RestaurantData {
   id: string;
@@ -47,6 +48,7 @@ interface RestaurantData {
     cardEnabled: boolean;
     cashEnabled: boolean;
   };
+  tax_rate?: number; // Added tax_rate to RestaurantData interface
 }
 
 interface TableData {
@@ -78,7 +80,7 @@ export default function CheckoutPage({
   const [loading, setLoading] = useState(true);
 
   const subtotal = getTotalPrice();
-  const tax = subtotal * 0.077;
+  const tax = (subtotal * (restaurant?.tax_rate || 0)) / 100;
   const total = subtotal + tax + tip;
 
   // Load restaurant and table data and special instructions
@@ -127,7 +129,7 @@ export default function CheckoutPage({
       return;
     }
 
-    if (selectedPayment === "stripe" && !email) {
+    if (!email.trim()) {
       toast.error("Please enter your email for the receipt");
       return;
     }
@@ -176,11 +178,16 @@ export default function CheckoutPage({
           throw new Error(result.error);
         }
 
-        if (result.clientSecret) {
-          // Redirect to Stripe Checkout
+        if (result.clientSecret && result.orderId) {
+          // Clear cart before redirecting
+          clearCart();
+
+          // Redirect to payment confirmation
           router.push(
             `/qr/${resolvedParams.tableId}/payment-confirmation?client_secret=${result.clientSecret}&order_id=${result.orderId}`
           );
+        } else {
+          throw new Error("Failed to create payment. Please try again.");
         }
       } else if (selectedPayment === "cash") {
         // Handle cash payment
@@ -208,17 +215,24 @@ export default function CheckoutPage({
           throw new Error(result.error);
         }
 
-        // Mark payment as successful to prevent empty cart flash
-        setIsPaymentSuccessful(true);
-        // Clear cart and redirect to confirmation
-        clearCart();
-        router.push(
-          `/qr/${resolvedParams.tableId}/confirmation?payment=cash&order_id=${result.orderId}&total=${total.toFixed(2)}&tip=${tip.toFixed(2)}`
-        );
+        if (result.orderId) {
+          // Clear cart before redirecting
+          clearCart();
+
+          // Redirect to confirmation page
+          router.push(
+            `/qr/${resolvedParams.tableId}/confirmation?order_id=${result.orderId}&payment=cash&success=true`
+          );
+        } else {
+          throw new Error("Failed to create order. Please try again.");
+        }
       }
-    } catch (error: any) {
-      console.error("Payment error:", error);
-      toast.error(error.message || "Payment failed. Please try again.");
+    } catch (error) {
+      console.error("Error processing order:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to process order"
+      );
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -343,7 +357,10 @@ export default function CheckoutPage({
                   <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                 </div>
                 <p className="font-semibold text-gray-900">
-                  CHF {(item.price * item.quantity).toFixed(2)}
+                  {formatAmountWithCurrency(
+                    item.price * item.quantity,
+                    restaurant?.currency || "CHF"
+                  )}
                 </p>
               </div>
             ))}
@@ -352,20 +369,33 @@ export default function CheckoutPage({
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Subtotal</span>
-              <span className="text-gray-900">CHF {subtotal.toFixed(2)}</span>
+              <span className="text-gray-900">
+                {formatAmountWithCurrency(
+                  subtotal,
+                  restaurant?.currency || "CHF"
+                )}
+              </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Tax (7.7%)</span>
-              <span className="text-gray-900">CHF {tax.toFixed(2)}</span>
+              <span className="text-gray-600">
+                Tax ({(restaurant?.tax_rate || 0).toFixed(1)}%)
+              </span>
+              <span className="text-gray-900">
+                {formatAmountWithCurrency(tax, restaurant?.currency || "CHF")}
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Tip</span>
-              <span className="text-gray-900">CHF {tip.toFixed(2)}</span>
+              <span className="text-gray-900">
+                {formatAmountWithCurrency(tip, restaurant?.currency || "CHF")}
+              </span>
             </div>
             <Separator className="my-2" />
             <div className="flex justify-between text-lg font-semibold">
               <span className="text-gray-900">Total</span>
-              <span className="text-gray-900">CHF {total.toFixed(2)}</span>
+              <span className="text-gray-900">
+                {formatAmountWithCurrency(total, restaurant?.currency || "CHF")}
+              </span>
             </div>
           </div>
         </div>
@@ -509,28 +539,23 @@ export default function CheckoutPage({
               />
             </div>
 
-            {selectedPayment === "stripe" && (
-              <div>
-                <Label
-                  htmlFor="email"
-                  className="text-gray-700 font-medium mb-2"
-                >
-                  Email for Receipt *
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  className="h-12 text-lg border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  We'll send your receipt and order confirmation to this email
-                </p>
-              </div>
-            )}
+            <div>
+              <Label htmlFor="email" className="text-gray-700 font-medium mb-2">
+                Email Address *
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your@email.com"
+                className="h-12 text-lg border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                We'll send your receipt and order confirmation to this email
+              </p>
+            </div>
           </div>
         </div>
 
@@ -558,7 +583,7 @@ export default function CheckoutPage({
               Processing...
             </div>
           ) : (
-            `Confirm Order • CHF ${total.toFixed(2)}`
+            `Confirm Order • ${formatAmountWithCurrency(total, restaurant?.currency || "CHF")}`
           )}
         </Button>
       </div>

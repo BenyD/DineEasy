@@ -6,7 +6,7 @@ This guide explains how to set up the avatar storage bucket for the Profile feat
 
 - **Name**: `avatars`
 - **Public**: ✅ Yes (for public read access)
-- **File size limit**: `2MB` (2,097,152 bytes)
+- **File size limit**: `1MB` (1,048,576 bytes)
 - **Allowed image types**:
   - `image/jpeg` (JPG/JPEG)
   - `image/png` (PNG)
@@ -20,7 +20,7 @@ This guide explains how to set up the avatar storage bucket for the Profile feat
 4. Configure the bucket:
    - **Name**: `avatars`
    - **Public bucket**: ✅ Checked
-   - **File size limit**: `2097152` (2MB)
+   - **File size limit**: `1048576` (1MB)
    - **Allowed MIME types**: `image/jpeg,image/png,image/webp`
 5. Click **Create bucket**
 
@@ -29,7 +29,7 @@ This guide explains how to set up the avatar storage bucket for the Profile feat
 1. Create the bucket using the CLI:
 
    ```bash
-   supabase storage create avatars --public --file-size-limit 2097152 --allowed-mime-types "image/jpeg,image/png,image/webp"
+   supabase storage create avatars --public --file-size-limit 1048576 --allowed-mime-types "image/jpeg,image/png,image/webp"
    ```
 
 2. Run the database migration:
@@ -70,7 +70,7 @@ avatars/
 
 ## Image Requirements
 
-- **Maximum file size**: 2MB
+- **Maximum file size**: 1MB
 - **Supported formats**: JPEG, PNG, WebP
 - **Recommended dimensions**: 400x400 pixels (square)
 - **Recommended aspect ratio**: 1:1 (square)
@@ -91,7 +91,7 @@ Ensure you're using the service role key (not the anon key) for bucket creation.
 
 ### Error: "File too large"
 
-Avatar files must be 2MB or smaller. Consider compressing the image or using a smaller file.
+Avatar files must be 1MB or smaller. Consider compressing the image or using a smaller file.
 
 ### Error: "Invalid file type"
 
@@ -103,6 +103,6 @@ Once setup is complete, you can test the avatar functionality:
 
 1. Go to the dashboard settings
 2. Click on the **Profile** tab
-3. Try uploading an image file (JPEG, PNG, or WebP, max 2MB)
+3. Try uploading an image file (JPEG, PNG, or WebP, max 1MB)
 4. Verify the image appears in the preview
 5. Save the changes and check that the avatar appears in the sidebar

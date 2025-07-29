@@ -9,29 +9,61 @@ interface CartItem extends MenuItem {
 
 // Initialize cart outside the hook to maintain a single source of truth
 let initialCart: CartItem[] = [];
+let currentTableId: string | null = null;
+
 try {
   if (typeof window !== "undefined") {
     const savedCart = localStorage.getItem("qr-cart");
-    if (savedCart) {
+    const savedTableId = localStorage.getItem("qr-cart-table-id");
+    if (savedCart && savedTableId) {
       initialCart = JSON.parse(savedCart);
+      currentTableId = savedTableId;
     }
   }
 } catch (error) {
   console.error("Error loading initial cart:", error);
+  // Clear corrupted data
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("qr-cart");
+    localStorage.removeItem("qr-cart-table-id");
+  }
 }
 
-export function useCart() {
+export function useCart(tableId?: string) {
   const [cart, setCart] = useState<CartItem[]>(initialCart);
+
+  // Reset cart if table ID changes
+  useEffect(() => {
+    if (tableId && tableId !== currentTableId) {
+      console.log("Table ID changed, clearing cart:", {
+        old: currentTableId,
+        new: tableId,
+      });
+      setCart([]);
+      initialCart = [];
+      currentTableId = tableId;
+      localStorage.removeItem("qr-cart");
+      localStorage.removeItem("qr-cart-table-id");
+    }
+  }, [tableId]);
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
     console.log("Saving cart to localStorage:", cart);
-    if (cart.length > 0 || initialCart.length === 0) {
-      // Only save if cart has items or was initially empty
-      localStorage.setItem("qr-cart", JSON.stringify(cart));
-      initialCart = cart; // Update the shared initial cart
+    try {
+      if (cart.length > 0 || initialCart.length === 0) {
+        // Only save if cart has items or was initially empty
+        localStorage.setItem("qr-cart", JSON.stringify(cart));
+        if (tableId) {
+          localStorage.setItem("qr-cart-table-id", tableId);
+        }
+        initialCart = cart; // Update the shared initial cart
+        currentTableId = tableId || null;
+      }
+    } catch (error) {
+      console.error("Error saving cart to localStorage:", error);
     }
-  }, [cart]);
+  }, [cart, tableId]);
 
   const addToCart = (item: MenuItem) => {
     console.log("Adding item to cart:", item);
@@ -70,6 +102,12 @@ export function useCart() {
   const clearCart = () => {
     setCart([]);
     initialCart = []; // Clear the shared initial cart
+    try {
+      localStorage.removeItem("qr-cart");
+      localStorage.removeItem("qr-cart-table-id");
+    } catch (error) {
+      console.error("Error clearing cart from localStorage:", error);
+    }
   };
 
   const getTotalItems = () => {

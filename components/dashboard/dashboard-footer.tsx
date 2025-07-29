@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { Wifi, WifiOff, AlertCircle, Loader2 } from "lucide-react";
 
 export function DashboardFooter() {
   const pathname = usePathname();
@@ -21,12 +22,13 @@ export function DashboardFooter() {
   const isTablesPage = pathname.includes("/tables");
   const isOrdersPage = pathname.includes("/orders");
   const isKitchenPage = pathname.includes("/kitchen");
+  const isDashboardPage = pathname === "/dashboard";
 
   // Use appropriate WebSocket hook based on page
   const menuWebSocket = useMenuWebSocket({ enabled: isMenuPage });
   const tablesWebSocket = useTablesWebSocket({ enabled: isTablesPage });
   const ordersWebSocket = useOrdersWebSocket({
-    enabled: isOrdersPage || isKitchenPage,
+    enabled: isOrdersPage || isKitchenPage || isDashboardPage,
   });
 
   // Get the active WebSocket connection
@@ -34,10 +36,26 @@ export function DashboardFooter() {
     ? menuWebSocket
     : isTablesPage
       ? tablesWebSocket
-      : isOrdersPage || isKitchenPage
-        ? ordersWebSocket
-        : menuWebSocket;
-  const { isConnected, reconnectAttempts } = activeWebSocket;
+      : ordersWebSocket; // Use ordersWebSocket for orders, kitchen, and dashboard pages
+
+  // Handle different WebSocket hook interfaces
+  const isConnected =
+    "isConnected" in activeWebSocket ? activeWebSocket.isConnected : false;
+  const reconnectAttempts =
+    "reconnectAttempts" in activeWebSocket
+      ? activeWebSocket.reconnectAttempts
+      : 0;
+  const connectionStatus =
+    "connectionStatus" in activeWebSocket
+      ? activeWebSocket.connectionStatus
+      : ((isConnected ? "connected" : "disconnected") as
+          | "connected"
+          | "disconnected"
+          | "connecting"
+          | "error");
+  const error = "error" in activeWebSocket ? activeWebSocket.error : null;
+  const lastUpdate =
+    "lastUpdate" in activeWebSocket ? activeWebSocket.lastUpdate : null;
 
   // Get page-specific connection label
   const getConnectionLabel = () => {
@@ -45,8 +63,50 @@ export function DashboardFooter() {
     if (isTablesPage) return "Tables Live";
     if (isOrdersPage) return "Orders Live";
     if (isKitchenPage) return "Kitchen Live";
+    if (isDashboardPage) return "Dashboard Live";
     return "Live";
   };
+
+  // Get connection status icon and color
+  const getConnectionStatus = () => {
+    switch (connectionStatus) {
+      case "connected":
+        return {
+          icon: Wifi,
+          color: "text-green-600",
+          bgColor: "bg-green-100",
+          borderColor: "border-green-200",
+          label: getConnectionLabel(),
+        };
+      case "connecting":
+        return {
+          icon: Loader2,
+          color: "text-blue-600",
+          bgColor: "bg-blue-100",
+          borderColor: "border-blue-200",
+          label: "Connecting...",
+        };
+      case "error":
+        return {
+          icon: AlertCircle,
+          color: "text-red-600",
+          bgColor: "bg-red-100",
+          borderColor: "border-red-200",
+          label: "Connection Error",
+        };
+      default:
+        return {
+          icon: WifiOff,
+          color: "text-gray-600",
+          bgColor: "bg-gray-100",
+          borderColor: "border-gray-200",
+          label: "Offline",
+        };
+    }
+  };
+
+  const connectionStatusInfo = getConnectionStatus();
+  const StatusIcon = connectionStatusInfo.icon;
 
   return (
     <footer className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -87,43 +147,79 @@ export function DashboardFooter() {
             </Link>
           </div>
 
-          {/* Right side - WebSocket Status */}
+          {/* Right side - Status Indicators */}
           <div className="flex items-center gap-2">
+            {/* WebSocket Status */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border bg-background/50 backdrop-blur">
-                    <div
+                  <div
+                    className={cn(
+                      "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border backdrop-blur transition-all duration-200",
+                      connectionStatusInfo.bgColor,
+                      connectionStatusInfo.borderColor
+                    )}
+                  >
+                    <StatusIcon
                       className={cn(
-                        "w-1.5 h-1.5 rounded-full",
-                        isConnected
-                          ? "bg-green-500 animate-pulse"
-                          : "bg-red-500"
+                        "w-3 h-3",
+                        connectionStatusInfo.color,
+                        connectionStatus === "connecting" && "animate-spin"
                       )}
                     />
                     <span
-                      className={cn(
-                        "font-medium",
-                        isConnected ? "text-green-700" : "text-red-700"
-                      )}
+                      className={cn("font-medium", connectionStatusInfo.color)}
                     >
-                      {isConnected ? getConnectionLabel() : "Offline"}
+                      {connectionStatusInfo.label}
                     </span>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent>
-                  <div className="space-y-1">
-                    <p className="font-medium">Real-time Updates</p>
-                    <p className="text-xs text-muted-foreground">
-                      {isConnected
-                        ? `${getConnectionLabel()} - Updates will sync automatically`
-                        : "Disconnected - Manual refresh required"}
-                    </p>
-                    {reconnectAttempts > 0 && (
-                      <p className="text-xs text-orange-600">
-                        Reconnection attempts: {reconnectAttempts}
+                <TooltipContent side="top" className="max-w-xs">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <StatusIcon className="w-4 h-4" />
+                      <p className="font-medium">Real-time Updates</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        {connectionStatus === "connected"
+                          ? `${getConnectionLabel()} - Updates will sync automatically`
+                          : connectionStatus === "connecting"
+                            ? "Establishing connection..."
+                            : connectionStatus === "error"
+                              ? "Connection failed - Manual refresh required"
+                              : "Disconnected - Manual refresh required"}
                       </p>
-                    )}
+                      {(() => {
+                        if (
+                          lastUpdate &&
+                          connectionStatus === "connected" &&
+                          lastUpdate instanceof Date
+                        ) {
+                          return (
+                            <p className="text-xs text-green-600">
+                              Last update: {lastUpdate.toLocaleTimeString()}
+                            </p>
+                          );
+                        }
+                        return null;
+                      })()}
+                      {reconnectAttempts > 0 && (
+                        <p className="text-xs text-orange-600">
+                          Reconnection attempts: {String(reconnectAttempts)}
+                        </p>
+                      )}
+                      {(() => {
+                        if (error && typeof error === "string") {
+                          return (
+                            <p className="text-xs text-red-600">
+                              Error: {error}
+                            </p>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
                   </div>
                 </TooltipContent>
               </Tooltip>

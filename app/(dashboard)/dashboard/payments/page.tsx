@@ -39,7 +39,6 @@ import {
 } from "@/lib/actions/stripe-connect";
 import {
   getPaymentStats,
-  getPaymentTransactions,
   getStripeAccountInfo,
   updatePaymentMethodSettings,
   getPaymentMethodSettings,
@@ -64,16 +63,16 @@ type PaymentMethod = {
 
 const paymentMethods: PaymentMethod[] = [
   {
-    id: "creditCard",
-    name: "Credit & Debit Cards",
-    description: "Visa, Mastercard, American Express",
+    id: "card",
+    name: "Card Payments",
+    description: "Credit & debit cards via Stripe",
     icon: CreditCard,
     iconColor: "text-blue-600",
     enabled: true,
   },
   {
     id: "cash",
-    name: "Cash Payment",
+    name: "Cash Payments",
     description: "Pay at the table or counter",
     icon: Banknote,
     iconColor: "text-green-600",
@@ -108,6 +107,9 @@ export default function PaymentsPage() {
   const [restaurantCountry, setRestaurantCountry] = useState<string | null>(
     null
   );
+  const [restaurantCurrency, setRestaurantCurrency] = useState<string | null>(
+    null
+  );
 
   // Check if the restaurant's country supports Stripe Connect
   const countrySupportsStripeConnect = restaurantCountry
@@ -132,6 +134,12 @@ export default function PaymentsPage() {
   const [transactionOffset, setTransactionOffset] = useState(0);
   const [hasMoreTransactions, setHasMoreTransactions] = useState(true);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageSize] = useState(20);
+
   const hasChanges =
     JSON.stringify(originalMethods) !== JSON.stringify(methods);
 
@@ -152,7 +160,7 @@ export default function PaymentsPage() {
       // Get user's restaurant
       const { data: restaurant, error } = await supabase
         .from("restaurants")
-        .select("id, country")
+        .select("id, country, currency")
         .eq("owner_id", user.id)
         .single();
 
@@ -163,11 +171,12 @@ export default function PaymentsPage() {
 
       setRestaurantId(restaurant.id);
       setRestaurantCountry(restaurant.country);
+      setRestaurantCurrency(restaurant.currency || "CHF");
 
       // Fetch all data in parallel
       await Promise.all([
         fetchPaymentStats(restaurant.id),
-        fetchTransactions(restaurant.id),
+        fetchTransactions(restaurant.id, 1), // Fetch first page
         fetchStripeAccountInfo(restaurant.id),
         fetchPaymentMethodSettings(restaurant.id),
         fetchStripeRequirements(restaurant.id),
@@ -178,6 +187,34 @@ export default function PaymentsPage() {
 
     fetchInitialData();
   }, []);
+
+  // Refresh stats when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && restaurantId) {
+        fetchPaymentStats(restaurantId);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [restaurantId]);
+
+  // Refresh stats every 5 minutes
+  useEffect(() => {
+    if (!restaurantId) return;
+
+    const interval = setInterval(
+      () => {
+        fetchPaymentStats(restaurantId);
+      },
+      5 * 60 * 1000
+    ); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [restaurantId]);
 
   const fetchPaymentStats = async (id: string) => {
     try {
@@ -191,17 +228,163 @@ export default function PaymentsPage() {
 
   const fetchTransactions = async (
     id: string,
-    offset: number = 0,
+    page: number = 1,
     append: boolean = false
   ) => {
     try {
-      const newTransactions = await getPaymentTransactions(id, 20, offset);
+      const supabase = createClient();
+      const offset = (page - 1) * pageSize;
+
+      // Get total count for card payments
+      const { count: cardCount } = await supabase
+        .from("payments")
+        .select("*", { count: "exact", head: true })
+        .eq("restaurant_id", id);
+
+      // Get total count for cash orders
+      const { count: cashCount } = await supabase
+        .from("orders")
+        .select("*", { count: "exact", head: true })
+        .eq("restaurant_id", id)
+        .is("stripe_payment_intent_id", null);
+
+      const totalTransactionCount = (cardCount || 0) + (cashCount || 0);
+      setTotalCount(totalTransactionCount);
+      setTotalPages(Math.ceil(totalTransactionCount / pageSize));
+
+      // For now, let's fetch all data and then paginate on the client side
+      // This is simpler and ensures accurate pagination when combining two data sources
+      // In a production environment, you might want to use a more sophisticated approach
+      // like a view or stored procedure that combines both tables
+
+      // Get all card payments from payments table
+      const { data: cardPayments, error: cardError } = await supabase
+        .from("payments")
+        .select(
+          `
+          id,
+          amount,
+          currency,
+          status,
+          method,
+          created_at,
+          order_id,
+          stripe_payment_id,
+          refund_id,
+          order:orders (
+            id,
+            total_amount,
+            table_id,
+            notes,
+            customer_name,
+            tables (
+              number
+            )
+          )
+        `
+        )
+        .eq("restaurant_id", id)
+        .order("created_at", { ascending: false });
+
+      if (cardError) throw cardError;
+
+      // Get all cash orders from orders table
+      const { data: cashOrders, error: cashError } = await supabase
+        .from("orders")
+        .select(
+          `
+          id,
+          total_amount,
+          created_at,
+          status,
+          customer_name,
+          tables (
+            number
+          )
+        `
+        )
+        .eq("restaurant_id", id)
+        .is("stripe_payment_intent_id", null)
+        .order("created_at", { ascending: false });
+
+      if (cashError) throw cashError;
+
+      // Transform card payments
+      const cardPaymentsData = (cardPayments || []).map((payment) => {
+        const order =
+          payment.order &&
+          Array.isArray(payment.order) &&
+          payment.order.length > 0
+            ? payment.order[0]
+            : undefined;
+
+        return {
+          id: payment.id,
+          amount: payment.amount,
+          currency: payment.currency,
+          status: payment.status,
+          method: payment.method,
+          created_at: payment.created_at,
+          order_id: payment.order_id,
+          stripe_payment_id: payment.stripe_payment_id,
+          refund_id: payment.refund_id,
+          customer_name: order?.customer_name,
+          table_number: order?.tables?.[0]?.number,
+          order: order
+            ? {
+                id: order.id,
+                total_amount: order.total_amount,
+                table_id: order.table_id,
+                notes: order.notes,
+                customer_name: order.customer_name,
+                tables: order.tables?.[0]
+                  ? { number: order.tables[0].number }
+                  : undefined,
+              }
+            : undefined,
+        };
+      });
+
+      // Transform cash orders
+      const cashOrdersData = (cashOrders || []).map((order) => ({
+        id: `cash-${order.id}`,
+        amount: order.total_amount,
+        currency: restaurantCurrency || "CHF", // Use restaurant currency instead of hardcoded USD
+        status: order.status === "completed" ? "completed" : "pending",
+        method: "cash",
+        created_at: order.created_at,
+        order_id: order.id,
+        stripe_payment_id: "",
+        refund_id: undefined,
+        customer_name: order.customer_name,
+        table_number: order.tables?.[0]?.number,
+        order: {
+          id: order.id,
+          total_amount: order.total_amount,
+          table_id: order.id, // Using order id as table_id for cash orders
+          notes: undefined,
+          customer_name: order.customer_name,
+          tables: order.tables?.[0]
+            ? { number: order.tables[0].number }
+            : undefined,
+        },
+      }));
+
+      // Combine and sort by creation date
+      const allTransactions = [...cardPaymentsData, ...cashOrdersData].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      // Apply pagination
+      const newTransactions = allTransactions.slice(offset, offset + pageSize);
+
       if (append) {
         setTransactions((prev) => [...prev, ...newTransactions]);
       } else {
         setTransactions(newTransactions);
       }
-      setHasMoreTransactions(newTransactions.length === 20);
+      setHasMoreTransactions(newTransactions.length === pageSize);
       setTransactionOffset(offset + newTransactions.length);
     } catch (error) {
       console.error("Error fetching transactions:", error);
@@ -229,18 +412,14 @@ export default function PaymentsPage() {
         methods.map((method) => ({
           ...method,
           enabled:
-            method.id === "creditCard"
-              ? settings.cardEnabled
-              : settings.cashEnabled,
+            method.id === "card" ? settings.cardEnabled : settings.cashEnabled,
         }))
       );
       setOriginalMethods(
         methods.map((method) => ({
           ...method,
           enabled:
-            method.id === "creditCard"
-              ? settings.cardEnabled
-              : settings.cashEnabled,
+            method.id === "card" ? settings.cardEnabled : settings.cashEnabled,
         }))
       );
     } catch (error) {
@@ -342,8 +521,7 @@ export default function PaymentsPage() {
     setIsSaving(true);
     try {
       const settings = {
-        cardEnabled:
-          methods.find((m) => m.id === "creditCard")?.enabled || false,
+        cardEnabled: methods.find((m) => m.id === "card")?.enabled || false,
         cashEnabled: methods.find((m) => m.id === "cash")?.enabled || false,
       };
 
@@ -370,7 +548,14 @@ export default function PaymentsPage() {
 
   const handleLoadMoreTransactions = () => {
     if (restaurantId) {
-      fetchTransactions(restaurantId, transactionOffset, true);
+      fetchTransactions(restaurantId, currentPage + 1, true);
+    }
+  };
+
+  const handlePageChange = (page: number) => {
+    if (restaurantId) {
+      setCurrentPage(page);
+      fetchTransactions(restaurantId, page, false);
     }
   };
 
@@ -379,9 +564,10 @@ export default function PaymentsPage() {
 
     setIsRefreshing(true);
     try {
+      setCurrentPage(1); // Reset to first page
       await Promise.all([
         fetchPaymentStats(restaurantId),
-        fetchTransactions(restaurantId),
+        fetchTransactions(restaurantId, 1), // Fetch first page
         fetchStripeAccountInfo(restaurantId),
       ]);
       toast.success("Data refreshed");
@@ -390,6 +576,11 @@ export default function PaymentsPage() {
     } finally {
       setIsRefreshing(false);
     }
+  };
+
+  const refreshStats = async () => {
+    if (!restaurantId) return;
+    await fetchPaymentStats(restaurantId);
   };
 
   if (isLoading) {
@@ -590,6 +781,7 @@ export default function PaymentsPage() {
             stats={paymentStats}
             isLoading={isRefreshing}
             onRefresh={handleRefreshData}
+            currency={restaurantCurrency || currency}
           />
         )}
 
@@ -801,7 +993,7 @@ export default function PaymentsPage() {
                 className="space-y-4"
               >
                 {methods.map((method: PaymentMethod) => {
-                  const isCardMethod = method.id === "creditCard";
+                  const isCardMethod = method.id === "card";
                   const isDisabled =
                     isCardMethod && !stripeAccount?.charges_enabled;
 
@@ -1004,7 +1196,9 @@ export default function PaymentsPage() {
                       <div className="flex justify-between text-sm">
                         <span>Stripe Processing Fee:</span>
                         <span className="font-medium">
-                          2.9% + {getCurrencySymbol(currency)} 0.30
+                          2.9% +{" "}
+                          {getCurrencySymbol(restaurantCurrency || currency)}{" "}
+                          0.30
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
@@ -1013,7 +1207,11 @@ export default function PaymentsPage() {
                       </div>
                       <div className="flex justify-between text-sm font-medium text-gray-900 pt-2 border-t">
                         <span>Total Fee per Card Transaction:</span>
-                        <span>4.9% + {getCurrencySymbol(currency)} 0.30</span>
+                        <span>
+                          4.9% +{" "}
+                          {getCurrencySymbol(restaurantCurrency || currency)}{" "}
+                          0.30
+                        </span>
                       </div>
                     </div>
 
@@ -1037,22 +1235,45 @@ export default function PaymentsPage() {
                       <div className="space-y-1 text-blue-800">
                         <div className="flex justify-between">
                           <span>Order Amount:</span>
-                          <span>{formatCurrency(100, currency)}</span>
+                          <span>
+                            {formatCurrency(
+                              100,
+                              restaurantCurrency || currency
+                            )}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span>
-                            Stripe Fee (2.9% + {getCurrencySymbol(currency)}{" "}
+                            Stripe Fee (2.9% +{" "}
+                            {getCurrencySymbol(restaurantCurrency || currency)}{" "}
                             0.30):
                           </span>
-                          <span>- {formatCurrency(3.2, currency)}</span>
+                          <span>
+                            -{" "}
+                            {formatCurrency(
+                              3.2,
+                              restaurantCurrency || currency
+                            )}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span>DineEasy Commission (2%):</span>
-                          <span>- {formatCurrency(2.0, currency)}</span>
+                          <span>
+                            -{" "}
+                            {formatCurrency(
+                              2.0,
+                              restaurantCurrency || currency
+                            )}
+                          </span>
                         </div>
                         <div className="flex justify-between font-medium border-t border-blue-200 pt-1 mt-1">
                           <span>You Receive:</span>
-                          <span>{formatCurrency(94.8, currency)}</span>
+                          <span>
+                            {formatCurrency(
+                              94.8,
+                              restaurantCurrency || currency
+                            )}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1116,6 +1337,13 @@ export default function PaymentsPage() {
           isLoading={isRefreshing}
           onLoadMore={handleLoadMoreTransactions}
           hasMore={hasMoreTransactions}
+          totalCount={totalCount}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          pageSize={pageSize}
+          onStatsRefresh={refreshStats}
+          currency={restaurantCurrency || currency}
         />
       </motion.div>
     </div>

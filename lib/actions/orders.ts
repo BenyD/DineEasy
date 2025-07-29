@@ -35,28 +35,6 @@ export interface Order {
   stripe_payment_intent_id?: string;
 }
 
-// Map frontend status to database status
-const mapStatusToDatabase = (status: string): string => {
-  switch (status) {
-    case "new":
-      return "pending";
-    case "refunded":
-      return "cancelled";
-    default:
-      return status;
-  }
-};
-
-// Map database status to frontend status
-const mapStatusFromDatabase = (status: string): string => {
-  switch (status) {
-    case "pending":
-      return "new";
-    default:
-      return status;
-  }
-};
-
 export interface OrderFilters {
   status?: string;
   search?: string;
@@ -106,8 +84,7 @@ export async function getRestaurantOrders(
     else {
       // Only apply status filter in SQL if specified
       if (filters?.status && filters.status !== "all") {
-        const dbStatus = mapStatusToDatabase(filters.status);
-        query = query.eq("status", dbStatus);
+        query = query.eq("status", filters.status);
       }
     }
 
@@ -165,7 +142,7 @@ export async function getRestaurantOrders(
           tableNumber,
           customerName: order.customer_name || undefined,
           items,
-          status: mapStatusFromDatabase(order.status),
+          status: order.status,
           time: new Date(order.created_at),
           estimatedTime: 15, // Default estimated time
           notes: order.notes,
@@ -216,11 +193,10 @@ export async function updateOrderStatus(
   const supabase = createClient();
 
   try {
-    const dbStatus = mapStatusToDatabase(newStatus);
     const { error } = await supabase
       .from("orders")
       .update({
-        status: dbStatus,
+        status: newStatus,
         updated_at: new Date().toISOString(),
       })
       .eq("id", orderId);

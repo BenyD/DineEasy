@@ -16,6 +16,15 @@ export interface PaymentStats {
   transactionGrowth: number;
   refundedAmount: number;
   refundedTransactions: number;
+  // New payment method specific stats
+  cardRevenue: number;
+  cardTransactions: number;
+  cashRevenue: number;
+  cashTransactions: number;
+  cardRevenueThisMonth: number;
+  cardTransactionsThisMonth: number;
+  cashRevenueThisMonth: number;
+  cashTransactionsThisMonth: number;
 }
 
 export interface PaymentTransaction {
@@ -28,6 +37,8 @@ export interface PaymentTransaction {
   order_id: string;
   stripe_payment_id: string;
   refund_id?: string;
+  customer_name?: string;
+  table_number?: number;
   order?: {
     id: string;
     total_amount: number;
@@ -111,39 +122,137 @@ export async function getPaymentStats(
       0
     );
 
-    // Get all payments for the restaurant
-    const { data: allPayments, error: allError } = await supabase
+    // Get all card payments for the restaurant
+    const { data: allCardPayments, error: allCardError } = await supabase
       .from("payments")
       .select("amount, status, created_at")
       .eq("restaurant_id", restaurantId);
 
-    if (allError) throw allError;
+    if (allCardError) throw allCardError;
 
-    // Get current month payments
-    const { data: currentMonthPayments, error: currentError } = await supabase
-      .from("payments")
-      .select("amount, status, created_at")
+    // Get all cash orders for the restaurant
+    const { data: allCashOrders, error: allCashError } = await supabase
+      .from("orders")
+      .select("total_amount, status, created_at")
       .eq("restaurant_id", restaurantId)
-      .gte("created_at", currentMonthStart.toISOString())
-      .lte("created_at", currentMonthEnd.toISOString());
+      .is("stripe_payment_intent_id", null);
 
-    if (currentError) throw currentError;
+    if (allCashError) throw allCashError;
 
-    // Get last month payments
-    const { data: lastMonthPayments, error: lastError } = await supabase
+    // Get current month card payments
+    const { data: currentMonthCardPayments, error: currentCardError } =
+      await supabase
+        .from("payments")
+        .select("amount, status, created_at")
+        .eq("restaurant_id", restaurantId)
+        .gte("created_at", currentMonthStart.toISOString())
+        .lte("created_at", currentMonthEnd.toISOString());
+
+    if (currentCardError) throw currentCardError;
+
+    // Get current month cash orders
+    const { data: currentMonthCashOrders, error: currentCashError } =
+      await supabase
+        .from("orders")
+        .select("total_amount, status, created_at")
+        .eq("restaurant_id", restaurantId)
+        .is("stripe_payment_intent_id", null)
+        .gte("created_at", currentMonthStart.toISOString())
+        .lte("created_at", currentMonthEnd.toISOString());
+
+    if (currentCashError) throw currentCashError;
+
+    // Get last month card payments
+    const { data: lastMonthCardPayments, error: lastCardError } = await supabase
       .from("payments")
       .select("amount, status, created_at")
       .eq("restaurant_id", restaurantId)
       .gte("created_at", lastMonthStart.toISOString())
       .lte("created_at", lastMonthEnd.toISOString());
 
-    if (lastError) throw lastError;
+    if (lastCardError) throw lastCardError;
+
+    // Get last month cash orders
+    const { data: lastMonthCashOrders, error: lastCashError } = await supabase
+      .from("orders")
+      .select("total_amount, status, created_at")
+      .eq("restaurant_id", restaurantId)
+      .is("stripe_payment_intent_id", null)
+      .gte("created_at", lastMonthStart.toISOString())
+      .lte("created_at", lastMonthEnd.toISOString());
+
+    if (lastCashError) throw lastCashError;
+
+    // Combine card payments and cash orders
+    const allPayments = [
+      ...(allCardPayments || []),
+      ...(allCashOrders || []).map((order) => ({
+        amount: order.total_amount,
+        status: order.status === "completed" ? "completed" : "pending",
+        created_at: order.created_at,
+      })),
+    ];
+
+    const currentMonthPayments = [
+      ...(currentMonthCardPayments || []),
+      ...(currentMonthCashOrders || []).map((order) => ({
+        amount: order.total_amount,
+        status: order.status === "completed" ? "completed" : "pending",
+        created_at: order.created_at,
+      })),
+    ];
+
+    const lastMonthPayments = [
+      ...(lastMonthCardPayments || []),
+      ...(lastMonthCashOrders || []).map((order) => ({
+        amount: order.total_amount,
+        status: order.status === "completed" ? "completed" : "pending",
+        created_at: order.created_at,
+      })),
+    ];
 
     // Calculate stats
     const completedPayments =
       allPayments?.filter((p) => p.status === "completed") || [];
     const refundedPayments =
-      allPayments?.filter((p) => p.status === "refunded") || [];
+      allCardPayments?.filter((p) => p.status === "refunded") || []; // Only card payments can be refunded
+
+    // Card payment stats
+    const completedCardPayments =
+      allCardPayments?.filter((p) => p.status === "completed") || [];
+    const cardRevenue = completedCardPayments.reduce(
+      (sum, payment) => sum + payment.amount,
+      0
+    );
+    const cardTransactions = completedCardPayments.length;
+
+    // Cash payment stats
+    const completedCashOrders =
+      allCashOrders?.filter((order) => order.status === "completed") || [];
+    const cashRevenue = completedCashOrders.reduce(
+      (sum, order) => sum + order.total_amount,
+      0
+    );
+    const cashTransactions = completedCashOrders.length;
+
+    // This month card payment stats
+    const thisMonthCompletedCard =
+      currentMonthCardPayments?.filter((p) => p.status === "completed") || [];
+    const cardRevenueThisMonth = thisMonthCompletedCard.reduce(
+      (sum, payment) => sum + payment.amount,
+      0
+    );
+    const cardTransactionsThisMonth = thisMonthCompletedCard.length;
+
+    // This month cash payment stats
+    const thisMonthCompletedCash =
+      currentMonthCashOrders?.filter((order) => order.status === "completed") ||
+      [];
+    const cashRevenueThisMonth = thisMonthCompletedCash.reduce(
+      (sum, order) => sum + order.total_amount,
+      0
+    );
+    const cashTransactionsThisMonth = thisMonthCompletedCash.length;
 
     const totalRevenue = completedPayments.reduce(
       (sum, payment) => sum + payment.amount,
@@ -198,10 +307,19 @@ export async function getPaymentStats(
       transactionGrowth,
       refundedAmount,
       refundedTransactions,
+      // Payment method specific stats
+      cardRevenue,
+      cardTransactions,
+      cashRevenue,
+      cashTransactions,
+      cardRevenueThisMonth,
+      cardTransactionsThisMonth,
+      cashRevenueThisMonth,
+      cashTransactionsThisMonth,
     };
   } catch (error) {
     console.error("Error fetching payment stats:", error);
-    throw new Error("Failed to fetch payment stats");
+    throw new Error("Failed to fetch payment statistics");
   }
 }
 
@@ -230,6 +348,8 @@ export async function getPaymentTransactions(
         order_id,
         stripe_payment_id,
         refund_id,
+        customer_name,
+        table_number,
         order:orders (
           id,
           total_amount,
@@ -254,6 +374,8 @@ export async function getPaymentTransactions(
       order_id: payment.order_id,
       stripe_payment_id: payment.stripe_payment_id,
       refund_id: payment.refund_id,
+      customer_name: payment.customer_name,
+      table_number: payment.table_number,
       order:
         payment.order &&
         Array.isArray(payment.order) &&
@@ -357,6 +479,8 @@ export async function getPaymentByStripeId(
         order_id,
         stripe_payment_id,
         refund_id,
+        customer_name,
+        table_number,
         order:orders (
           id,
           total_amount,
@@ -383,6 +507,8 @@ export async function getPaymentByStripeId(
       order_id: payment.order_id,
       stripe_payment_id: payment.stripe_payment_id,
       refund_id: payment.refund_id,
+      customer_name: payment.customer_name,
+      table_number: payment.table_number,
       order:
         payment.order &&
         Array.isArray(payment.order) &&

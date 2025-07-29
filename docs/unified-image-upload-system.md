@@ -119,9 +119,9 @@ create policy "Restaurant owners can upload menu images"
 
 ### Size Limits
 
-- **Avatar**: 2MB
-- **Restaurant Images**: 5MB
-- **Menu Images**: 5MB
+- **Avatar**: 1MB
+- **Restaurant Images**: 1MB
+- **Menu Images**: 1MB
 
 ### Allowed Types
 

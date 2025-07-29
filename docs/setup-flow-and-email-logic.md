@@ -57,8 +57,8 @@ DineEasy uses **two distinct email addresses** for different purposes:
 - ✅ **Business Email** - Required, email format validation
 - ⚪ **Phone Number** - Optional, but validated if provided
 - ⚪ **Website** - Optional, but validated if provided
-- ⚪ **Logo** - Optional, 2MB max, image format validation
-- ⚪ **Cover Photo** - Optional, 5MB max, image format validation
+- ⚪ **Logo** - Optional, 1MB max, image format validation
+- ⚪ **Cover Photo** - Optional, 1MB max, image format validation
 
 ### Step 3: Location & Services (Required Fields)
 
@@ -90,8 +90,8 @@ new URL(website.startsWith("http") ? website : `https://${website}`);
 
 #### Image Validation
 
-- **Logo**: 2MB max, JPEG/PNG/GIF/WebP
-- **Cover Photo**: 5MB max, JPEG/PNG/GIF/WebP
+- **Logo**: 1MB max, JPEG/PNG/WebP
+- **Cover Photo**: 1MB max, JPEG/PNG/WebP
 - File type validation
 - File size validation
 - Corrupted file detection
@@ -102,7 +102,7 @@ new URL(website.startsWith("http") ? website : `https://${website}`);
 
 - **Bucket**: `restaurant-images`
 - **Public Access**: Yes (for customer viewing)
-- **File Size Limit**: 5MB
+- **File Size Limit**: 1MB
 - **Allowed Types**: `image/jpeg`, `image/png`, `image/gif`, `image/webp`
 
 ### File Structure

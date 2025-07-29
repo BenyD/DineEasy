@@ -12,7 +12,7 @@ This document provides a comprehensive analysis of all image upload mechanisms a
 
 - **Path**: `{restaurantId}/{imageType}-{slug}-{timestamp}.{extension}`
 - **Bucket**: `restaurant-images`
-- **Max Size**: 5MB
+- **Max Size**: 1MB
 - **Validation**: ✅ Comprehensive (file type, size, corruption check)
 
 ### **Flow**:
@@ -36,7 +36,7 @@ This document provides a comprehensive analysis of all image upload mechanisms a
 
 - **Path**: `{restaurantId}/{imageType}-{slug}-{timestamp}.{extension}`
 - **Bucket**: `restaurant-images`
-- **Max Size**: 5MB
+- **Max Size**: 1MB
 - **Validation**: ✅ Comprehensive
 
 ### **Flow**:
@@ -59,7 +59,7 @@ This document provides a comprehensive analysis of all image upload mechanisms a
 
 - **Path**: `{userId}/{userId}-{timestamp}.{extension}`
 - **Bucket**: `avatars`
-- **Max Size**: 2MB
+- **Max Size**: 1MB
 - **Validation**: ✅ Comprehensive
 
 ### **Flow**:
@@ -82,7 +82,7 @@ This document provides a comprehensive analysis of all image upload mechanisms a
 
 - **Path**: `{restaurantId}/menu-items/{timestamp}.{extension}`
 - **Bucket**: `menu-images`
-- **Max Size**: 5MB
+- **Max Size**: 1MB
 - **Validation**: ✅ Basic (size check only)
 
 ### **Flow**:
@@ -102,6 +102,7 @@ This document provides a comprehensive analysis of all image upload mechanisms a
 ### ✅ **All Issues Fixed**
 
 All upload mechanisms now have:
+
 - ✅ Comprehensive file validation (type, size, corruption check)
 - ✅ Consistent error handling
 - ✅ Proper cleanup on errors
@@ -109,6 +110,7 @@ All upload mechanisms now have:
 - ✅ Proper RLS policies
 
 **Previous Issues (Now Resolved)**:
+
 1. **Menu Item Upload Validation**: Fixed with comprehensive validation
 2. **Menu Item Upload Error Handling**: Enhanced with better error handling
 3. **Path Structure Inconsistency**: Unified all paths to use proper ID structure
@@ -122,17 +124,17 @@ All upload mechanisms now have:
 
 1. **`avatars`** - User profile images
    - Public access: ✅
-   - Size limit: 2MB ✅
+   - Size limit: 1MB ✅
    - RLS policies: ✅
 
 2. **`restaurant-images`** - Restaurant logos & covers
    - Public access: ✅
-   - Size limit: 5MB ✅
+   - Size limit: 1MB ✅
    - RLS policies: ✅
 
 3. **`menu-images`** - Menu item images
    - Public access: ✅
-   - Size limit: 5MB ✅
+   - Size limit: 1MB ✅
    - RLS policies: ✅
 
 ---
@@ -167,6 +169,7 @@ All upload mechanisms now have:
 4. **File Type Validation**: ✅ All uploads now validate file types consistently
 
 ### **Future Enhancements** (Optional)
+
 - Consider adding upload progress indicators to restaurant image uploads
 - Add image compression for better performance
 - Implement image cropping/resizing features

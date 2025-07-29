@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useCart } from "@/hooks/useCart";
 import { getTableInfo } from "@/lib/actions/qr-client";
+import { formatAmountWithCurrency } from "@/lib/utils/currency";
 import Link from "next/link";
 
 interface RestaurantData {
@@ -28,6 +29,7 @@ interface RestaurantData {
   phone?: string;
   email?: string;
   currency?: string;
+  tax_rate?: number; // Added tax_rate to RestaurantData
 }
 
 interface TableData {
@@ -50,7 +52,7 @@ export default function CartPage({
   const [tableData, setTableData] = useState<TableData | null>(null);
 
   const subtotal = getTotalPrice();
-  const tax = subtotal * 0.077; // 7.7% Swiss VAT
+  const tax = (subtotal * (restaurant?.tax_rate || 0)) / 100;
   const total = subtotal + tax;
 
   // Load restaurant and table data
@@ -254,8 +256,10 @@ export default function CartPage({
                   </div>
 
                   <span className="font-bold text-gray-900 text-lg">
-                    {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
-                    {(item.price * item.quantity).toFixed(2)}
+                    {formatAmountWithCurrency(
+                      item.price * item.quantity,
+                      restaurant?.currency || "CHF"
+                    )}
                   </span>
                 </div>
               </div>
@@ -303,22 +307,25 @@ export default function CartPage({
                 Subtotal ({getTotalItems()} items)
               </span>
               <span className="text-gray-900 font-medium">
-                {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
-                {subtotal.toFixed(2)}
+                {formatAmountWithCurrency(
+                  subtotal,
+                  restaurant?.currency || "CHF"
+                )}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Tax (7.7%)</span>
+              <span className="text-gray-600">
+                Tax ({(restaurant?.tax_rate || 0).toFixed(1)}%)
+              </span>
               <span className="text-gray-900 font-medium">
-                {restaurant?.currency?.toUpperCase() || "CHF"} {tax.toFixed(2)}
+                {formatAmountWithCurrency(tax, restaurant?.currency || "CHF")}
               </span>
             </div>
             <Separator className="my-3" />
             <div className="flex justify-between text-xl font-bold">
               <span>Total</span>
               <span className="text-green-700">
-                {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
-                {total.toFixed(2)}
+                {formatAmountWithCurrency(total, restaurant?.currency || "CHF")}
               </span>
             </div>
           </div>
@@ -327,13 +334,15 @@ export default function CartPage({
 
       {/* Enhanced Proceed Button */}
       <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-gradient-to-t from-white via-white/95 to-transparent">
-        <Link href={`/qr/${resolvedParams.tableId}/checkout?specialInstructions=${encodeURIComponent(specialInstructions)}`}>
+        <Link
+          href={`/qr/${resolvedParams.tableId}/checkout?specialInstructions=${encodeURIComponent(specialInstructions)}`}
+        >
           <Button
             size="lg"
             className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-xl hover:shadow-2xl transition-all duration-200 h-16 rounded-2xl text-lg font-semibold"
           >
-            Proceed to Payment • {restaurant?.currency?.toUpperCase() || "CHF"}{" "}
-            {total.toFixed(2)}
+            Proceed to Payment •{" "}
+            {formatAmountWithCurrency(total, restaurant?.currency || "CHF")}
           </Button>
         </Link>
       </div>

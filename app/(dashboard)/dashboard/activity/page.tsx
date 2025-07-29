@@ -1,21 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Activity,
-  Search,
-  Filter,
-  Download,
-  RefreshCw,
-  ShoppingCart,
-  FileText,
-  Users,
-  QrCode,
-  CreditCard,
-  Settings,
-} from "lucide-react";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -25,23 +20,37 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+  Filter,
+  Search,
+  Download,
+  RefreshCw,
+  Calendar,
+  Clock,
+  User,
+  ShoppingCart,
+  CreditCard,
+  Settings,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  MoreHorizontal,
+} from "lucide-react";
+import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
+import { formatAmountWithCurrency } from "@/lib/utils/currency";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { BreadcrumbHeader } from "@/components/dashboard/breadcrumb-header";
 
 // Mock activity data
-const mockActivities = [
+const getMockActivities = (currency: string) => [
   {
     id: "1",
     type: "order",
-    action: "Order #1234 completed",
+    action: "Order completed",
     description: "Order for Table 5 has been marked as completed",
     user: {
       name: "John Doe",
@@ -49,7 +58,11 @@ const mockActivities = [
       role: "Manager",
     },
     timestamp: new Date(Date.now() - 2 * 60 * 1000), // 2 minutes ago
-    details: { orderId: "1234", table: "5", amount: "$45.50" },
+    details: {
+      orderId: "1234",
+      table: "5",
+      amount: formatAmountWithCurrency(45.5, currency),
+    },
   },
   {
     id: "2",
@@ -65,7 +78,7 @@ const mockActivities = [
     details: {
       itemName: "Margherita Pizza",
       category: "Pizza",
-      price: "$18.99",
+      price: formatAmountWithCurrency(18.99, currency),
     },
   },
   {
@@ -98,7 +111,7 @@ const mockActivities = [
     id: "5",
     type: "payment",
     action: "Payment processed",
-    description: "Payment of $32.75 processed successfully via Stripe",
+    description: `Payment of ${formatAmountWithCurrency(32.75, currency)} processed successfully via Stripe`,
     user: {
       name: "System",
       avatar: "/placeholder.svg?height=32&width=32&text=SY",
@@ -106,7 +119,7 @@ const mockActivities = [
     },
     timestamp: new Date(Date.now() - 60 * 60 * 1000), // 1 hour ago
     details: {
-      amount: "$32.75",
+      amount: formatAmountWithCurrency(32.75, currency),
       method: "Stripe",
       transactionId: "txn_1234567890",
     },
@@ -138,7 +151,7 @@ const mockActivities = [
     details: {
       orderId: "1230",
       reason: "Customer changed mind",
-      refundAmount: "$28.50",
+      refundAmount: formatAmountWithCurrency(28.5, currency),
     },
   },
   {
@@ -161,18 +174,18 @@ const mockActivities = [
 ];
 
 const activityTypes = [
-  { value: "all", label: "All Activities", icon: Activity },
+  { value: "all", label: "All Activities", icon: ShoppingCart },
   { value: "order", label: "Orders", icon: ShoppingCart },
-  { value: "menu", label: "Menu", icon: FileText },
-  { value: "staff", label: "Staff", icon: Users },
-  { value: "table", label: "Tables", icon: QrCode },
+  { value: "menu", label: "Menu", icon: Plus },
+  { value: "staff", label: "Staff", icon: User },
+  { value: "table", label: "Tables", icon: Eye },
   { value: "payment", label: "Payments", icon: CreditCard },
   { value: "system", label: "System", icon: Settings },
 ];
 
 const getActivityIcon = (type: string) => {
   const activityType = activityTypes.find((t) => t.value === type);
-  return activityType ? activityType.icon : Activity;
+  return activityType ? activityType.icon : ShoppingCart;
 };
 
 const getActivityColor = (type: string) => {
@@ -248,14 +261,15 @@ export default function ActivityLogsPage() {
   const [selectedType, setSelectedType] = useState("all");
   const [selectedUser, setSelectedUser] = useState("all");
   const [timeRange, setTimeRange] = useState("all");
+  const { currency } = useRestaurantSettings();
 
   // Get unique users for filter
   const uniqueUsers = Array.from(
-    new Set(mockActivities.map((activity) => activity.user.name))
+    new Set(getMockActivities(currency).map((activity) => activity.user.name))
   );
 
   // Filter activities
-  const filteredActivities = mockActivities.filter((activity) => {
+  const filteredActivities = getMockActivities(currency).filter((activity) => {
     const matchesSearch =
       activity.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
       activity.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -413,8 +427,6 @@ export default function ActivityLogsPage() {
               </motion.div>
             </motion.div>
 
-            <Separator />
-
             {/* Activity Type Filters */}
             <motion.div
               className="flex flex-wrap gap-2"
@@ -456,8 +468,8 @@ export default function ActivityLogsPage() {
           <CardHeader>
             <CardTitle className="text-lg">Activity Logs</CardTitle>
             <CardDescription>
-              Showing {filteredActivities.length} of {mockActivities.length}{" "}
-              activities
+              Showing {filteredActivities.length} of{" "}
+              {getMockActivities(currency).length} activities
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -475,7 +487,7 @@ export default function ActivityLogsPage() {
                     animate={{ scale: 1 }}
                     transition={{ type: "spring", stiffness: 200 }}
                   >
-                    <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <ShoppingCart className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   </motion.div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
                     No activities found
@@ -534,18 +546,7 @@ export default function ActivityLogsPage() {
                             className="flex items-center mt-2"
                             whileHover={{ scale: 1.02 }}
                           >
-                            <Avatar className="w-6 h-6">
-                              <AvatarImage
-                                src={activity.user.avatar || "/placeholder.svg"}
-                                alt={activity.user.name}
-                              />
-                              <AvatarFallback className="text-xs">
-                                {activity.user.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")}
-                              </AvatarFallback>
-                            </Avatar>
+                            <User className="w-6 h-6" />
                             <span className="text-xs text-gray-500 ml-2">
                               {activity.user.name} • {activity.user.role}
                             </span>

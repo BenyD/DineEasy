@@ -3,17 +3,20 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingCart, Sparkles, Bell, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { formatAmountWithCurrency } from "@/lib/utils/currency";
 
 interface CartButtonProps {
   totalItems: number;
   totalPrice: number;
   tableId: string;
+  currency?: string;
 }
 
 export function CartButton({
   totalItems,
   totalPrice,
   tableId,
+  currency = "CHF",
 }: CartButtonProps) {
   return (
     <div className="fixed bottom-4 left-4 right-4 sm:bottom-6 sm:right-6 sm:left-auto z-50">
@@ -37,7 +40,7 @@ export function CartButton({
           <div className="flex flex-col items-start flex-1">
             <span className="text-xs sm:text-sm font-medium">View Cart</span>
             <span className="font-bold text-base sm:text-lg">
-              CHF {totalPrice.toFixed(2)}
+              {formatAmountWithCurrency(totalPrice, currency)}
             </span>
           </div>
 

@@ -134,7 +134,7 @@ function validateImageFile(file: File, type: "logo" | "cover"): string | null {
   }
 
   // Check file size limit
-  const maxSize = 5 * 1024 * 1024; // 5MB for both logo and cover
+  const maxSize = 1 * 1024 * 1024; // 1MB for both logo and cover
   if (file.size > maxSize) {
     return `File size too large. Maximum size: ${maxSize / 1024 / 1024}MB`;
   }
@@ -1083,9 +1083,9 @@ export async function updateRestaurantImages(formData: FormData) {
 
     // Handle logo upload if provided
     if (logoFile && logoFile.size > 0) {
-      // Validate file size (5MB limit)
-      if (logoFile.size > 5 * 1024 * 1024) {
-        return { error: "Logo file size must be less than 5MB" };
+      // Validate file size (1MB limit)
+      if (logoFile.size > 1 * 1024 * 1024) {
+        return { error: "Logo file size must be less than 1MB" };
       }
 
       // Validate file type
@@ -1164,9 +1164,9 @@ export async function updateRestaurantImages(formData: FormData) {
 
     // Handle cover photo upload if provided
     if (coverFile && coverFile.size > 0) {
-      // Validate file size (5MB limit)
-      if (coverFile.size > 5 * 1024 * 1024) {
-        return { error: "Cover photo file size must be less than 5MB" };
+      // Validate file size (1MB limit)
+      if (coverFile.size > 1 * 1024 * 1024) {
+        return { error: "Cover photo file size must be less than 1MB" };
       }
 
       // Validate file type

@@ -1,21 +1,40 @@
 "use client";
 
-import type React from "react";
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Calendar,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   TrendingUp,
+  TrendingDown,
   DollarSign,
   ShoppingCart,
   Users,
-  Star,
-  Filter,
+  Calendar,
   Download,
   RefreshCw,
-  Clock,
-  ChevronDown,
+  Filter,
+  Eye,
+  BarChart3,
+  PieChart,
+  LineChart,
 } from "lucide-react";
+import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
+import { formatAmountWithCurrency } from "@/lib/utils/currency";
 import {
   LineChart,
   Line,
@@ -33,59 +52,44 @@ import {
   ComposedChart,
   Area,
 } from "recharts";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-// Mock analytics data
+// Mock data
 const mockAnalytics = {
   revenue: {
-    today: 1250.5,
-    yesterday: 980.25,
-    thisWeek: 8750.0,
-    lastWeek: 7200.0,
-    thisMonth: 32500.0,
-    lastMonth: 28900.0,
+    today: 1245.67,
+    yesterday: 1189.34,
+    thisWeek: 8234.56,
+    lastWeek: 7890.12,
+    thisMonth: 32456.78,
+    lastMonth: 29876.45,
   },
   orders: {
     today: 45,
-    yesterday: 38,
+    yesterday: 42,
     thisWeek: 312,
-    lastWeek: 285,
-    thisMonth: 1250,
-    lastMonth: 1180,
+    lastWeek: 298,
+    thisMonth: 1245,
+    lastMonth: 1189,
   },
   customers: {
-    today: 120,
-    yesterday: 95,
-    thisWeek: 850,
-    lastWeek: 780,
-    thisMonth: 3200,
-    lastMonth: 2950,
+    today: 23,
+    yesterday: 21,
+    thisWeek: 156,
+    lastWeek: 149,
+    thisMonth: 623,
+    lastMonth: 594,
   },
   avgOrderValue: {
-    today: 27.8,
-    yesterday: 25.85,
-    thisWeek: 28.05,
-    lastWeek: 25.26,
-    thisMonth: 26.0,
-    lastMonth: 24.5,
+    today: 27.68,
+    yesterday: 28.32,
+    thisWeek: 26.39,
+    lastWeek: 26.48,
+    thisMonth: 26.07,
+    lastMonth: 25.13,
   },
   topItems: [
     { name: "Margherita Pizza", orders: 89, revenue: 1958.0 },
@@ -181,216 +185,181 @@ const StatCard = ({
   icon: React.ReactNode;
   formatter?: (val: number) => string;
 }) => {
-  const percentageChange = ((value - previousValue) / previousValue) * 100;
-  const isPositive = percentageChange > 0;
+  const { currency } = useRestaurantSettings();
+  const change = value - previousValue;
+  const changePercent = previousValue > 0 ? (change / previousValue) * 100 : 0;
+  const isPositive = change >= 0;
 
   return (
-    <motion.div whileHover={cardHoverVariants.hover}>
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between space-y-0">
-            <h3 className="text-sm font-medium tracking-tight text-gray-500">
-              {title}
-            </h3>
-            <motion.div whileHover={iconRotateVariants.hover}>
-              {icon}
-            </motion.div>
-          </div>
-          <motion.div
-            className="mt-2"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: "spring", stiffness: 200 }}
-          >
-            <div className="text-2xl font-bold">{formatter(value)}</div>
-            <p className="text-xs text-gray-500">
-              vs. yesterday
-              <motion.span
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className={`ml-2 font-medium ${
+    <Card className="bg-white shadow-sm border-gray-200">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-600">{title}</p>
+            <p className="text-2xl font-bold text-gray-900">
+              {formatter === (val: number) => val.toString() 
+                ? formatter(value)
+                : formatter === (val: number) => `CHF ${val.toFixed(2)}`
+                ? formatAmountWithCurrency(value, currency)
+                : formatter(value)
+              }
+            </p>
+            <div className="flex items-center space-x-1">
+              {isPositive ? (
+                <TrendingUp className="w-4 h-4 text-green-500" />
+              ) : (
+                <TrendingDown className="w-4 h-4 text-red-500" />
+              )}
+              <span
+                className={`text-sm font-medium ${
                   isPositive ? "text-green-600" : "text-red-600"
                 }`}
               >
                 {isPositive ? "+" : ""}
-                {percentageChange.toFixed(1)}%
-              </motion.span>
-            </p>
-          </motion.div>
-        </CardContent>
-      </Card>
-    </motion.div>
+                {changePercent.toFixed(1)}%
+              </span>
+              <span className="text-sm text-gray-500">vs yesterday</span>
+            </div>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-lg">{icon}</div>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
 export default function AnalyticsPage() {
-  const [selectedPeriod, setSelectedPeriod] = useState("today");
-  const [selectedMetrics, setSelectedMetrics] = useState([
+  const [selectedPeriod, setSelectedPeriod] = useState<keyof typeof mockAnalytics.revenue>("today");
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>([
     "revenue",
     "orders",
     "customers",
     "avgOrderValue",
   ]);
+  const [selectedChart, setSelectedChart] = useState("revenue");
+  const { currency } = useRestaurantSettings();
 
   const resetFilters = () => {
     setSelectedPeriod("today");
     setSelectedMetrics(["revenue", "orders", "customers", "avgOrderValue"]);
+    setSelectedChart("revenue");
   };
 
   const handleExportReport = () => {
-    console.log(`Exporting report for ${selectedPeriod}`);
+    // Mock export functionality
+    console.log("Exporting analytics report...");
   };
 
   return (
-    <motion.div
-      className="flex-1 space-y-6 p-6"
-      initial="hidden"
-      animate="visible"
-      variants={containerVariants}
-    >
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <motion.div
-        className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
-        variants={itemVariants}
-      >
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+          <p className="text-gray-500">
             Track your restaurant's performance and insights
           </p>
         </div>
-        <motion.div
-          className="flex items-center gap-2"
-          whileHover={buttonHoverVariants.hover}
-          whileTap={buttonHoverVariants.tap}
-        >
-          <Button variant="outline" size="sm" onClick={handleExportReport}>
-            <Download className="w-4 h-4 mr-2" />
-            Export Data
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={resetFilters}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Reset
           </Button>
-        </motion.div>
-      </motion.div>
+          <Button
+            size="sm"
+            onClick={handleExportReport}
+            className="flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </Button>
+        </div>
+      </div>
 
-      {/* Filters Card */}
-      <motion.div variants={itemVariants}>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filters & Analytics
-            </CardTitle>
-            <CardDescription>
-              Customize your analytics view and reporting preferences
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <motion.div
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-              variants={itemVariants}
-            >
-              {/* Time Period Filter */}
-              <motion.div className="space-y-2" whileHover={{ scale: 1.01 }}>
-                <Label>Time Period</Label>
-                <Select
-                  value={selectedPeriod}
-                  onValueChange={setSelectedPeriod}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="today">Today</SelectItem>
-                    <SelectItem value="yesterday">Yesterday</SelectItem>
-                    <SelectItem value="thisWeek">This Week</SelectItem>
-                    <SelectItem value="lastWeek">Last Week</SelectItem>
-                    <SelectItem value="thisMonth">This Month</SelectItem>
-                    <SelectItem value="lastMonth">Last Month</SelectItem>
-                    <SelectItem value="thisYear">This Year</SelectItem>
-                    <SelectItem value="lastYear">Last Year</SelectItem>
-                  </SelectContent>
-                </Select>
-              </motion.div>
-            </motion.div>
-
-            <Separator />
-
-            {/* Metrics Selection */}
-            <motion.div variants={itemVariants}>
-              <Label className="mb-3 block">Metrics to Display</Label>
-              <motion.div
-                className="flex flex-wrap gap-2"
-                variants={containerVariants}
+      {/* Filters */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="period" className="text-sm font-medium">
+                Time Period
+              </Label>
+              <Select value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as keyof typeof mockAnalytics.revenue)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="yesterday">Yesterday</SelectItem>
+                  <SelectItem value="thisWeek">This Week</SelectItem>
+                  <SelectItem value="lastWeek">Last Week</SelectItem>
+                  <SelectItem value="thisMonth">This Month</SelectItem>
+                  <SelectItem value="lastMonth">Last Month</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="metrics" className="text-sm font-medium">
+                Metrics
+              </Label>
+              <Select
+                value={selectedMetrics.join(",")}
+                onValueChange={(value) => setSelectedMetrics(value.split(","))}
               >
-                {[
-                  { id: "revenue", label: "Revenue", icon: DollarSign },
-                  { id: "orders", label: "Orders", icon: ShoppingCart },
-                  { id: "customers", label: "Customers", icon: Users },
-                  {
-                    id: "avgOrderValue",
-                    label: "Avg Order Value",
-                    icon: TrendingUp,
-                  },
-                ].map(({ id, label, icon: Icon }) => (
-                  <motion.div
-                    key={id}
-                    whileHover={buttonHoverVariants.hover}
-                    whileTap={buttonHoverVariants.tap}
-                  >
-                    <Button
-                      variant={
-                        selectedMetrics.includes(id) ? "default" : "outline"
-                      }
-                      onClick={() => {
-                        if (selectedMetrics.includes(id)) {
-                          setSelectedMetrics(
-                            selectedMetrics.filter((m) => m !== id)
-                          );
-                        } else {
-                          setSelectedMetrics([...selectedMetrics, id]);
-                        }
-                      }}
-                      className={
-                        selectedMetrics.includes(id)
-                          ? "bg-green-600 hover:bg-green-700"
-                          : ""
-                      }
-                    >
-                      <Icon className="w-4 h-4 mr-2" />
-                      {label}
-                    </Button>
-                  </motion.div>
-                ))}
-                <motion.div
-                  whileHover={buttonHoverVariants.hover}
-                  whileTap={buttonHoverVariants.tap}
-                >
-                  <Button
-                    variant="outline"
-                    onClick={resetFilters}
-                    className="ml-auto"
-                  >
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Reset
-                  </Button>
-                </motion.div>
-              </motion.div>
-            </motion.div>
-          </CardContent>
-        </Card>
-      </motion.div>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="revenue,orders,customers,avgOrderValue">
+                    All Metrics
+                  </SelectItem>
+                  <SelectItem value="revenue">Revenue Only</SelectItem>
+                  <SelectItem value="orders">Orders Only</SelectItem>
+                  <SelectItem value="customers">Customers Only</SelectItem>
+                  <SelectItem value="avgOrderValue">Avg Order Value Only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="chart" className="text-sm font-medium">
+                Chart Type
+              </Label>
+              <Select value={selectedChart} onValueChange={setSelectedChart}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="revenue">Revenue Trend</SelectItem>
+                  <SelectItem value="orders">Orders Trend</SelectItem>
+                  <SelectItem value="customers">Customers Trend</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Key Metrics */}
+      {/* Stats Cards */}
       <AnimatePresence mode="wait">
         <motion.div
-          className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-          variants={containerVariants}
+          key={`${selectedPeriod}-${selectedMetrics.join(",")}`}
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
         >
           {selectedMetrics.includes("revenue") && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.3, delay: 0 }}
               layout
             >
               <StatCard
@@ -402,7 +371,7 @@ export default function AnalyticsPage() {
                 }
                 previousValue={mockAnalytics.revenue.yesterday}
                 icon={<DollarSign className="w-6 h-6 text-green-600" />}
-                formatter={(val) => `CHF ${val.toFixed(2)}`}
+                formatter={(val) => formatAmountWithCurrency(val, currency)}
               />
             </motion.div>
           )}
@@ -466,7 +435,7 @@ export default function AnalyticsPage() {
                 }
                 previousValue={mockAnalytics.avgOrderValue.yesterday}
                 icon={<TrendingUp className="w-6 h-6 text-amber-600" />}
-                formatter={(val) => `CHF ${val.toFixed(2)}`}
+                formatter={(val) => formatAmountWithCurrency(val, currency)}
               />
             </motion.div>
           )}
@@ -658,6 +627,6 @@ export default function AnalyticsPage() {
           </Card>
         </motion.div>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }

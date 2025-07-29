@@ -419,8 +419,8 @@ export function useMenuForm({
         return;
       }
 
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error("File size exceeds 5MB limit");
+      if (file.size > 1 * 1024 * 1024) {
+        toast.error("File size exceeds 1MB limit");
         return;
       }
 

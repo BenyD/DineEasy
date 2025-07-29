@@ -73,6 +73,26 @@ const RESTAURANT_TYPES = [
   { value: "food-truck", label: "Food Truck" },
 ] as const;
 
+const CUISINE_TYPES = [
+  { value: "italian", label: "Italian" },
+  { value: "japanese", label: "Japanese" },
+  { value: "chinese", label: "Chinese" },
+  { value: "indian", label: "Indian" },
+  { value: "mexican", label: "Mexican" },
+  { value: "thai", label: "Thai" },
+  { value: "french", label: "French" },
+  { value: "mediterranean", label: "Mediterranean" },
+  { value: "american", label: "American" },
+  { value: "greek", label: "Greek" },
+  { value: "spanish", label: "Spanish" },
+  { value: "korean", label: "Korean" },
+  { value: "seafood", label: "Seafood" },
+  { value: "vegetarian", label: "Vegetarian" },
+  { value: "vegan", label: "Vegan" },
+  { value: "fusion", label: "Fusion" },
+  { value: "other", label: "Other" },
+] as const;
+
 const PRICE_RANGES = [
   { value: "$", label: "$ (Under 15 CHF)" },
   { value: "$$", label: "$$ (15-30 CHF)" },
@@ -369,9 +389,9 @@ export default function SettingsPage() {
         return;
       }
 
-      // Validate file size (2MB limit)
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error("Avatar file size must be less than 2MB");
+      // Validate file size (1MB limit)
+      if (file.size > 1 * 1024 * 1024) {
+        toast.error("Avatar file size must be less than 1MB");
         return;
       }
 
@@ -470,9 +490,9 @@ export default function SettingsPage() {
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file size (5MB limit)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error("Logo file size must be less than 5MB");
+      // Validate file size (1MB limit)
+      if (file.size > 1 * 1024 * 1024) {
+        toast.error("Logo file size must be less than 1MB");
         return;
       }
 
@@ -503,9 +523,9 @@ export default function SettingsPage() {
         return;
       }
 
-      // Validate file size (5MB limit)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error("Image size must be less than 5MB");
+      // Validate file size (1MB limit)
+      if (file.size > 1 * 1024 * 1024) {
+        toast.error("Image size must be less than 1MB");
         return;
       }
 
@@ -852,7 +872,7 @@ export default function SettingsPage() {
                                 />
                                 <p className="text-sm text-gray-500 mt-1">
                                   Recommended size: 1920x640 pixels. Max file
-                                  size: 5MB. Supported: JPEG, PNG, WebP.
+                                  size: 1MB. Supported: JPEG, PNG, WebP.
                                 </p>
                               </div>
                               {(coverPreview || restaurant.cover_url) && (
@@ -909,7 +929,7 @@ export default function SettingsPage() {
                                     />
                                     <p className="text-sm text-gray-500 mt-1">
                                       Recommended size: 400x400 pixels. Max file
-                                      size: 5MB. Supported: JPEG, PNG, WebP.
+                                      size: 1MB. Supported: JPEG, PNG, WebP.
                                     </p>
                                   </div>
                                   {(logoPreview || restaurant.logo_url) && (
@@ -988,18 +1008,30 @@ export default function SettingsPage() {
                           <Label htmlFor="cuisine" className="text-base">
                             Cuisine Type
                           </Label>
-                          <Input
-                            id="cuisine"
+                          <Select
                             value={formData.cuisine}
-                            onChange={(e) =>
+                            onValueChange={(value) =>
                               setFormData({
                                 ...formData,
-                                cuisine: e.target.value,
+                                cuisine: value as typeof formData.cuisine,
                               })
                             }
-                            className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                             disabled={!isEditing}
-                          />
+                          >
+                            <SelectTrigger className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                              <SelectValue placeholder="Select cuisine type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CUISINE_TYPES.map((cuisine) => (
+                                <SelectItem
+                                  key={cuisine.value}
+                                  value={cuisine.value}
+                                >
+                                  {cuisine.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
 
                         <div className="space-y-2">
@@ -1634,7 +1666,7 @@ export default function SettingsPage() {
                                   />
                                   <p className="text-sm text-gray-500 mt-1">
                                     Recommended size: 400x400 pixels. Max file
-                                    size: 2MB. Supported: JPEG, PNG, WebP.
+                                    size: 1MB. Supported: JPEG, PNG, WebP.
                                   </p>
                                 </div>
                                 {profileData.avatarUrl && (

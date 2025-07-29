@@ -29,22 +29,22 @@ export function formatCurrencyCompact(
 function getLocaleForCurrency(currency: string): string {
   const currencyLocales: Record<string, string> = {
     CHF: "de-CH",
-    // USD: "en-US",
-    // EUR: "de-DE",
-    // GBP: "en-GB",
-    // INR: "en-IN",
-    // AUD: "en-AU",
-    // AED: "ar-AE",
-    // SEK: "sv-SE",
-    // CAD: "en-CA",
-    // NZD: "en-NZ",
-    // LKR: "si-LK",
-    // SGD: "en-SG",
-    // MYR: "ms-MY",
-    // THB: "th-TH",
-    // JPY: "ja-JP",
-    // HKD: "zh-HK",
-    // KRW: "ko-KR",
+    USD: "en-US",
+    EUR: "de-DE",
+    GBP: "en-GB",
+    INR: "en-IN",
+    AUD: "en-AU",
+    AED: "ar-AE",
+    SEK: "sv-SE",
+    CAD: "en-CA",
+    NZD: "en-NZ",
+    LKR: "si-LK",
+    SGD: "en-SG",
+    MYR: "ms-MY",
+    THB: "th-TH",
+    JPY: "ja-JP",
+    HKD: "zh-HK",
+    KRW: "ko-KR",
   };
 
   return currencyLocales[currency] || "de-CH";
@@ -53,22 +53,22 @@ function getLocaleForCurrency(currency: string): string {
 export function getCurrencySymbol(currency: string): string {
   const symbols: Record<string, string> = {
     CHF: "CHF",
-    // USD: "$",
-    // EUR: "€",
-    // GBP: "£",
-    // INR: "₹",
-    // AUD: "A$",
-    // AED: "AED",
-    // SEK: "kr",
-    // CAD: "C$",
-    // NZD: "NZ$",
-    // LKR: "Rs",
-    // SGD: "S$",
-    // MYR: "RM",
-    // THB: "฿",
-    // JPY: "¥",
-    // HKD: "HK$",
-    // KRW: "₩",
+    USD: "$",
+    EUR: "€",
+    GBP: "£",
+    INR: "₹",
+    AUD: "A$",
+    AED: "AED",
+    SEK: "kr",
+    CAD: "C$",
+    NZD: "NZ$",
+    LKR: "Rs",
+    SGD: "S$",
+    MYR: "RM",
+    THB: "฿",
+    JPY: "¥",
+    HKD: "HK$",
+    KRW: "₩",
   };
 
   return symbols[currency] || currency;
@@ -81,4 +81,13 @@ export function parseCurrencyAmount(
   // Remove currency symbols and commas, then parse
   const cleanAmount = amount.replace(/[^\d.-]/g, "");
   return parseFloat(cleanAmount) || 0;
+}
+
+// Helper function to format amount with currency symbol
+export function formatAmountWithCurrency(
+  amount: number,
+  currency: string = "CHF"
+): string {
+  const symbol = getCurrencySymbol(currency);
+  return `${symbol} ${amount.toFixed(2)}`;
 }

@@ -162,12 +162,29 @@ export default function KitchenPage() {
   // WebSocket for real-time updates
   useOrdersWebSocket({
     restaurantId: restaurant?.id,
-    onOrderAdded: (order) => {
+    onOrderAdded: async (order) => {
+      // Fetch the full order from the DB to get customerName and tableNumber
+      let customerName = "Guest";
+      let tableNumber = order.table_id
+        ? `Table ${order.table_id.slice(0, 4)}`
+        : "Unknown";
+
+      if (restaurant?.id && order.id) {
+        const result = await getRestaurantOrders(restaurant.id, {
+          search: order.id,
+        });
+        const fullOrder = result.data?.find((o) => o.id === order.id);
+        if (fullOrder) {
+          customerName = fullOrder.customerName || "Guest";
+          tableNumber = fullOrder.tableNumber || tableNumber;
+        }
+      }
+
       setOrders((prev) => [
         {
           id: order.id,
-          tableNumber: order.table_number || "Unknown",
-          customerName: order.customer_name || "",
+          tableNumber,
+          customerName,
           items: [], // Optionally fetch items if needed
           status: order.status,
           time: new Date(order.created_at),
@@ -211,17 +228,14 @@ export default function KitchenPage() {
   useEffect(() => {
     if (orders.length === 0 || previousOrdersCount === 0) return;
 
-    const currentNewOrdersCount = orders.filter(
-      (order) => order.status === "new"
+    const newOrders = orders.filter((order) => order.status === "pending");
+
+    const activeOrdersCount = orders.filter(
+      (order) => order.status !== "pending"
     ).length;
-    const previousNewOrdersCount = Math.max(
-      0,
-      previousOrdersCount -
-        orders.filter((order) => order.status !== "new").length
-    );
 
     // Only play sound if we have more new orders than before and sound is not muted
-    if (currentNewOrdersCount > previousNewOrdersCount && !isSoundMuted) {
+    if (newOrders.length > 0 && !isSoundMuted) {
       const audio = new Audio("/notification-sound.mp3");
       audio.play().catch((error) => console.log("Audio play failed:", error));
     }
@@ -356,7 +370,10 @@ export default function KitchenPage() {
                     New Orders
                   </p>
                   <p className="text-xl md:text-2xl font-bold text-red-900">
-                    {orders.filter((order) => order.status === "new").length}
+                    {
+                      orders.filter((order) => order.status === "pending")
+                        .length
+                    }
                   </p>
                 </div>
                 <motion.div variants={iconVariants}>

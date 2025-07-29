@@ -14,28 +14,28 @@ export type UploadType =
 const UPLOAD_CONFIGS = {
   avatar: {
     bucket: "avatars",
-    maxSize: 2 * 1024 * 1024, // 2MB
+    maxSize: 1 * 1024 * 1024, // 1MB
     allowedTypes: ["image/jpeg", "image/png", "image/webp"],
     allowedExtensions: ["jpg", "jpeg", "png", "webp"],
     folder: "avatars",
   },
   "restaurant-logo": {
     bucket: "restaurant-images",
-    maxSize: 5 * 1024 * 1024, // 5MB
+    maxSize: 1 * 1024 * 1024, // 1MB
     allowedTypes: ["image/jpeg", "image/png", "image/webp"],
     allowedExtensions: ["jpg", "jpeg", "png", "webp"],
     folder: "restaurant-images",
   },
   "restaurant-cover": {
     bucket: "restaurant-images",
-    maxSize: 5 * 1024 * 1024, // 5MB
+    maxSize: 1 * 1024 * 1024, // 1MB
     allowedTypes: ["image/jpeg", "image/png", "image/webp"],
     allowedExtensions: ["jpg", "jpeg", "png", "webp"],
     folder: "restaurant-images",
   },
   "menu-item": {
     bucket: "menu-images",
-    maxSize: 5 * 1024 * 1024, // 5MB
+    maxSize: 1 * 1024 * 1024, // 1MB
     allowedTypes: ["image/jpeg", "image/png", "image/webp"],
     allowedExtensions: ["jpg", "jpeg", "png", "webp"],
     folder: "menu-images",
