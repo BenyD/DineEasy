@@ -12,11 +12,7 @@ export function MenuWebSocketStatus({
   editingItem = null,
   isSubmitting = false,
 }: MenuWebSocketStatusProps) {
-  const { isConnected } = useMenuWebSocket({
-    isAddDialogOpen,
-    editingItem,
-    isSubmitting,
-  });
+  const { isConnected } = useMenuWebSocket();
 
   return (
     <div className="flex items-center gap-2">

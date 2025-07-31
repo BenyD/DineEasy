@@ -114,7 +114,7 @@ import { QR_CONFIG } from "@/lib/constants";
 
 import { useTablesOptimized } from "@/hooks/useTablesOptimized";
 import { useTablesWebSocket } from "@/hooks/useTablesWebSocket";
-import { retryWithConditions } from "@/lib/utils/retry";
+import { retry } from "@/lib/utils/retry";
 
 type Table = Database["public"]["Tables"]["tables"]["Row"];
 type TableStatus = Database["public"]["Enums"]["table_status"];
@@ -252,13 +252,11 @@ function TablesPage() {
   // Refresh data with retry logic
   const handleRefresh = useCallback(async () => {
     if (!loading && !refreshing) {
-      const result = await retryWithConditions(refreshData, {
-        networkErrors: true,
-        serverErrors: true,
-        maxAttempts: 3,
-      });
-
-      if (!result.success) {
+      try {
+        await retry(refreshData, {
+          maxAttempts: 3,
+        });
+      } catch (error) {
         toast.error("Failed to refresh tables after multiple attempts");
       }
     }
@@ -267,13 +265,11 @@ function TablesPage() {
   // Load data on mount with retry logic
   useEffect(() => {
     const loadDataWithRetry = async () => {
-      const result = await retryWithConditions(fetchData, {
-        networkErrors: true,
-        serverErrors: true,
-        maxAttempts: 3,
-      });
-
-      if (!result.success) {
+      try {
+        await retry(fetchData, {
+          maxAttempts: 3,
+        });
+      } catch (error) {
         toast.error("Failed to load tables after multiple attempts");
       }
     };

@@ -57,6 +57,15 @@ export default function PaymentReturnPage() {
     sessionId: string,
     retryCount = 0
   ): Promise<boolean> => {
+    // Define valid statuses at the top of the function
+    const validStatuses = [
+      "active",
+      "trialing",
+      "past_due",
+      "incomplete",
+      "incomplete_expired",
+    ];
+
     try {
       const supabase = createClient();
 
@@ -127,14 +136,7 @@ export default function PaymentReturnPage() {
           }))
         );
 
-        // Check for valid subscription statuses (expanded list)
-        const validStatuses = [
-          "active",
-          "trialing",
-          "past_due",
-          "incomplete",
-          "incomplete_expired",
-        ];
+
         const hasValidSubscription = restaurant.subscriptions.some((sub: any) =>
           validStatuses.includes(sub.status)
         );
@@ -1104,7 +1106,7 @@ export default function PaymentReturnPage() {
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-lg font-semibold"
                     disabled={
                       isRetrying ||
-                      (paymentStatus.retryCount &&
+                      (paymentStatus.retryCount !== undefined &&
                         paymentStatus.retryCount >= 3)
                     }
                   >

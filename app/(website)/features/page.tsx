@@ -186,7 +186,6 @@ export default function FeaturesPage() {
       {/* Main Features */}
       <section className="relative overflow-hidden bg-white py-16 sm:py-24">
         <GradientBlob
-          colors={["#dcfce7", "#bbf7d0"]}
           className="absolute left-0 top-0 -z-10 opacity-50"
         />
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -287,7 +286,6 @@ export default function FeaturesPage() {
       {/* Additional Features */}
       <section className="relative bg-gray-50 py-16 sm:py-24">
         <GradientBlob
-          colors={["#dcfce7", "#bbf7d0"]}
           className="absolute right-0 top-0 -z-10 opacity-50"
         />
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -328,15 +326,11 @@ export default function FeaturesPage() {
       {/* CTA Section */}
       <CTASection
         title="Ready to Transform Your Restaurant?"
-        description="Join thousands of restaurants already using DineEasy to streamline their operations and delight their customers."
-        primaryAction={{
-          text: "Start Free Trial",
-          href: "/signup",
-        }}
-        secondaryAction={{
-          text: "Contact Sales",
-          href: "/contact",
-        }}
+        subtitle="Join thousands of restaurants already using DineEasy to streamline their operations and delight their customers."
+        buttonText="Start Free Trial"
+        buttonHref="/signup"
+        secondaryButtonText="Contact Sales"
+        secondaryButtonHref="/contact"
       />
     </PageWrapper>
   );

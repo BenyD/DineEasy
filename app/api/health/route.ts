@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
-import { resend } from "@/lib/email";
 
 interface HealthCheckResult {
   status: "healthy" | "degraded" | "unhealthy";
@@ -103,7 +102,7 @@ export async function GET(req: NextRequest) {
       const stripeStart = Date.now();
       try {
         // Test Stripe API connectivity
-        const account = await stripe.accounts.list({ limit: 1 });
+        const accountsResponse = await stripe.accounts.list({ limit: 1 });
         const responseTime = Date.now() - stripeStart;
 
         healthCheck.services.stripe = {
@@ -111,7 +110,7 @@ export async function GET(req: NextRequest) {
           responseTime,
           details: {
             connected: true,
-            livemode: account.livemode,
+            accountsCount: accountsResponse.data.length,
           },
         };
         healthCheck.checks.passed++;

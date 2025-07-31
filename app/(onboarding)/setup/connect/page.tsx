@@ -60,7 +60,7 @@ export default function ConnectPage() {
     null
   );
   const [showWarningDialog, setShowWarningDialog] = useState(false);
-  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [isCompletingOnboarding, setIsCompletingOnboarding] = useState(false);
 
   useEffect(() => {
     const checkAuthAndStatus = async () => {
@@ -150,10 +150,6 @@ export default function ConnectPage() {
       const accountId = searchParams.get("account_id");
       const refresh = searchParams.get("refresh");
 
-      if (success === "true") {
-        setShowSuccessDialog(true);
-      }
-
       if (refresh === "true") {
         // Handle refresh URL - regenerate account link
         console.log("Handling refresh URL - regenerating account link");
@@ -161,9 +157,9 @@ export default function ConnectPage() {
         return;
       }
 
-      if (accountId) {
-        // User completed Stripe Connect onboarding
-        await checkAccountStatus(restaurant.id);
+      if (accountId || success === "true") {
+        // User completed Stripe Connect onboarding - check status and complete onboarding
+        await checkAccountStatusAndComplete(restaurant.id);
       } else {
         // Check current status
         await checkAccountStatus(restaurant.id);
@@ -172,6 +168,30 @@ export default function ConnectPage() {
 
     checkAuthAndStatus();
   }, [router, searchParams]);
+
+  const checkAccountStatusAndComplete = async (restaurantId: string) => {
+    setIsCheckingStatus(true);
+    try {
+      const result = await getStripeAccountStatus(restaurantId);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      const status = result.status as "not_connected" | "pending" | "active";
+      setAccountStatus(status);
+
+      // If account is active, automatically complete onboarding and redirect
+      if (status === "active") {
+        await completeOnboardingAndRedirect(restaurantId);
+      }
+    } catch (error) {
+      console.error("Error checking account status:", error);
+      toast.error("Failed to check account status");
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
 
   const checkAccountStatus = async (restaurantId: string) => {
     setIsCheckingStatus(true);
@@ -187,6 +207,33 @@ export default function ConnectPage() {
       toast.error("Failed to check account status");
     } finally {
       setIsCheckingStatus(false);
+    }
+  };
+
+  const completeOnboardingAndRedirect = async (restaurantId: string) => {
+    setIsCompletingOnboarding(true);
+    try {
+      const result = await completeOnboarding(restaurantId);
+
+      if (result.error) {
+        console.error("Error completing onboarding:", result.error);
+        toast.error("Failed to complete onboarding. Please try again.");
+        return;
+      }
+
+      console.log("Onboarding completed successfully:", result);
+      toast.success("Payment setup complete! Welcome to DineEasy!");
+
+      // Clear onboarding progress from localStorage
+      clearOnboardingProgress();
+
+      // Redirect to dashboard
+      router.push("/dashboard");
+    } catch (error) {
+      console.error("Error completing onboarding:", error);
+      toast.error("Failed to complete onboarding. Please try again.");
+    } finally {
+      setIsCompletingOnboarding(false);
     }
   };
 
@@ -239,90 +286,14 @@ export default function ConnectPage() {
   const handleContinue = async () => {
     if (accountStatus === "not_connected") {
       setShowWarningDialog(true);
-    } else {
-      // Use the comprehensive onboarding completion function
-      if (restaurantId) {
-        try {
-          const result = await completeOnboarding(restaurantId);
-
-          if (result.error) {
-            console.error("Error completing onboarding:", result.error);
-            toast.error("Failed to complete onboarding. Please try again.");
-            return;
-          }
-
-          console.log("Onboarding completed successfully:", result);
-          toast.success("Onboarding completed successfully!");
-
-          // Clear onboarding progress from localStorage
-          clearOnboardingProgress();
-        } catch (error) {
-          console.error("Error completing onboarding:", error);
-          toast.error("Failed to complete onboarding. Please try again.");
-          return;
-        }
-      }
-
-      router.push("/dashboard");
+    } else if (accountStatus === "active") {
+      await completeOnboardingAndRedirect(restaurantId!);
     }
   };
 
   const handleSkipToDashboard = async () => {
     setShowWarningDialog(false);
-
-    // Use the comprehensive onboarding completion function
-    if (restaurantId) {
-      try {
-        const result = await completeOnboarding(restaurantId);
-
-        if (result.error) {
-          console.error("Error completing onboarding:", result.error);
-          toast.error("Failed to complete onboarding. Please try again.");
-          return;
-        }
-
-        console.log("Onboarding completed successfully:", result);
-        toast.success("Onboarding completed successfully!");
-
-        // Clear onboarding progress from localStorage
-        clearOnboardingProgress();
-      } catch (error) {
-        console.error("Error completing onboarding:", error);
-        toast.error("Failed to complete onboarding. Please try again.");
-        return;
-      }
-    }
-
-    router.push("/dashboard");
-  };
-
-  const handleSuccessContinue = async () => {
-    setShowSuccessDialog(false);
-
-    // Use the comprehensive onboarding completion function
-    if (restaurantId) {
-      try {
-        const result = await completeOnboarding(restaurantId);
-
-        if (result.error) {
-          console.error("Error completing onboarding:", result.error);
-          toast.error("Failed to complete onboarding. Please try again.");
-          return;
-        }
-
-        console.log("Onboarding completed successfully:", result);
-        toast.success("Onboarding completed successfully!");
-
-        // Clear onboarding progress from localStorage
-        clearOnboardingProgress();
-      } catch (error) {
-        console.error("Error completing onboarding:", error);
-        toast.error("Failed to complete onboarding. Please try again.");
-        return;
-      }
-    }
-
-    router.push("/dashboard");
+    await completeOnboardingAndRedirect(restaurantId!);
   };
 
   // Check if the restaurant's country supports Stripe Connect
@@ -330,12 +301,16 @@ export default function ConnectPage() {
     ? COUNTRY_OPTIONS.find((c) => c.value === restaurantCountry)?.stripeConnect
     : true;
 
-  if (isCheckingStatus) {
+  if (isCheckingStatus || isCompletingOnboarding) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-green-600" />
-          <p className="text-gray-600">Checking your payment setup...</p>
+          <p className="text-gray-600">
+            {isCompletingOnboarding
+              ? "Completing your setup..."
+              : "Checking your payment setup..."}
+          </p>
         </div>
       </div>
     );
@@ -662,27 +637,6 @@ export default function ConnectPage() {
             </Card>
           </motion.div>
         </div>
-
-        {/* Success Dialog */}
-        <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-500" />
-                Setup Complete!
-              </DialogTitle>
-              <DialogDescription>
-                Great! You've successfully set up your Stripe account. You can
-                now accept payments from your customers.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button onClick={handleSuccessContinue} className="w-full">
-                Continue to Dashboard
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Warning Dialog */}
         <Dialog open={showWarningDialog} onOpenChange={setShowWarningDialog}>

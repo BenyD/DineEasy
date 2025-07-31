@@ -34,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { PhoneInput } from "@/components/ui/phone-input";
 import {
   Select,
   SelectContent,
@@ -42,7 +43,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
-import { CURRENCIES, COUNTRY_OPTIONS, type Currency } from "@/lib/constants";
+import { useRestaurantWebSocket } from "@/hooks/useRestaurantWebSocket";
+import {
+  CURRENCIES,
+  COUNTRY_OPTIONS,
+  CURRENCY_SYMBOLS,
+  type Currency,
+} from "@/lib/constants";
+import { COUNTRIES } from "@/lib/constants/countries";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -93,11 +101,88 @@ const CUISINE_TYPES = [
   { value: "other", label: "Other" },
 ] as const;
 
-const PRICE_RANGES = [
-  { value: "$", label: "$ (Under 15 CHF)" },
-  { value: "$$", label: "$$ (15-30 CHF)" },
-  { value: "$$$", label: "$$$ (31-60 CHF)" },
-  { value: "$$$$", label: "$$$$ (60+ CHF)" },
+// Function to generate price ranges based on currency
+const getPriceRanges = (currency: string) => {
+  const symbol = CURRENCY_SYMBOLS[currency as Currency] || "CHF";
+
+  // Define price ranges based on currency
+  const priceRanges = {
+    CHF: [
+      { value: "$", label: `Budget Friendly (Under 15 ${symbol})` },
+      { value: "$$", label: `Moderate (15-30 ${symbol})` },
+      {
+        value: "$$$",
+        label: `Upscale (31-60 ${symbol})`,
+      },
+      {
+        value: "$$$$",
+        label: `Fine Dining (60+ ${symbol})`,
+      },
+    ],
+    USD: [
+      { value: "$", label: `Budget Friendly (Under 15 ${symbol})` },
+      { value: "$$", label: `Moderate (15-30 ${symbol})` },
+      { value: "$$$", label: `Upscale (31-60 ${symbol})` },
+      {
+        value: "$$$$",
+        label: `Fine Dining (60+ ${symbol})`,
+      },
+    ],
+    EUR: [
+      { value: "$", label: `Budget Friendly (Under 15 ${symbol})` },
+      { value: "$$", label: `Moderate (15-30 ${symbol})` },
+      { value: "$$$", label: `Upscale (31-60 ${symbol})` },
+      {
+        value: "$$$$",
+        label: `Fine Dining (60+ ${symbol})`,
+      },
+    ],
+    GBP: [
+      { value: "$", label: `Budget Friendly (Under 15 ${symbol})` },
+      { value: "$$", label: `Moderate (15-30 ${symbol})` },
+      { value: "$$$", label: `Upscale (31-60 ${symbol})` },
+      {
+        value: "$$$$",
+        label: `Fine Dining (60+ ${symbol})`,
+      },
+    ],
+    JPY: [
+      { value: "$", label: `Budget Friendly (Under 1500 ${symbol})` },
+      { value: "$$", label: `Moderate (1500-3000 ${symbol})` },
+      {
+        value: "$$$",
+        label: `Upscale (3000-6000 ${symbol})`,
+      },
+      {
+        value: "$$$$",
+        label: `Fine Dining (6000+ ${symbol})`,
+      },
+    ],
+  };
+
+  // Return currency-specific ranges or fallback to generic format
+  return (
+    priceRanges[currency as keyof typeof priceRanges] ||
+    ([
+      { value: "$", label: `Budget Friendly (Under 15 ${symbol})` },
+      { value: "$$", label: `Moderate (15-30 ${symbol})` },
+      { value: "$$$", label: `Upscale (31-60 ${symbol})` },
+      {
+        value: "$$$$",
+        label: `Fine Dining (60+ ${symbol})`,
+      },
+    ] as const)
+  );
+};
+
+const SEATING_CAPACITY_OPTIONS = [
+  { value: "1-10", label: "1-10 seats" },
+  { value: "11-25", label: "11-25 seats" },
+  { value: "26-50", label: "26-50 seats" },
+  { value: "51-100", label: "51-100 seats" },
+  { value: "101-200", label: "101-200 seats" },
+  { value: "201-500", label: "201-500 seats" },
+  { value: "500+", label: "500+ seats" },
 ] as const;
 
 // Add animation variants at the top level
@@ -155,13 +240,13 @@ export default function SettingsPage() {
         } = await supabase.auth.getUser();
 
         if (user) {
-          const { data: profile, error } = await supabase
+          const { data: profile } = await supabase
             .from("profiles")
             .select("full_name, avatar_url")
             .eq("id", user.id)
             .single();
 
-          if (!error && profile) {
+          if (profile) {
             setProfileData({
               fullName: profile.full_name || "",
               avatarUrl: profile.avatar_url || "",
@@ -176,6 +261,19 @@ export default function SettingsPage() {
     fetchProfile();
   }, []);
 
+  // Restaurant WebSocket for real-time status updates
+  useRestaurantWebSocket({
+    restaurantId: restaurant?.id,
+    onRestaurantUpdated: (updatedRestaurant) => {
+      // Update the restaurant data in the store
+      if (updatedRestaurant) {
+        // Refresh restaurant data to get the latest status
+        fetchRestaurant();
+      }
+    },
+    enabled: !!restaurant?.id,
+  });
+
   // Initialize form data from restaurant
   const [formData, setFormData] = useState({
     name: "",
@@ -189,7 +287,7 @@ export default function SettingsPage() {
     website: "",
     cuisine: "",
     type: "restaurant" as const,
-    currency: currency,
+    currency: (currency || "CHF") as Currency,
     taxRate: 0,
     vatNumber: "",
     priceRange: "$" as const,
@@ -197,6 +295,7 @@ export default function SettingsPage() {
     acceptsReservations: false,
     deliveryAvailable: false,
     takeoutAvailable: false,
+    autoOpenClose: false,
     openingHours: {
       monday: { open: "09:00", close: "17:00" },
       tuesday: { open: "09:00", close: "17:00" },
@@ -260,10 +359,11 @@ export default function SettingsPage() {
         taxRate: restaurant.tax_rate || 0,
         vatNumber: restaurant.vat_number || "",
         priceRange: restaurant.price_range || "$",
-        seatingCapacity: restaurant.seating_capacity?.toString() || "",
+        seatingCapacity: restaurant.seating_capacity || "",
         acceptsReservations: restaurant.accepts_reservations || false,
         deliveryAvailable: restaurant.delivery_available || false,
         takeoutAvailable: restaurant.takeout_available || false,
+        autoOpenClose: restaurant.auto_open_close || false,
         openingHours: restaurant.opening_hours || {
           monday: { open: "09:00", close: "17:00" },
           tuesday: { open: "09:00", close: "17:00" },
@@ -318,7 +418,7 @@ export default function SettingsPage() {
         phone: formData.phone,
         address: formData.address,
         city: formData.city,
-        postal_code: formData.postalCode,
+        postalCode: formData.postalCode,
         country: formData.country,
         description: formData.description,
         website: formData.website,
@@ -328,12 +428,11 @@ export default function SettingsPage() {
         tax_rate: formData.taxRate,
         vat_number: formData.vatNumber,
         price_range: formData.priceRange,
-        seating_capacity: formData.seatingCapacity
-          ? parseInt(formData.seatingCapacity)
-          : null,
+        seating_capacity: formData.seatingCapacity || null,
         accepts_reservations: formData.acceptsReservations,
         delivery_available: formData.deliveryAvailable,
         takeout_available: formData.takeoutAvailable,
+        auto_open_close: formData.autoOpenClose,
         opening_hours: formData.openingHours,
       });
 
@@ -1052,14 +1151,16 @@ export default function SettingsPage() {
                               <SelectValue placeholder="Select price range" />
                             </SelectTrigger>
                             <SelectContent>
-                              {PRICE_RANGES.map((range) => (
-                                <SelectItem
-                                  key={range.value}
-                                  value={range.value}
-                                >
-                                  {range.label}
-                                </SelectItem>
-                              ))}
+                              {getPriceRanges(formData.currency).map(
+                                (range) => (
+                                  <SelectItem
+                                    key={range.value}
+                                    value={range.value}
+                                  >
+                                    {range.label}
+                                  </SelectItem>
+                                )
+                              )}
                             </SelectContent>
                           </Select>
                         </div>
@@ -1163,15 +1264,15 @@ export default function SettingsPage() {
                           <Label htmlFor="phone" className="text-base">
                             Phone Number
                           </Label>
-                          <Input
-                            id="phone"
+                          <PhoneInput
                             value={formData.phone}
-                            onChange={(e) =>
+                            onChange={(value) =>
                               setFormData({
                                 ...formData,
-                                phone: e.target.value,
+                                phone: value,
                               })
                             }
+                            defaultCountry={restaurant.country || "CH"}
                             className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                             disabled={!isEditing}
                           />
@@ -1248,19 +1349,30 @@ export default function SettingsPage() {
                           >
                             Seating Capacity
                           </Label>
-                          <Input
-                            id="seatingCapacity"
+                          <Select
                             value={formData.seatingCapacity}
-                            onChange={(e) =>
+                            onValueChange={(value) =>
                               setFormData({
                                 ...formData,
-                                seatingCapacity: e.target.value,
+                                seatingCapacity: value,
                               })
                             }
-                            className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                             disabled={!isEditing}
-                            type="number"
-                          />
+                          >
+                            <SelectTrigger className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                              <SelectValue placeholder="Select seating capacity" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {SEATING_CAPACITY_OPTIONS.map((option) => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </motion.div>
@@ -1324,6 +1436,14 @@ export default function SettingsPage() {
                                 ...formData,
                                 postalCode: e.target.value,
                               })
+                            }
+                            placeholder={
+                              restaurant.country &&
+                              COUNTRIES[
+                                restaurant.country as keyof typeof COUNTRIES
+                              ]?.postalCodeFormat
+                                ? `e.g., ${COUNTRIES[restaurant.country as keyof typeof COUNTRIES]?.postalCodeFormat}`
+                                : "Postal Code"
                             }
                             className="transition-all duration-300 focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                             disabled={!isEditing}
@@ -1462,6 +1582,31 @@ export default function SettingsPage() {
                           </motion.div>
                         ))}
                       </div>
+
+                      {/* Auto Open/Close Toggle */}
+                      <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="space-y-1">
+                          <Label className="text-base font-medium text-blue-900">
+                            Auto Open/Close
+                          </Label>
+                          <p className="text-sm text-blue-700">
+                            Automatically open and close the restaurant based on
+                            your opening hours
+                          </p>
+                        </div>
+                        <Switch
+                          id="autoOpenClose"
+                          checked={formData.autoOpenClose}
+                          onCheckedChange={(checked) =>
+                            setFormData({
+                              ...formData,
+                              autoOpenClose: checked,
+                            })
+                          }
+                          disabled={!isEditing}
+                          className="data-[state=checked]:bg-blue-600"
+                        />
+                      </div>
                     </motion.div>
 
                     <Separator />
@@ -1480,6 +1625,11 @@ export default function SettingsPage() {
                             {restaurant.is_open
                               ? "Currently open for business"
                               : "Currently closed"}
+                            {restaurant.auto_open_close && (
+                              <span className="block text-xs text-blue-600 mt-1">
+                                Auto-managed based on opening hours
+                              </span>
+                            )}
                           </p>
                         </div>
                         <Button
@@ -1492,12 +1642,22 @@ export default function SettingsPage() {
                               ? "bg-red-600 hover:bg-red-700"
                               : "bg-green-600 hover:bg-green-700"
                           }
+                          disabled={restaurant.auto_open_close}
                         >
                           {restaurant.is_open
                             ? "Close Restaurant"
                             : "Open Restaurant"}
                         </Button>
                       </div>
+                      {restaurant.auto_open_close && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-sm text-blue-700">
+                            Restaurant status is automatically managed based on
+                            your opening hours. You can disable auto open/close
+                            above to manually control the status.
+                          </p>
+                        </div>
+                      )}
                     </motion.div>
 
                     <Separator />

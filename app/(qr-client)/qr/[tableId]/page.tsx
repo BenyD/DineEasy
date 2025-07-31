@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -20,8 +20,19 @@ import { MenuItemCard } from "@/components/qr/MenuItemCard";
 import { CartButton } from "@/components/qr/CartButton";
 import { useCart } from "@/hooks/useCart";
 import { getTableInfo, getRestaurantMenu } from "@/lib/actions/qr-client";
+import { checkRestaurantOpenStatus } from "@/lib/actions/restaurant";
+import { useRestaurantWebSocket } from "@/hooks/useRestaurantWebSocket";
 import type { MenuItem } from "@/types";
 import Link from "next/link";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface Category {
   id: string;
@@ -45,10 +56,45 @@ export default function QRClientPage({
   const [showSearch, setShowSearch] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
+  const [restaurantOpenStatus, setRestaurantOpenStatus] = useState<{
+    isOpen: boolean;
+    autoManaged: boolean;
+    currentTime?: string;
+    nextOpen?: string;
+    nextClose?: string;
+  } | null>(null);
   const maxRetries = 3;
 
-  const { cart, addToCart, updateQuantity, getTotalItems, getTotalPrice } =
-    useCart(tableData?.id);
+  const {
+    cart,
+    addToCart,
+    updateQuantity,
+    getTotalItems,
+    getTotalPrice,
+    showTableChangeWarning,
+    confirmTableChange,
+    cancelTableChange,
+  } = useCart(tableData?.id);
+
+  // Restaurant WebSocket for real-time status updates
+  const { isConnected: isRestaurantWebSocketConnected } =
+    useRestaurantWebSocket({
+      restaurantId: restaurantData?.id,
+      onRestaurantStatusChanged: (isOpen, wasOpen) => {
+        console.log("Restaurant status changed:", { isOpen, wasOpen });
+        setRestaurantOpenStatus((prev) => (prev ? { ...prev, isOpen } : null));
+
+        // Show immediate feedback to user
+        if (isOpen) {
+          toast.success("Restaurant is now open for orders!");
+        } else {
+          toast.info(
+            "Restaurant is now closed. Orders are no longer accepted."
+          );
+        }
+      },
+      enabled: !!restaurantData?.id,
+    });
 
   // Monitor network status
   useEffect(() => {
@@ -110,6 +156,14 @@ export default function QRClientPage({
           stripeAccountId: restaurantData.stripe_account_id,
           paymentMethods: restaurantData.payment_methods,
         });
+
+        // Check restaurant open status
+        const openStatusResult = await checkRestaurantOpenStatus(
+          restaurantData.id
+        );
+        setRestaurantOpenStatus(openStatusResult);
+
+        console.log("QR Client - Restaurant open status:", openStatusResult);
 
         // Validate restaurant ID before fetching menu
         if (
@@ -173,54 +227,171 @@ export default function QRClientPage({
     loadData();
   }, [params]);
 
-  // Filter categories based on search query
-  const filteredCategories = categories
-    .map((category) => ({
-      ...category,
-      items: category.items.filter(
-        (item) =>
-          item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      ),
-    }))
-    .filter((category) => category.items.length > 0);
+  // Debounced search to improve performance
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Use debounced search query for filtering
+  const filteredCategories = useMemo(() => {
+    return categories
+      .map((category) => ({
+        ...category,
+        items: category.items.filter(
+          (item) =>
+            item.name
+              .toLowerCase()
+              .includes(debouncedSearchQuery.toLowerCase()) ||
+            item.description
+              ?.toLowerCase()
+              .includes(debouncedSearchQuery.toLowerCase())
+        ),
+      }))
+      .filter((category) => category.items.length > 0);
+  }, [categories, debouncedSearchQuery]);
+
+  // Performance optimization: Only render visible items with proper cleanup
+  const [visibleItems, setVisibleItems] = useState<Set<string>>(new Set());
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  useEffect(() => {
+    // Cleanup previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    // Create new observer
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        setVisibleItems((prev) => {
+          const newSet = new Set(prev);
+          entries.forEach((entry) => {
+            const itemId = entry.target.getAttribute("data-item-id");
+            if (itemId) {
+              if (entry.isIntersecting) {
+                newSet.add(itemId);
+              } else {
+                newSet.delete(itemId);
+              }
+            }
+          });
+          return newSet;
+        });
+      },
+      {
+        threshold: 0.1,
+        rootMargin: "50px", // Start loading items 50px before they come into view
+      }
+    );
+
+    // Observe all menu item cards
+    const itemElements = document.querySelectorAll("[data-item-id]");
+    itemElements.forEach((el) => {
+      observerRef.current?.observe(el);
+    });
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
+    };
+  }, [filteredCategories]);
 
   // Get active category data
   const activeCategoryData = categories.find(
     (cat) => cat.id === activeCategory
   );
 
-  // Performance optimization: Only render visible items
-  const [visibleItems, setVisibleItems] = useState<Set<string>>(new Set());
+  // Handle adding items to cart with restaurant status check
+  const handleAddToCart = (item: MenuItem) => {
+    // Check if restaurant is closed
+    if (restaurantOpenStatus && !restaurantOpenStatus.isOpen) {
+      toast.error(
+        "Restaurant is currently closed. Orders are not accepted at this time."
+      );
+      return;
+    }
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const itemId = entry.target.getAttribute("data-item-id");
-          if (itemId) {
-            setVisibleItems((prev) => {
-              const newSet = new Set(prev);
-              if (entry.isIntersecting) {
-                newSet.add(itemId);
-              } else {
-                newSet.delete(itemId);
-              }
-              return newSet;
-            });
-          }
-        });
-      },
-      { threshold: 0.1 }
+    // Check if item is available
+    if (!item.available) {
+      toast.error("This item is currently unavailable.");
+      return;
+    }
+
+    addToCart(item);
+    toast.success(`${item.name} added to cart`);
+  };
+
+  // Handle quantity updates with restaurant status check
+  const handleQuantityChange = (id: string, newQuantity: number) => {
+    // Find the item to check its availability
+    const item = categories
+      .flatMap((cat) => cat.items)
+      .find((item) => item.id === id);
+
+    if (!item) return;
+
+    // Check if restaurant is closed
+    if (restaurantOpenStatus && !restaurantOpenStatus.isOpen) {
+      toast.error(
+        "Restaurant is currently closed. Orders are not accepted at this time."
+      );
+      return;
+    }
+
+    // Check if item is available
+    if (!item.available) {
+      toast.error("This item is currently unavailable.");
+      return;
+    }
+
+    updateQuantity(id, newQuantity);
+  };
+
+  // Enhanced error handling with retry
+  const handleRetry = () => {
+    if (retryCount < maxRetries) {
+      setRetryCount((prev) => prev + 1);
+      setError(null);
+      // Reload data by calling the effect again
+      window.location.reload();
+    } else {
+      toast.error("Maximum retry attempts reached. Please refresh the page.");
+    }
+  };
+
+  // Enhanced error display with retry option
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-red-600" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            Something went wrong
+          </h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <div className="flex flex-col gap-3">
+            <Button onClick={handleRetry} disabled={retryCount >= maxRetries}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Try Again ({retryCount}/{maxRetries})
+            </Button>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              Refresh Page
+            </Button>
+          </div>
+        </div>
+      </div>
     );
-
-    // Observe all menu item cards
-    document.querySelectorAll("[data-item-id]").forEach((el) => {
-      observer.observe(el);
-    });
-
-    return () => observer.disconnect();
-  }, [filteredCategories]);
+  }
 
   if (loading) {
     return (
@@ -275,35 +446,32 @@ export default function QRClientPage({
     );
   }
 
-  if (error) {
+  if (restaurantOpenStatus && !restaurantOpenStatus.isOpen) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-4">
         <div className="text-center max-w-md">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-red-600" />
+            <Clock className="w-8 h-8 text-red-600" />
           </div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            Unable to load menu
+            Restaurant is currently closed
           </h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <div className="space-y-3">
-            <Button
-              onClick={() => {
-                setError(null);
-                setRetryCount((prev) => prev + 1);
-                window.location.reload();
-              }}
-              className="bg-green-600 hover:bg-green-700"
-              disabled={retryCount >= maxRetries}
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              {retryCount >= maxRetries ? "Max retries reached" : "Try Again"}
-            </Button>
-            {retryCount >= maxRetries && (
-              <p className="text-sm text-gray-500">
-                Please contact restaurant staff for assistance
-              </p>
-            )}
+          <p className="text-gray-600 mb-6">
+            {restaurantData?.name} is not accepting orders at this time.
+            {restaurantOpenStatus.autoManaged &&
+              restaurantOpenStatus.nextOpen && (
+                <span className="block mt-2 text-sm">
+                  We'll be open again at{" "}
+                  {new Date(restaurantOpenStatus.nextOpen).toLocaleTimeString(
+                    [],
+                    { hour: "2-digit", minute: "2-digit" }
+                  )}
+                </span>
+              )}
+          </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-500 bg-gray-50 px-4 py-2 rounded-full">
+            <Clock className="w-4 h-4" />
+            <span>Check back during opening hours</span>
           </div>
         </div>
       </div>
@@ -589,11 +757,11 @@ export default function QRClientPage({
                     <MenuItemCard
                       key={item.id}
                       item={item}
-                      onAddToCart={addToCart}
+                      onAddToCart={handleAddToCart}
                       cartQuantity={
                         cart.find((c) => c.id === item.id)?.quantity || 0
                       }
-                      onUpdateQuantity={updateQuantity}
+                      onUpdateQuantity={handleQuantityChange}
                       index={index}
                       isVisible={visibleItems.has(item.id)}
                     />
@@ -605,13 +773,51 @@ export default function QRClientPage({
         )}
       </div>
 
+      {/* Table Change Warning Dialog */}
+      <Dialog open={showTableChangeWarning} onOpenChange={cancelTableChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Switch to Different Table?</DialogTitle>
+            <DialogDescription>
+              You have items in your cart from a different table. Switching
+              tables will clear your current cart.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-amber-700 mb-2">
+                <AlertCircle className="w-4 h-4" />
+                <span className="font-medium">Cart will be cleared</span>
+              </div>
+              <p className="text-sm text-amber-600">
+                You have {getTotalItems()} item
+                {getTotalItems() !== 1 ? "s" : ""} in your cart worth{" "}
+                {getTotalPrice().toFixed(2)} CHF.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelTableChange}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmTableChange}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Clear Cart & Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Cart Button */}
       {getTotalItems() > 0 && (
         <CartButton
           totalItems={getTotalItems()}
           totalPrice={getTotalPrice()}
-          tableId={tableData.id}
+          tableId={tableData?.id}
           currency={restaurantData?.currency || "CHF"}
+          disabled={restaurantOpenStatus ? !restaurantOpenStatus.isOpen : false}
         />
       )}
     </div>

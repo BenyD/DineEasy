@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-06-30.basil",
+  apiVersion: "2025-06-30.basil", // Default Stripe API version
 });
 
 // Pricing configuration with improved .99 pricing format

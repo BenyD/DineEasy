@@ -253,8 +253,8 @@ export default function SelectPlanPage() {
                       <span className="text-3xl font-bold">
                         {formatPrice(
                           annual
-                            ? plan.price[selectedCurrency].yearly
-                            : plan.price[selectedCurrency].monthly,
+                            ? plan.price[selectedCurrency as "CHF"].yearly
+                            : plan.price[selectedCurrency as "CHF"].monthly,
                           selectedCurrency
                         )}
                       </span>
@@ -266,8 +266,8 @@ export default function SelectPlanPage() {
                       <p className="text-sm text-green-600 mt-1">
                         Save $
                         {(
-                          plan.price[selectedCurrency].monthly * 12 -
-                          plan.price[selectedCurrency].yearly
+                          plan.price[selectedCurrency as "CHF"].monthly * 12 -
+                          plan.price[selectedCurrency as "CHF"].yearly
                         ).toFixed(2)}{" "}
                         per year
                       </p>

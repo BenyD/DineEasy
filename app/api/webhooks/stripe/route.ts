@@ -8,7 +8,11 @@ import {
   sendRefundNotificationEmail,
   sendPaymentFailedEmail,
   sendPaymentDisputeEmail,
+  sendStripeAccountDeletionEmail,
+  sendPartialPaymentNotificationEmail,
 } from "@/lib/email";
+import { monitoring, recordWebhook, recordError } from "@/lib/utils/monitoring";
+import { retryStripe, retryDatabase } from "@/lib/utils/retry";
 import type { Stripe } from "stripe";
 
 // Define types for database function responses
@@ -30,11 +34,14 @@ interface StripeAccountRestaurant {
   stripe_account_enabled: boolean;
 }
 
-// Get the webhook secret
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+// Get the webhook secrets (support multiple secrets for different environments)
+const webhookSecrets = [
+  process.env.STRIPE_WEBHOOK_SECRET,
+  process.env.STRIPE_WEBHOOK_SECRET_BACKUP,
+].filter(Boolean);
 
-if (!webhookSecret) {
-  throw new Error("Stripe webhook secret is not set");
+if (webhookSecrets.length === 0) {
+  throw new Error("No Stripe webhook secrets configured");
 }
 
 export async function POST(req: Request) {
@@ -47,12 +54,26 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Pass the environment-specific webhook secret
-    const event = await constructWebhookEvent(
-      body,
-      signature,
-      webhookSecret as string
-    );
+    // Try multiple webhook secrets for signature verification
+    let event: Stripe.Event | undefined;
+    let lastError: Error | undefined;
+
+    for (const secret of webhookSecrets) {
+      if (!secret) continue;
+      try {
+        event = await constructWebhookEvent(body, signature, secret);
+        break;
+      } catch (error) {
+        lastError = error as Error;
+        continue;
+      }
+    }
+
+    if (!event) {
+      console.error("All webhook signature verifications failed:", lastError);
+      return new NextResponse("Invalid signature", { status: 400 });
+    }
+
     const supabase = createClient();
     const adminSupabase = createAdminClient();
 
@@ -63,6 +84,42 @@ export async function POST(req: Request) {
       created: new Date(event.created * 1000).toISOString(),
       livemode: event.livemode,
     });
+
+    // Record webhook event for monitoring
+    recordWebhook(event.type, true);
+
+    // Check if webhook event was already processed (idempotency)
+    const { data: existingEvent } = await adminSupabase
+      .from("webhook_events")
+      .select("id, processed_at, status")
+      .eq("stripe_event_id", event.id)
+      .single();
+
+    if (existingEvent?.processed_at) {
+      console.log("Webhook event already processed:", {
+        eventId: event.id,
+        processedAt: existingEvent.processed_at,
+        status: existingEvent.status,
+      });
+      return new NextResponse("Event already processed", { status: 200 });
+    }
+
+    // Record webhook event for idempotency tracking
+    const { error: recordError } = await adminSupabase
+      .from("webhook_events")
+      .insert({
+        stripe_event_id: event.id,
+        event_type: event.type,
+        livemode: event.livemode,
+        created_at: new Date(event.created * 1000).toISOString(),
+        status: "processing",
+        processed_at: null,
+      });
+
+    if (recordError) {
+      console.error("Error recording webhook event:", recordError);
+      // Continue processing even if recording fails
+    }
 
     // Helper function to check if a customer has active subscriptions
     const hasActiveSubscriptions = async (
@@ -81,7 +138,7 @@ export async function POST(req: Request) {
       }
     };
 
-    // Helper function for safe database operations with retry
+    // Enhanced helper function for safe database operations with connection retry
     const safeDatabaseOperation = async <T>(
       operation: () => Promise<T>,
       operationName: string,
@@ -94,10 +151,30 @@ export async function POST(req: Request) {
           return await operation();
         } catch (error) {
           lastError = error as Error;
+
+          // Check if it's a connection error
+          if (
+            (error as any).message?.includes("connection") ||
+            (error as any).code === "ECONNRESET"
+          ) {
+            console.error(
+              `${operationName} connection error attempt ${attempt}:`,
+              error
+            );
+
+            if (attempt < maxRetries) {
+              // Wait longer for connection issues
+              await new Promise((resolve) =>
+                setTimeout(resolve, Math.pow(3, attempt) * 1000)
+              );
+              continue;
+            }
+          }
+
+          // For other errors, use normal retry logic
           console.error(`${operationName} attempt ${attempt} failed:`, error);
 
           if (attempt < maxRetries) {
-            // Wait before retry with exponential backoff
             await new Promise((resolve) =>
               setTimeout(resolve, Math.pow(2, attempt) * 1000)
             );
@@ -106,6 +183,92 @@ export async function POST(req: Request) {
       }
 
       throw lastError!;
+    };
+
+    // Helper function to handle partial payments
+    const handlePartialPayment = async (invoice: Stripe.Invoice) => {
+      try {
+        console.log("Handling partial payment for invoice:", invoice.id);
+
+        // Get subscription details
+        const subscription = await stripe.subscriptions.retrieve(
+          (invoice as any).subscription as string
+        );
+
+        if (!subscription.metadata.restaurantId) {
+          console.log(
+            "No restaurant ID in subscription metadata, skipping partial payment handling"
+          );
+          return;
+        }
+
+        // Calculate payment percentages
+        const amountPaid = invoice.amount_paid;
+        const amountDue = invoice.amount_due;
+        const percentagePaid = Math.round((amountPaid / amountDue) * 100);
+        const remainingAmount = amountDue - amountPaid;
+
+        console.log("Partial payment analysis:", {
+          subscriptionId: subscription.id,
+          restaurantId: subscription.metadata.restaurantId,
+          amountPaid,
+          amountDue,
+          percentagePaid,
+          remainingAmount,
+        });
+
+        // Update subscription metadata to track partial payment
+        await stripe.subscriptions.update(subscription.id, {
+          metadata: {
+            ...subscription.metadata,
+            partial_payment_amount: amountPaid.toString(),
+            partial_payment_percentage: percentagePaid.toString(),
+            partial_payment_date: new Date().toISOString(),
+            remaining_amount: remainingAmount.toString(),
+          },
+        });
+
+        // Send partial payment notification email
+        try {
+          const customer = (await stripe.customers.retrieve(
+            subscription.customer as string
+          )) as Stripe.Customer;
+
+          if (customer.email) {
+            const { data: restaurant } = await adminSupabase
+              .from("restaurants")
+              .select("name")
+              .eq("id", subscription.metadata.restaurantId)
+              .single();
+
+            await sendPartialPaymentNotificationEmail(customer.email, {
+              invoiceId: invoice.id || "unknown",
+              subscriptionPlan: subscription.metadata.plan,
+              amountPaid,
+              amountDue,
+              percentagePaid,
+              remainingAmount,
+              currency: invoice.currency,
+              restaurantName: restaurant?.name,
+              customerName: customer.name || undefined,
+            });
+
+            console.log(
+              "Partial payment notification email sent to:",
+              customer.email
+            );
+          }
+        } catch (emailError) {
+          console.error(
+            "Error sending partial payment notification email:",
+            emailError
+          );
+          // Don't fail the webhook for email errors
+        }
+      } catch (error) {
+        console.error("Error handling partial payment:", error);
+        // Don't fail the webhook for partial payment handling errors
+      }
     };
 
     switch (event.type) {
@@ -274,26 +437,115 @@ export async function POST(req: Request) {
       }
 
       case "account.application.deauthorized": {
-        const application = event.data.object as Stripe.Application;
+        const application = event.data.object as any; // Use any since Stripe types might be incomplete
 
         console.log("Processing account.application.deauthorized event:", {
           applicationId: application.id,
+          accountId: application.account,
         });
 
-        // For deauthorization, we need to find restaurants by searching for the account ID
-        // The application object doesn't contain the account ID directly
-        // We'll need to handle this differently - either by storing the application ID
-        // or by handling this event differently
+        // Handle Stripe Connect account deauthorization
+        if (application.account) {
+          try {
+            // Find restaurants using this account
+            const { data: restaurants, error: fetchError } = await adminSupabase
+              .from("restaurants")
+              .select("id, name, email, owner_id")
+              .eq("stripe_account_id", application.account);
 
-        console.log(
-          "Account deauthorization detected. Manual intervention may be required."
-        );
+            if (fetchError) {
+              console.error(
+                "Error fetching restaurants for deauthorized account:",
+                fetchError
+              );
+              break;
+            }
 
-        // For now, we'll log this event but not take action
-        // In a production environment, you might want to:
-        // 1. Store application IDs in the database
-        // 2. Use a different webhook event
-        // 3. Handle this through Stripe dashboard notifications
+            if (!restaurants || restaurants.length === 0) {
+              console.log(
+                "No restaurants found for deauthorized account:",
+                application.account
+              );
+              break;
+            }
+
+            console.log(
+              `Found ${restaurants.length} restaurants affected by account deauthorization`
+            );
+
+            // Process each affected restaurant
+            for (const restaurant of restaurants) {
+              try {
+                // Disable payment processing
+                const { error: updateError } = await adminSupabase
+                  .from("restaurants")
+                  .update({
+                    stripe_account_enabled: false,
+                    stripe_account_deleted: true,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", restaurant.id);
+
+                if (updateError) {
+                  console.error(
+                    "Error updating restaurant after deauthorization:",
+                    {
+                      restaurantId: restaurant.id,
+                      error: updateError,
+                    }
+                  );
+                  continue;
+                }
+
+                console.log(
+                  "Successfully disabled payment processing for restaurant:",
+                  {
+                    restaurantId: restaurant.id,
+                    restaurantName: restaurant.name,
+                    accountId: application.account,
+                  }
+                );
+
+                // Send notification email to restaurant owner
+                try {
+                  // Get user email from auth
+                  const { data: user } =
+                    await adminSupabase.auth.admin.getUserById(
+                      restaurant.owner_id
+                    );
+
+                  if (user?.user?.email) {
+                    await sendStripeAccountDeletionEmail(user.user.email, {
+                      restaurantName: restaurant.name,
+                      accountId: application.account,
+                      deauthorizationDate: new Date().toLocaleDateString(),
+                    });
+
+                    console.log(
+                      "Sent deauthorization notification email to:",
+                      user.user.email
+                    );
+                  }
+                } catch (emailError) {
+                  console.error(
+                    "Error sending deauthorization email:",
+                    emailError
+                  );
+                  // Don't fail the webhook for email errors
+                }
+              } catch (restaurantError) {
+                console.error("Error processing restaurant deauthorization:", {
+                  restaurantId: restaurant.id,
+                  error: restaurantError,
+                });
+              }
+            }
+          } catch (error) {
+            console.error("Error handling account deauthorization:", error);
+          }
+        } else {
+          console.log("No account ID in deauthorization event, cannot process");
+        }
 
         break;
       }
@@ -865,6 +1117,9 @@ export async function POST(req: Request) {
         console.log("Processing payment_intent.succeeded:", {
           id: paymentIntent.id,
           amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+          transfer_data: paymentIntent.transfer_data,
+          application_fee_amount: paymentIntent.application_fee_amount,
           metadata: paymentIntent.metadata,
         });
 
@@ -876,26 +1131,110 @@ export async function POST(req: Request) {
             tableId: paymentIntent.metadata.tableId,
             amount: paymentIntent.amount / 100,
             platformFee: paymentIntent.metadata.platformFee,
+            transferDestination: paymentIntent.transfer_data?.destination,
+            applicationFee: paymentIntent.application_fee_amount,
           });
 
-          // Update order status to completed
-          if (paymentIntent.metadata.orderId) {
-            const { error: updateError } = await adminSupabase
-              .from("orders")
-              .update({
-                status: "completed",
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", paymentIntent.metadata.orderId);
+          // Enhanced validation for restaurant payout
+          if (!paymentIntent.transfer_data?.destination) {
+            console.error(
+              "❌ CRITICAL: No transfer destination configured for QR payment"
+            );
+            // Log this as a critical error for monitoring
+            console.error(
+              "❌ CRITICAL: Payment payout missing - no transfer destination configured",
+              {
+                paymentIntentId: paymentIntent.id,
+                orderId: paymentIntent.metadata.orderId,
+                restaurantId: paymentIntent.metadata.restaurantId,
+              }
+            );
+          } else {
+            // Verify the transfer destination matches the restaurant's Stripe account
+            const { data: restaurant } = await adminSupabase
+              .from("restaurants")
+              .select("stripe_account_id, name")
+              .eq("id", paymentIntent.metadata.restaurantId)
+              .single();
 
-            if (updateError) {
-              console.error("Error updating QR order status:", updateError);
-            } else {
-              console.log(
-                "QR order status updated to completed:",
-                paymentIntent.metadata.orderId
+            if (
+              restaurant &&
+              restaurant.stripe_account_id !==
+                paymentIntent.transfer_data.destination
+            ) {
+              console.error("❌ CRITICAL: Transfer destination mismatch:", {
+                expected: restaurant.stripe_account_id,
+                actual: paymentIntent.transfer_data.destination,
+                restaurantName: restaurant.name,
+              });
+              console.error(
+                "❌ CRITICAL: Payment payout mismatch - transfer destination doesn't match restaurant account",
+                {
+                  paymentIntentId: paymentIntent.id,
+                  expectedAccount: restaurant.stripe_account_id,
+                  actualAccount: paymentIntent.transfer_data.destination,
+                }
               );
+            } else {
+              console.log("✅ Money transfer configured correctly:", {
+                destination: paymentIntent.transfer_data.destination,
+                amount: paymentIntent.amount / 100,
+                applicationFee: paymentIntent.application_fee_amount
+                  ? paymentIntent.application_fee_amount / 100
+                  : 0,
+                restaurantAmount:
+                  (paymentIntent.amount -
+                    (paymentIntent.application_fee_amount || 0)) /
+                  100,
+                restaurantName: restaurant?.name || "Unknown",
+              });
             }
+          }
+
+          // Enhanced order status update with retry mechanism
+          if (paymentIntent.metadata.orderId) {
+            const updateOrderStatus = async (retryCount = 0): Promise<void> => {
+              try {
+                const { error: updateError } = await adminSupabase
+                  .from("orders")
+                  .update({
+                    status: "completed",
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", paymentIntent.metadata.orderId);
+
+                if (updateError) {
+                  throw updateError;
+                }
+
+                console.log(
+                  "✅ QR order status updated to completed:",
+                  paymentIntent.metadata.orderId
+                );
+              } catch (error) {
+                console.error(
+                  `Error updating QR order status (attempt ${retryCount + 1}):`,
+                  error
+                );
+
+                if (retryCount < 3) {
+                  // Retry with exponential backoff
+                  await new Promise((resolve) =>
+                    setTimeout(resolve, 1000 * Math.pow(2, retryCount))
+                  );
+                  return updateOrderStatus(retryCount + 1);
+                } else {
+                  console.error("❌ CRITICAL: Order status update failed", {
+                    orderId: paymentIntent.metadata.orderId,
+                    paymentIntentId: paymentIntent.id,
+                    error:
+                      error instanceof Error ? error.message : "Unknown error",
+                  });
+                }
+              }
+            };
+
+            await updateOrderStatus();
           }
 
           // Create payment record for QR payment
@@ -903,6 +1242,13 @@ export async function POST(req: Request) {
             paymentIntent.metadata.restaurantId &&
             paymentIntent.metadata.orderId
           ) {
+            console.log("Creating payment record for QR payment:", {
+              restaurantId: paymentIntent.metadata.restaurantId,
+              orderId: paymentIntent.metadata.orderId,
+              amount: paymentIntent.amount / 100,
+              stripePaymentId: paymentIntent.id,
+            });
+
             const { error: createError } = await adminSupabase.rpc(
               "create_payment_with_fallback",
               [
@@ -917,9 +1263,34 @@ export async function POST(req: Request) {
             );
 
             if (createError) {
-              console.error("Error creating QR payment record:", createError);
+              console.error(
+                "❌ Error creating QR payment record:",
+                createError
+              );
+
+              // Try direct insert as fallback
+              const { error: directInsertError } = await adminSupabase
+                .from("payments")
+                .insert({
+                  restaurant_id: paymentIntent.metadata.restaurantId,
+                  order_id: paymentIntent.metadata.orderId,
+                  amount: paymentIntent.amount / 100,
+                  status: "completed",
+                  method: "card",
+                  stripe_payment_id: paymentIntent.id,
+                  currency: paymentIntent.currency.toUpperCase(),
+                });
+
+              if (directInsertError) {
+                console.error(
+                  "❌ Direct insert also failed:",
+                  directInsertError
+                );
+              } else {
+                console.log("✅ Payment record created via direct insert");
+              }
             } else {
-              console.log("QR payment record created successfully");
+              console.log("✅ QR payment record created successfully");
             }
           }
 
@@ -992,6 +1363,7 @@ export async function POST(req: Request) {
           id: paymentIntent.id,
           amount: paymentIntent.amount,
           metadata: paymentIntent.metadata,
+          lastPaymentError: paymentIntent.last_payment_error,
         });
 
         // Check if this is a QR payment
@@ -1001,56 +1373,95 @@ export async function POST(req: Request) {
             restaurantId: paymentIntent.metadata.restaurantId,
             tableId: paymentIntent.metadata.tableId,
             amount: paymentIntent.amount / 100,
+            lastPaymentError: paymentIntent.last_payment_error,
           });
 
-          // Update order status to cancelled (not failed, as it's not in enum)
+          // For QR payments, we should be more conservative about cleanup
+          // Only clean up if the payment is definitively failed (not just requiring action)
           if (paymentIntent.metadata.orderId) {
-            const { error: updateError } = await adminSupabase
-              .from("orders")
-              .update({
-                status: "cancelled",
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", paymentIntent.metadata.orderId);
+            try {
+              // Check the order status first
+              const { data: order, error: orderError } = await adminSupabase
+                .from("orders")
+                .select("id, status, stripe_payment_intent_id")
+                .eq("id", paymentIntent.metadata.orderId)
+                .single();
 
-            if (updateError) {
-              console.error(
-                "Error updating QR order status to cancelled:",
-                updateError
-              );
-            } else {
-              console.log(
-                "QR order status updated to cancelled:",
-                paymentIntent.metadata.orderId
-              );
-            }
-          }
+              if (orderError || !order) {
+                console.log(
+                  "Order not found or already cleaned up:",
+                  paymentIntent.metadata.orderId
+                );
+                break;
+              }
 
-          // Create payment record for failed QR payment
-          if (
-            paymentIntent.metadata.restaurantId &&
-            paymentIntent.metadata.orderId
-          ) {
-            const { error: createError } = await adminSupabase.rpc(
-              "create_payment_with_fallback",
-              [
-                paymentIntent.metadata.restaurantId,
-                paymentIntent.metadata.orderId,
-                paymentIntent.amount / 100, // Convert from cents
-                "failed",
-                "card",
-                paymentIntent.id,
-                paymentIntent.currency.toUpperCase(),
-              ]
-            );
+              // Only clean up if the order is still pending and the payment is definitively failed
+              // Don't clean up for temporary failures like 3D Secure authentication
+              const isDefinitiveFailure =
+                paymentIntent.last_payment_error?.type === "card_error" &&
+                paymentIntent.last_payment_error?.decline_code !==
+                  "authentication_required";
 
-            if (createError) {
-              console.error(
-                "Error creating failed QR payment record:",
-                createError
-              );
-            } else {
-              console.log("Failed QR payment record created successfully");
+              if (order.status === "pending" && isDefinitiveFailure) {
+                console.log(
+                  "Definitive payment failure detected, cleaning up order:",
+                  {
+                    orderId: paymentIntent.metadata.orderId,
+                    errorType: paymentIntent.last_payment_error?.type,
+                    declineCode: paymentIntent.last_payment_error?.decline_code,
+                  }
+                );
+
+                // Import the function dynamically since this is a server action
+                const { handleFailedPayment } = await import(
+                  "@/lib/actions/qr-payments"
+                );
+
+                const result = await handleFailedPayment(
+                  paymentIntent.metadata.orderId,
+                  `Payment failed: ${paymentIntent.last_payment_error?.message || "Unknown error"}`
+                );
+
+                if (result.error) {
+                  console.error("Error handling failed payment:", result.error);
+                } else {
+                  console.log(
+                    "Successfully handled failed QR payment:",
+                    paymentIntent.metadata.orderId
+                  );
+                }
+              } else {
+                console.log("Payment failure but not cleaning up order:", {
+                  orderId: paymentIntent.metadata.orderId,
+                  orderStatus: order.status,
+                  isDefinitiveFailure,
+                  errorType: paymentIntent.last_payment_error?.type,
+                  declineCode: paymentIntent.last_payment_error?.decline_code,
+                });
+              }
+            } catch (error) {
+              console.error("Error handling QR payment failure:", error);
+
+              // Fallback: only update status to cancelled, don't delete
+              const { error: updateError } = await adminSupabase
+                .from("orders")
+                .update({
+                  status: "cancelled",
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", paymentIntent.metadata.orderId);
+
+              if (updateError) {
+                console.error(
+                  "Error updating QR order status to cancelled:",
+                  updateError
+                );
+              } else {
+                console.log(
+                  "QR order status updated to cancelled:",
+                  paymentIntent.metadata.orderId
+                );
+              }
             }
           }
 
@@ -1962,8 +2373,27 @@ export async function POST(req: Request) {
           subscription: (invoice as any).subscription,
           customer: invoice.customer,
           amount_due: invoice.amount_due,
+          amount_paid: invoice.amount_paid,
           status: invoice.status,
         });
+
+        // Check for partial payments
+        if (
+          invoice.amount_paid > 0 &&
+          invoice.amount_paid < invoice.amount_due
+        ) {
+          console.log("Partial payment detected:", {
+            amountPaid: invoice.amount_paid,
+            amountDue: invoice.amount_due,
+            remaining: invoice.amount_due - invoice.amount_paid,
+            percentagePaid: Math.round(
+              (invoice.amount_paid / invoice.amount_due) * 100
+            ),
+          });
+
+          // Handle partial payment logic
+          await handlePartialPayment(invoice);
+        }
 
         // Only handle subscription invoices
         if (!(invoice as any).subscription) {
@@ -2372,6 +2802,19 @@ export async function POST(req: Request) {
 
         break;
       }
+    }
+
+    // Update webhook event status to processed
+    const { error: updateError } = await adminSupabase
+      .from("webhook_events")
+      .update({
+        status: "processed",
+        processed_at: new Date().toISOString(),
+      })
+      .eq("stripe_event_id", event.id);
+
+    if (updateError) {
+      console.error("Error updating webhook event status:", updateError);
     }
 
     return new NextResponse("Webhook processed", { status: 200 });

@@ -23,11 +23,41 @@ interface OrderStatusTrackerProps {
 }
 
 const ORDER_STATUSES = [
-  { key: "pending", label: "Order Received", icon: Clock, color: "blue" },
-  { key: "preparing", label: "Preparing", icon: ChefHat, color: "amber" },
-  { key: "ready", label: "Ready", icon: CheckCircle, color: "green" },
-  { key: "served", label: "Served", icon: Utensils, color: "purple" },
-  { key: "completed", label: "Completed", icon: CheckCircle, color: "green" },
+  {
+    key: "pending",
+    label: "Order Received",
+    icon: Clock,
+    color: "blue",
+    description: "Your order has been received and is being reviewed",
+  },
+  {
+    key: "preparing",
+    label: "Preparing",
+    icon: ChefHat,
+    color: "amber",
+    description: "Our kitchen is preparing your delicious meal",
+  },
+  {
+    key: "ready",
+    label: "Ready",
+    icon: CheckCircle,
+    color: "green",
+    description: "Your order is ready for pickup or service",
+  },
+  {
+    key: "served",
+    label: "Served",
+    icon: Utensils,
+    color: "purple",
+    description: "Your order has been served to your table",
+  },
+  {
+    key: "completed",
+    label: "Completed",
+    icon: CheckCircle,
+    color: "green",
+    description: "Order completed successfully",
+  },
 ];
 
 const getStatusIndex = (status: string) => {
@@ -47,6 +77,8 @@ export function OrderStatusTracker({
     "connected" | "disconnected" | "error"
   >("disconnected");
   const [error, setError] = useState<string | null>(null);
+  const [orderDetails, setOrderDetails] = useState<any>(null);
+  const [estimatedTime, setEstimatedTime] = useState<number | null>(null);
 
   const {
     isConnected,
@@ -58,8 +90,20 @@ export function OrderStatusTracker({
     orderId,
     onStatusUpdate: (status) => {
       console.log("Order status updated via WebSocket:", status);
+      const previousStatus = currentStatus;
       setCurrentStatus(status);
       setError(null);
+
+      // Show notification for important status changes
+      if (status === "ready" && previousStatus !== "ready") {
+        // Play notification sound for ready status
+        try {
+          const audio = new Audio("/notification-sound.mp3");
+          audio.play().catch(() => console.log("Audio play failed"));
+        } catch (error) {
+          console.log("Audio notification failed:", error);
+        }
+      }
     },
     onConnectionChange: (isConnected) => {
       console.log("WebSocket connection changed:", isConnected);
@@ -76,12 +120,63 @@ export function OrderStatusTracker({
   useEffect(() => {
     if (orderStatus) {
       setCurrentStatus(orderStatus);
+      // Fetch updated order details when status changes
+      fetchOrderDetails();
     }
   }, [orderStatus]);
 
+  // Fetch order details
+  const fetchOrderDetails = async () => {
+    if (!orderId) return;
+
+    try {
+      const result = await getQROrderDetails(orderId);
+      if (result.order) {
+        setOrderDetails(result.order);
+        // Calculate estimated time based on order items and status
+        calculateEstimatedTime(result.order);
+      } else if (result.error) {
+        console.error("Error fetching order details:", result.error);
+        setError(result.error);
+      }
+    } catch (error) {
+      console.error("Error fetching order details:", error);
+      setError("Failed to fetch order details");
+    }
+  };
+
+  // Calculate estimated time based on order complexity and current status
+  const calculateEstimatedTime = (order: any) => {
+    if (!order || !order.order_items) return;
+
+    const baseTime = 15; // Base preparation time in minutes
+    const itemCount = order.order_items.length;
+    const complexityMultiplier = Math.min(itemCount * 0.5, 2); // Max 2x for complexity
+
+    let estimatedMinutes = baseTime * complexityMultiplier;
+
+    // Adjust based on current status
+    const statusIndex = getStatusIndex(currentStatus);
+    if (statusIndex >= 2) {
+      // ready or beyond
+      estimatedMinutes = 0;
+    } else if (statusIndex >= 1) {
+      // preparing
+      estimatedMinutes = Math.max(estimatedMinutes * 0.6, 5); // 60% remaining
+    }
+
+    setEstimatedTime(Math.round(estimatedMinutes));
+  };
+
   // Update connection status when WebSocket status changes
   useEffect(() => {
-    setConnectionStatus(wsConnectionStatus);
+    if (wsConnectionStatus === "connecting") {
+      setConnectionStatus("disconnected");
+    } else {
+      setConnectionStatus(
+        wsConnectionStatus as "connected" | "disconnected" | "error"
+      );
+    }
   }, [wsConnectionStatus]);
 
   // Fallback polling when WebSocket fails
@@ -94,8 +189,8 @@ export function OrderStatusTracker({
     try {
       setIsPolling(true);
       const result = await getQROrderDetails(orderId);
-      if (result.success && result.data) {
-        const newStatus = result.data.status;
+      if (result.order) {
+        const newStatus = result.order.status;
         setPollingStatus(newStatus);
         setCurrentStatus(newStatus);
         setError(null);
@@ -107,6 +202,11 @@ export function OrderStatusTracker({
       setIsPolling(false);
     }
   };
+
+  // Initial fetch of order details
+  useEffect(() => {
+    fetchOrderDetails();
+  }, [orderId]);
 
   // Start polling if WebSocket is not connected
   useEffect(() => {
@@ -190,6 +290,12 @@ export function OrderStatusTracker({
           <statusInfo.icon className="w-4 h-4" />
           {statusInfo.label}
         </div>
+        <p className="text-xs text-gray-600 mt-2">{statusInfo.description}</p>
+        {estimatedTime !== null && estimatedTime > 0 && (
+          <p className="text-xs text-amber-600 mt-1 font-medium">
+            ⏱️ Estimated {estimatedTime} minutes remaining
+          </p>
+        )}
         {lastUpdate && (
           <p className="text-xs text-gray-500 mt-2">
             Last updated: {lastUpdate.toLocaleTimeString()}
@@ -222,6 +328,33 @@ export function OrderStatusTracker({
           />
         </div>
       </div>
+
+      {/* Order Summary (if available) */}
+      {orderDetails && (
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h4 className="text-sm font-medium text-gray-900 mb-2">
+            Order Summary
+          </h4>
+          <div className="space-y-1 text-xs text-gray-600">
+            <div className="flex justify-between">
+              <span>Items:</span>
+              <span>{orderDetails.order_items?.length || 0} items</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Total:</span>
+              <span className="font-medium">
+                CHF {orderDetails.total_amount?.toFixed(2) || "0.00"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Order Time:</span>
+              <span>
+                {new Date(orderDetails.created_at).toLocaleTimeString()}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Status Steps */}
       <div className="space-y-3">
@@ -274,6 +407,11 @@ export function OrderStatusTracker({
                 {isCurrent && (
                   <p className="text-xs text-amber-600 mt-1">
                     Currently in progress...
+                  </p>
+                )}
+                {status.description && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {status.description}
                   </p>
                 )}
               </div>

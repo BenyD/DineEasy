@@ -2,195 +2,157 @@
 
 ## Overview
 
-The storage cleanup system automatically removes all storage objects (images, files) when a user is deleted from the `auth.users` table. This ensures that no orphaned files are left in the storage buckets, keeping the system clean and preventing unnecessary storage costs.
+The DineEasy platform includes an automated storage cleanup system that removes user files when accounts are deleted. This system prevents orphaned files from accumulating in storage buckets and helps maintain data hygiene.
 
 ## How It Works
 
-### Automatic Cleanup
-
-1. **Database Trigger**: When a user is deleted from `auth.users`, a PostgreSQL trigger automatically fires
+1. **Trigger**: When a user is deleted from `auth.users`
 2. **Cleanup Function**: The `cleanup_user_storage()` function is executed
-3. **File Removal**: All storage objects associated with the deleted user are removed from:
-   - `avatars` bucket (user profile images)
-   - `restaurant-images` bucket (restaurant logos and cover images)
-   - `menu-images` bucket (menu item images)
+3. **Storage Cleanup**: Removes files from all relevant storage buckets
+4. **Logging**: All operations are logged for audit purposes
 
-### Storage Structure
+## Storage Buckets
 
-Files are organized by user ID (restaurant ID) in the storage buckets:
+The system cleans up files from the following buckets:
 
-```
-avatars/
-├── user-id-1/avatar.jpg
-└── user-id-2/avatar.png
+- **`avatars`**: User profile pictures
+- **`restaurant-images`**: Restaurant logos and cover images
+- **`menu-images`**: Menu item images
 
-restaurant-images/
-├── user-id-1/logo-restaurant-123.jpg
-├── user-id-1/cover-restaurant-123.jpg
-└── user-id-2/logo-cafe-456.png
-
-menu-images/
-├── user-id-1/menu-items/item-1.jpg
-├── user-id-1/menu-items/item-2.png
-└── user-id-2/menu-items/burger.jpg
-```
-
-## Database Functions
+## Functions
 
 ### `cleanup_user_storage()`
 
-- **Purpose**: Automatically triggered when a user is deleted
-- **Functionality**: Removes all storage objects for the deleted user
-- **Trigger**: `AFTER DELETE ON auth.users`
+**Purpose**: Automatically triggered when a user is deleted from `auth.users`
+
+**What it does**:
+- Deletes avatar files where `owner = user_id`
+- Deletes restaurant images with path pattern `user_id/*`
+- Deletes menu images with path pattern `user_id/*`
+
+**Type Casting Fix**: 
+- **Issue**: The `owner` field in `storage.objects` is of type `UUID`, but the function was comparing it with `TEXT`
+- **Solution**: Cast `user_id` to `UUID` when comparing with the `owner` field: `owner = user_id::UUID`
 
 ### `manual_cleanup_user_storage(target_user_id UUID)`
 
-- **Purpose**: Manual cleanup for testing or specific cases
-- **Returns**: Summary of deleted files
-- **Usage**: Can be called via RPC for manual cleanup
+**Purpose**: Manually clean up storage for a specific user
 
-### `list_user_storage_objects(target_user_id UUID)`
-
-- **Purpose**: List all storage objects for a user
-- **Returns**: Table with bucket_id, object_name, file_size, created_at
-- **Usage**: Useful for debugging and verification
-
-## Server Actions
-
-### `manualCleanupUserStorage(userId: string)`
-
-- **Purpose**: Server action for manual cleanup
-- **Returns**: `StorageCleanupResult` with success status and message
-
-### `listUserStorageObjects(userId: string)`
-
-- **Purpose**: Server action to list user's storage objects
-- **Returns**: Array of `StorageObjectInfo`
-
-### `getUserStorageStats(userId: string)`
-
-- **Purpose**: Get storage usage statistics for a user
-- **Returns**: Detailed stats including file counts and sizes per bucket
-
-## Testing the System
-
-### 1. List Current Storage Objects
-
-```sql
-SELECT * FROM list_user_storage_objects('user-uuid-here');
-```
-
-### 2. Manual Cleanup Test
-
+**Usage**:
 ```sql
 SELECT manual_cleanup_user_storage('user-uuid-here');
 ```
 
-### 3. Verify Cleanup
+**Returns**: A summary message with the number of files deleted
 
+**Type Casting Fix**:
+- Uses `UUID` directly for `owner` field comparison
+- Converts to `TEXT` for path pattern matching
+
+### `list_user_storage_objects(target_user_id UUID)`
+
+**Purpose**: List all storage objects associated with a user (for debugging)
+
+**Usage**:
 ```sql
 SELECT * FROM list_user_storage_objects('user-uuid-here');
--- Should return empty result
 ```
 
-## Security Considerations
-
-- **SECURITY DEFINER**: Functions run with elevated privileges to access storage
-- **Owner-based Cleanup**: Only deletes files owned by the deleted user
-- **Path-based Cleanup**: Deletes files with user ID in the path
-- **Logging**: All cleanup operations are logged for audit purposes
+**Returns**: Table with bucket_id, object_name, file_size, and created_at
 
 ## Error Handling
 
-- **Graceful Degradation**: If cleanup fails, it logs the error but doesn't prevent user deletion
-- **Partial Cleanup**: If some files can't be deleted, others will still be cleaned up
-- **Manual Recovery**: Manual cleanup functions can be used to retry failed operations
+### Common Issues
 
-## Monitoring
+1. **Type Casting Errors**:
+   - **Error**: `operator does not exist: uuid = text`
+   - **Cause**: Comparing UUID fields with TEXT values
+   - **Solution**: Use explicit type casting (`::UUID` or `::TEXT`)
 
-### Logs to Monitor
+2. **Permission Errors**:
+   - **Error**: `permission denied for table storage.objects`
+   - **Cause**: Function doesn't have proper permissions
+   - **Solution**: Ensure `SECURITY DEFINER` and proper grants
 
-- `RAISE LOG 'Cleaning up storage for deleted user: %'`
-- `RAISE LOG 'Storage cleanup completed for user: %'`
-- `RAISE LOG 'Manual storage cleanup for user %: % files deleted'`
-
-### Metrics to Track
-
-- Number of files deleted per user
-- Storage cleanup success rate
-- Manual cleanup usage
-
-## Migration Files
-
-1. `20250729000010_cleanup_storage_on_user_delete.sql`
-   - Creates automatic cleanup trigger and function
-
-2. `20250729000011_manual_storage_cleanup_function.sql`
-   - Creates manual cleanup and listing functions
-
-## Usage Examples
-
-### Manual Cleanup via Server Action
-
-```typescript
-import { manualCleanupUserStorage } from "@/lib/actions/storage-cleanup";
-
-const result = await manualCleanupUserStorage("user-uuid-here");
-if (result.success) {
-  console.log(result.message);
-} else {
-  console.error(result.error);
-}
-```
-
-### List Storage Objects
-
-```typescript
-import { listUserStorageObjects } from "@/lib/actions/storage-cleanup";
-
-const result = await listUserStorageObjects("user-uuid-here");
-if (result.success && result.data) {
-  result.data.forEach((obj) => {
-    console.log(
-      `${obj.bucket_id}: ${obj.object_name} (${obj.file_size} bytes)`
-    );
-  });
-}
-```
-
-### Get Storage Stats
-
-```typescript
-import { getUserStorageStats } from "@/lib/actions/storage-cleanup";
-
-const result = await getUserStorageStats("user-uuid-here");
-if (result.success && result.data) {
-  console.log(`Total files: ${result.data.totalFiles}`);
-  console.log(`Total size: ${result.data.totalSize} bytes`);
-  console.log(`Menu images: ${result.data.buckets.menu_images.count} files`);
-}
-```
+3. **Missing User**:
+   - **Warning**: `User does not exist in auth.users`
+   - **Cause**: Trying to clean up storage for non-existent user
+   - **Solution**: Check if user exists before cleanup
 
 ## Troubleshooting
 
-### Common Issues
+### Check Storage Objects for a User
 
-1. **Permission Errors**: Ensure functions have proper SECURITY DEFINER privileges
-2. **Missing Files**: Check if files exist before attempting cleanup
-3. **Partial Cleanup**: Some files might be locked or in use
+```sql
+-- List all storage objects for a specific user
+SELECT * FROM list_user_storage_objects('user-uuid-here');
 
-### Debugging Steps
+-- Manual query to check storage objects
+SELECT 
+    bucket_id,
+    name,
+    owner,
+    metadata->>'size' as file_size,
+    created_at
+FROM storage.objects 
+WHERE owner = 'user-uuid-here'::UUID
+   OR name LIKE 'user-uuid-here/%'
+ORDER BY bucket_id, name;
+```
 
-1. List all storage objects for the user
-2. Check database logs for cleanup errors
-3. Verify trigger is properly installed
-4. Test manual cleanup function
-
-### Recovery
+### Manual Cleanup
 
 If automatic cleanup fails:
 
 1. Use `manual_cleanup_user_storage()` to retry
 2. Check logs for specific error messages
-3. Verify storage bucket permissions
-4. Contact support if issues persist
+3. Verify user exists in `auth.users`
+4. Check storage bucket permissions
+
+### Debug Function Execution
+
+```sql
+-- Enable detailed logging
+SET log_statement = 'all';
+SET log_min_messages = 'log';
+
+-- Test manual cleanup
+SELECT manual_cleanup_user_storage('user-uuid-here');
+
+-- Check logs
+SELECT * FROM pg_stat_activity WHERE query LIKE '%cleanup%';
+```
+
+## Recent Fixes
+
+### Migration 20250729000018
+- **Issue**: Type casting error in `cleanup_user_storage()`
+- **Fix**: Added `user_id::UUID` cast for owner field comparison
+- **Impact**: Resolves "operator does not exist: uuid = text" errors
+
+### Migration 20250729000019
+- **Issue**: Inconsistent type handling in manual functions
+- **Fix**: Proper UUID/TEXT casting in all storage functions
+- **Impact**: Ensures consistent behavior across all cleanup functions
+
+## Best Practices
+
+1. **Test Cleanup Functions**: Always test with a sample user before production
+2. **Monitor Logs**: Check for cleanup errors in database logs
+3. **Backup Important Data**: Ensure important files are backed up before cleanup
+4. **Use Manual Functions**: For debugging, use manual functions instead of triggers
+5. **Verify Permissions**: Ensure functions have proper `SECURITY DEFINER` and grants
+
+## Security Considerations
+
+- Functions use `SECURITY DEFINER` to run with elevated privileges
+- Only authenticated users and service role can execute functions
+- All operations are logged for audit purposes
+- Functions only clean up files owned by the deleted user
+
+## Performance Impact
+
+- Cleanup operations are typically fast for most users
+- Large numbers of files may take longer to process
+- Operations are logged but don't block user deletion
+- Consider batching for users with many files

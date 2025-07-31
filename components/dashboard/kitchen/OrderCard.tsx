@@ -10,6 +10,7 @@ import { AlertCircle, Bell, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 import { cn } from "@/lib/utils";
+import { CURRENCY_SYMBOLS } from "@/lib/constants/currencies";
 
 interface OrderItem {
   name: string;
@@ -104,7 +105,9 @@ export function OrderCard({
   }, [time]);
 
   const formatCurrency = (amount: number) => {
-    return `${currency.symbol} ${amount.toFixed(2)}`;
+    const symbol =
+      CURRENCY_SYMBOLS[currency as keyof typeof CURRENCY_SYMBOLS] || currency;
+    return `${symbol} ${amount.toFixed(2)}`;
   };
 
   const getActionButton = () => {

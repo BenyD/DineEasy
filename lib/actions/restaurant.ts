@@ -1544,3 +1544,35 @@ export async function checkAndSendWelcomeEmail(restaurantId: string) {
     return { error: "Failed to check and send welcome email" };
   }
 }
+
+export async function checkRestaurantOpenStatus(restaurantId: string) {
+  try {
+    const supabase = createClient();
+    
+    const { data, error } = await supabase
+      .rpc('check_restaurant_open_status', {
+        p_restaurant_id: restaurantId
+      });
+
+    if (error) {
+      console.error('Error checking restaurant open status:', error);
+      return { isOpen: false, autoManaged: false, error: error.message };
+    }
+
+    if (data && data.length > 0) {
+      const status = data[0];
+      return {
+        isOpen: status.is_open,
+        autoManaged: status.auto_managed,
+        currentTime: status.current_time,
+        nextOpen: status.next_open,
+        nextClose: status.next_close
+      };
+    }
+
+    return { isOpen: false, autoManaged: false, error: 'No data returned' };
+  } catch (error) {
+    console.error('Error checking restaurant open status:', error);
+    return { isOpen: false, autoManaged: false, error: 'Failed to check status' };
+  }
+}

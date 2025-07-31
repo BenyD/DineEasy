@@ -1121,6 +1121,160 @@ export const sendWelcomeToDineEasyEmail = async (
   }
 };
 
+export const sendStripeAccountDeletionEmail = async (
+  email: string,
+  deletionData: {
+    restaurantName: string;
+    accountId: string;
+    deauthorizationDate: string;
+  }
+) => {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: "DineEasy <noreply@dineeasy.ch>",
+      to: email,
+      subject: "Payment Processing Disabled - Action Required",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #dc2626; margin-bottom: 20px;">⚠️ Payment Processing Disabled</h2>
+          
+          <p>Dear ${deletionData.restaurantName} team,</p>
+          
+          <p>We've detected that your Stripe Connect account has been deauthorized. This means your restaurant can no longer accept payments through DineEasy.</p>
+          
+          <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <h3 style="color: #dc2626; margin-top: 0;">What this means:</h3>
+            <ul style="color: #7f1d1d;">
+              <li>Customers can no longer pay for orders through your QR codes</li>
+              <li>You won't receive payments to your bank account</li>
+              <li>Your restaurant is still active for menu management and order tracking</li>
+            </ul>
+          </div>
+          
+          <div style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <h3 style="color: #0369a1; margin-top: 0;">How to fix this:</h3>
+            <ol style="color: #0c4a6e;">
+              <li>Log into your DineEasy dashboard</li>
+              <li>Go to Settings → Payment Setup</li>
+              <li>Click "Reconnect Stripe Account"</li>
+              <li>Complete the Stripe Connect setup process</li>
+            </ol>
+          </div>
+          
+          <p><strong>Account ID:</strong> ${deletionData.accountId}</p>
+          <p><strong>Deauthorization Date:</strong> ${deletionData.deauthorizationDate}</p>
+          
+          <p>If you need help reconnecting your payment processing, please contact our support team.</p>
+          
+          <p>Best regards,<br>The DineEasy Team</p>
+          
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+          <p style="font-size: 12px; color: #6b7280;">
+            This is an automated notification. Please do not reply to this email.
+          </p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error("Error sending Stripe account deletion email:", error);
+      throw error;
+    }
+
+    console.log("Stripe account deletion email sent successfully:", {
+      email,
+      restaurantName: deletionData.restaurantName,
+      accountId: deletionData.accountId,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending Stripe account deletion email:", error);
+    throw error;
+  }
+};
+
+export const sendPartialPaymentNotificationEmail = async (
+  email: string,
+  partialPaymentData: {
+    invoiceId: string;
+    subscriptionPlan: string;
+    amountPaid: number;
+    amountDue: number;
+    percentagePaid: number;
+    remainingAmount: number;
+    currency: string;
+    restaurantName?: string;
+    customerName?: string;
+  }
+) => {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: "DineEasy <noreply@dineeasy.ch>",
+      to: email,
+      subject: "Partial Payment Received - Action Required",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #f59e0b; margin-bottom: 20px;">⚠️ Partial Payment Received</h2>
+          
+          <p>Dear ${partialPaymentData.customerName || partialPaymentData.restaurantName || "Valued Customer"},</p>
+          
+          <p>We've received a partial payment for your DineEasy subscription. Your payment method was charged for ${partialPaymentData.percentagePaid}% of the total amount due.</p>
+          
+          <div style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <h3 style="color: #92400e; margin-top: 0;">Payment Summary:</h3>
+            <ul style="color: #78350f;">
+              <li><strong>Total Amount Due:</strong> ${(partialPaymentData.amountDue / 100).toFixed(2)} ${partialPaymentData.currency.toUpperCase()}</li>
+              <li><strong>Amount Paid:</strong> ${(partialPaymentData.amountPaid / 100).toFixed(2)} ${partialPaymentData.currency.toUpperCase()}</li>
+              <li><strong>Remaining Balance:</strong> ${(partialPaymentData.remainingAmount / 100).toFixed(2)} ${partialPaymentData.currency.toUpperCase()}</li>
+              <li><strong>Payment Percentage:</strong> ${partialPaymentData.percentagePaid}%</li>
+            </ul>
+          </div>
+          
+          <div style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <h3 style="color: #0369a1; margin-top: 0;">What happens next:</h3>
+            <ul style="color: #0c4a6e;">
+              <li>Your subscription remains active with limited functionality</li>
+              <li>Stripe will automatically retry the remaining payment</li>
+              <li>You may need to update your payment method</li>
+              <li>Contact support if you need assistance</li>
+            </ul>
+          </div>
+          
+          <p><strong>Invoice ID:</strong> ${partialPaymentData.invoiceId}</p>
+          <p><strong>Plan:</strong> ${partialPaymentData.subscriptionPlan}</p>
+          <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+          
+          <p>If you have any questions about this partial payment, please contact our support team.</p>
+          
+          <p>Best regards,<br>The DineEasy Team</p>
+          
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+          <p style="font-size: 12px; color: #6b7280;">
+            This is an automated notification. Please do not reply to this email.
+          </p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error("Error sending partial payment notification email:", error);
+      throw error;
+    }
+
+    console.log("Partial payment notification email sent successfully:", {
+      email,
+      invoiceId: partialPaymentData.invoiceId,
+      percentagePaid: partialPaymentData.percentagePaid,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending partial payment notification email:", error);
+    throw error;
+  }
+};
+
 // Test function to debug email sending
 export const testEmailSending = async (email: string) => {
   try {

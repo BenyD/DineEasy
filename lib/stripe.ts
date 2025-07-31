@@ -11,8 +11,10 @@ for (const envVar of requiredEnvVars) {
 }
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-06-30.basil", // Keep the future version as it seems to be required by the types
+  apiVersion: "2025-06-30.basil", // Default Stripe API version
   typescript: true,
+  timeout: 30000, // 30 second timeout for API calls
+  maxNetworkRetries: 3, // Retry failed network requests up to 3 times
 });
 
 export type StripePlan = "starter" | "pro" | "elite";

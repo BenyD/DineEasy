@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
+import { useRestaurantWebSocket } from "@/hooks/useRestaurantWebSocket";
 
 interface SidebarData {
   restaurant: {
@@ -28,6 +29,7 @@ export function useSidebarData(): SidebarData {
     user: null,
     isLoading: true,
     error: null,
+    refreshUserData: () => {},
   });
 
   // Get restaurant data from the store
@@ -36,6 +38,28 @@ export function useSidebarData(): SidebarData {
     isLoading: storeLoading,
     error: storeError,
   } = useRestaurantSettings();
+
+  // Restaurant WebSocket for real-time status updates
+  useRestaurantWebSocket({
+    restaurantId: storeRestaurant?.id,
+    onRestaurantUpdated: (restaurant) => {
+      // Update the restaurant status in the store
+      const { updateRestaurantStatus } = useRestaurantSettings.getState();
+      updateRestaurantStatus((restaurant as any).is_open);
+
+      // Also update the sidebar data
+      setData((prev) => ({
+        ...prev,
+        restaurant: prev.restaurant
+          ? {
+              ...prev.restaurant,
+              status: (restaurant as any).is_open ? "open" : "closed",
+            }
+          : null,
+      }));
+    },
+    enabled: !!storeRestaurant?.id,
+  });
 
   // Add a refresh trigger
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -152,6 +176,7 @@ export function useSidebarData(): SidebarData {
           },
           isLoading: false, // We have the data now, so loading is complete
           error: storeError,
+          refreshUserData: () => {},
         });
       } catch (error: any) {
         console.error("❌ Error fetching sidebar data:", error);
@@ -160,6 +185,7 @@ export function useSidebarData(): SidebarData {
           user: null,
           isLoading: false,
           error: error.message || "Failed to fetch data",
+          refreshUserData: () => {},
         });
       }
     }

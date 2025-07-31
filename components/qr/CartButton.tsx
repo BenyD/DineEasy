@@ -10,6 +10,7 @@ interface CartButtonProps {
   totalPrice: number;
   tableId: string;
   currency?: string;
+  disabled?: boolean;
 }
 
 export function CartButton({
@@ -17,14 +18,22 @@ export function CartButton({
   totalPrice,
   tableId,
   currency = "CHF",
+  disabled = false,
 }: CartButtonProps) {
   return (
     <div className="fixed bottom-4 left-4 right-4 sm:bottom-6 sm:right-6 sm:left-auto z-50">
-      <Link href={`/qr/${tableId}/cart`}>
+      <Link
+        href={disabled ? "#" : `/qr/${tableId}/cart`}
+        onClick={disabled ? (e) => e.preventDefault() : undefined}
+      >
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-green-600 hover:bg-green-700 text-white rounded-xl border border-green-200 h-14 sm:h-16 px-4 sm:px-6 flex items-center gap-3 sm:gap-4 transition-all duration-200"
+          className={`rounded-xl border h-14 sm:h-16 px-4 sm:px-6 flex items-center gap-3 sm:gap-4 transition-all duration-200 ${
+            disabled
+              ? "bg-gray-400 text-gray-600 border-gray-300 cursor-not-allowed"
+              : "bg-green-600 hover:bg-green-700 text-white border-green-200"
+          }`}
         >
           <div className="relative">
             <div className="bg-white/20 p-2 sm:p-3 rounded-lg">

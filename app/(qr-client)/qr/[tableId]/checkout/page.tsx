@@ -30,6 +30,12 @@ import {
 } from "@/lib/actions/qr-payments";
 import { getTableInfo } from "@/lib/actions/qr-client";
 import { formatAmountWithCurrency } from "@/lib/utils/currency";
+import {
+  validateOrderData,
+  sanitizeOrderData,
+  validateEmail,
+  validateCustomerName,
+} from "@/lib/utils/validation";
 
 interface RestaurantData {
   id: string;
@@ -78,6 +84,7 @@ export default function CheckoutPage({
   const [restaurant, setRestaurant] = useState<RestaurantData | null>(null);
   const [tableData, setTableData] = useState<TableData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [paymentValidation, setPaymentValidation] = useState<any>(null);
 
   const subtotal = getTotalPrice();
   const tax = (subtotal * (restaurant?.tax_rate || 0)) / 100;
@@ -97,6 +104,8 @@ export default function CheckoutPage({
           setTableData(tableData);
           setRestaurant(restaurantData);
           setRestaurantId(restaurantData.id);
+
+          // Payment methods are validated in the UI based on restaurant data
         }
 
         // Get stored restaurant ID as fallback
@@ -129,13 +138,50 @@ export default function CheckoutPage({
       return;
     }
 
-    if (!email.trim()) {
+    // Validate and sanitize user inputs
+    const sanitizedEmail = email.trim();
+    const sanitizedCustomerName = customerName.trim();
+    const sanitizedSpecialInstructions = specialInstructions.trim();
+
+    // Validate email
+    if (!sanitizedEmail) {
       toast.error("Please enter your email for the receipt");
       return;
     }
 
-    if (!customerName.trim()) {
+    if (!validateEmail(sanitizedEmail)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    // Validate customer name
+    if (!sanitizedCustomerName) {
       toast.error("Please enter your name");
+      return;
+    }
+
+    if (!validateCustomerName(sanitizedCustomerName)) {
+      toast.error(
+        "Please enter a valid name (letters, spaces, hyphens, apostrophes only)"
+      );
+      return;
+    }
+
+    // Validate order data
+    const orderValidation = validateOrderData({
+      email: sanitizedEmail,
+      customerName: sanitizedCustomerName,
+      specialInstructions: sanitizedSpecialInstructions,
+      items: cart.map((item) => ({
+        quantity: item.quantity,
+        price: item.price,
+      })),
+      subtotal,
+      tip,
+    });
+
+    if (!orderValidation.isValid) {
+      toast.error(orderValidation.errors[0]);
       return;
     }
 
@@ -153,7 +199,7 @@ export default function CheckoutPage({
           );
         }
 
-        // Create server-side Stripe payment intent
+        // Create server-side Stripe payment intent with sanitized data
         const paymentData: QRPaymentData = {
           tableId: resolvedParams.tableId,
           restaurantId: restaurantId,
@@ -167,9 +213,9 @@ export default function CheckoutPage({
           tax,
           tip,
           total,
-          email,
-          customerName,
-          specialInstructions,
+          email: sanitizedEmail,
+          customerName: sanitizedCustomerName,
+          specialInstructions: sanitizedSpecialInstructions,
         };
 
         const result = await createQRPaymentIntent(paymentData);
@@ -179,7 +225,7 @@ export default function CheckoutPage({
         }
 
         if (result.clientSecret && result.orderId) {
-          // Clear cart before redirecting
+          // Only clear cart after successful payment intent creation
           clearCart();
 
           // Redirect to payment confirmation
@@ -190,7 +236,7 @@ export default function CheckoutPage({
           throw new Error("Failed to create payment. Please try again.");
         }
       } else if (selectedPayment === "cash") {
-        // Handle cash payment
+        // Handle cash payment with sanitized data
         const paymentData: QRPaymentData = {
           tableId: resolvedParams.tableId,
           restaurantId: restaurantId,
@@ -204,9 +250,9 @@ export default function CheckoutPage({
           tax,
           tip,
           total,
-          email,
-          customerName,
-          specialInstructions,
+          email: sanitizedEmail,
+          customerName: sanitizedCustomerName,
+          specialInstructions: sanitizedSpecialInstructions,
         };
 
         const result = await createCashOrder(paymentData);
@@ -216,7 +262,7 @@ export default function CheckoutPage({
         }
 
         if (result.orderId) {
-          // Clear cart before redirecting
+          // Only clear cart after successful order creation
           clearCart();
 
           // Redirect to confirmation page
@@ -229,6 +275,8 @@ export default function CheckoutPage({
       }
     } catch (error) {
       console.error("Error processing order:", error);
+
+      // Don't clear cart on error - let user try again
       toast.error(
         error instanceof Error ? error.message : "Failed to process order"
       );
@@ -283,19 +331,22 @@ export default function CheckoutPage({
     );
   }
 
-  // Check if restaurant has Stripe Connect enabled
-  const hasStripeConnect =
-    restaurant?.stripe_account_enabled && restaurant?.stripe_account_id;
+  // Use enhanced payment validation if available, fallback to basic validation
+  const cardPaymentEnabled =
+    paymentValidation?.paymentMethods?.card?.available ||
+    (restaurant?.stripe_account_enabled &&
+      restaurant?.stripe_account_id &&
+      (restaurant?.payment_methods?.cardEnabled ?? true));
 
-  // Get payment method settings from restaurant
-  const paymentMethods = restaurant?.payment_methods || {
-    cardEnabled: true,
-    cashEnabled: true,
-  };
+  const cashPaymentEnabled =
+    paymentValidation?.paymentMethods?.cash?.available ||
+    (restaurant?.payment_methods?.cashEnabled ?? true);
 
-  // Check which payment methods are available
-  const cardPaymentEnabled = hasStripeConnect && paymentMethods.cardEnabled;
-  const cashPaymentEnabled = paymentMethods.cashEnabled;
+  // Get payment method issues for better error messages
+  const cardPaymentIssues =
+    paymentValidation?.paymentMethods?.card?.issues || [];
+  const cashPaymentIssues =
+    paymentValidation?.paymentMethods?.cash?.issues || [];
 
   // If no payment methods are enabled, show error
   if (!cardPaymentEnabled && !cashPaymentEnabled) {
@@ -426,7 +477,68 @@ export default function CheckoutPage({
             Payment Method
           </h2>
 
-          {!cardPaymentEnabled && (
+          {/* Debug Payment Validation (Development Only) */}
+          {process.env.NODE_ENV === "development" && paymentValidation && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+              <h4 className="font-medium text-gray-900 mb-2">
+                Payment Validation Debug:
+              </h4>
+              <div className="text-xs text-gray-600 space-y-1">
+                <p>
+                  <strong>Restaurant:</strong>{" "}
+                  {paymentValidation.restaurantName}
+                </p>
+                <p>
+                  <strong>Currency:</strong> {paymentValidation.currency}
+                </p>
+                <p>
+                  <strong>Card Enabled:</strong>{" "}
+                  {paymentValidation.paymentMethods.card.enabled ? "Yes" : "No"}
+                </p>
+                <p>
+                  <strong>Card Available:</strong>{" "}
+                  {paymentValidation.paymentMethods.card.available
+                    ? "Yes"
+                    : "No"}
+                </p>
+                <p>
+                  <strong>Stripe Enabled:</strong>{" "}
+                  {paymentValidation.paymentMethods.card.stripeEnabled
+                    ? "Yes"
+                    : "No"}
+                </p>
+                <p>
+                  <strong>Stripe Account ID:</strong>{" "}
+                  {paymentValidation.paymentMethods.card.stripeAccountId ||
+                    "None"}
+                </p>
+                <p>
+                  <strong>Cash Enabled:</strong>{" "}
+                  {paymentValidation.paymentMethods.cash.enabled ? "Yes" : "No"}
+                </p>
+                <p>
+                  <strong>Cash Available:</strong>{" "}
+                  {paymentValidation.paymentMethods.cash.available
+                    ? "Yes"
+                    : "No"}
+                </p>
+                {cardPaymentIssues.length > 0 && (
+                  <div>
+                    <p>
+                      <strong>Card Issues:</strong>
+                    </p>
+                    <ul className="list-disc list-inside ml-2">
+                      {cardPaymentIssues.map((issue: string, index: number) => (
+                        <li key={index}>{issue}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!cardPaymentEnabled && cardPaymentIssues.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
               <div className="flex items-center gap-2 text-amber-700 mb-2">
                 <AlertCircle className="w-5 h-5" />
@@ -434,10 +546,22 @@ export default function CheckoutPage({
                   Online payments not available
                 </span>
               </div>
-              <p className="text-sm text-amber-600">
-                This restaurant doesn't have online payment processing set up.
-                Please pay at the counter.
-              </p>
+              <div className="text-sm text-amber-600 space-y-1">
+                <p>
+                  This restaurant doesn't have online payment processing set up.
+                </p>
+                {cardPaymentIssues.length > 0 && (
+                  <div className="mt-2">
+                    <p className="font-medium">Issues:</p>
+                    <ul className="list-disc list-inside space-y-1 mt-1">
+                      {cardPaymentIssues.map((issue: string, index: number) => (
+                        <li key={index}>{issue}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="mt-2">Please pay at the counter.</p>
+              </div>
             </div>
           )}
 

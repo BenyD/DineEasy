@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { createRestaurant } from "@/lib/actions/restaurant";
 import { completeOnboarding } from "@/lib/actions/restaurant";
 import { toast } from "sonner";
@@ -44,6 +45,7 @@ import {
   COUNTRY_OPTIONS,
   type Currency,
 } from "@/lib/constants";
+import { COUNTRIES } from "@/lib/constants/countries";
 import { getOnboardingStatus, redirectToOnboardingStep } from "@/lib/utils";
 
 const RESTAURANT_TYPES = [
@@ -79,11 +81,88 @@ const CURRENCY_OPTIONS = Object.entries(CURRENCIES).map(([code, currency]) => ({
   label: `${CURRENCY_NAMES[code as Currency]} (${CURRENCY_SYMBOLS[code as Currency]})`,
 }));
 
-const PRICE_RANGES = [
-  { value: "$", label: "$ - Budget friendly" },
-  { value: "$$", label: "$$  - Moderate" },
-  { value: "$$$", label: "$$$ - Upscale" },
-  { value: "$$$$", label: "$$$$ - Fine dining" },
+// Function to generate price ranges based on currency
+const getPriceRanges = (currency: string) => {
+  const symbol = CURRENCY_SYMBOLS[currency as Currency] || "CHF";
+
+  // Define price ranges based on currency
+  const priceRanges = {
+    CHF: [
+      { value: "$", label: `Budget Friendly (Under 15 ${symbol})` },
+      { value: "$$", label: `Moderate (15-30 ${symbol})` },
+      {
+        value: "$$$",
+        label: `Upscale (31-60 ${symbol})`,
+      },
+      {
+        value: "$$$$",
+        label: `Fine Dining (60+ ${symbol})`,
+      },
+    ],
+    USD: [
+      { value: "$", label: `Budget Friendly (Under 15 ${symbol})` },
+      { value: "$$", label: `Moderate (15-30 ${symbol})` },
+      { value: "$$$", label: `Upscale (31-60 ${symbol})` },
+      {
+        value: "$$$$",
+        label: `Fine Dining (60+ ${symbol})`,
+      },
+    ],
+    EUR: [
+      { value: "$", label: `Budget Friendly (Under 15 ${symbol})` },
+      { value: "$$", label: `Moderate (15-30 ${symbol})` },
+      { value: "$$$", label: `Upscale (31-60 ${symbol})` },
+      {
+        value: "$$$$",
+        label: `Fine Dining (60+ ${symbol})`,
+      },
+    ],
+    GBP: [
+      { value: "$", label: `Budget Friendly (Under 15 ${symbol})` },
+      { value: "$$", label: `Moderate (15-30 ${symbol})` },
+      { value: "$$$", label: `Upscale (31-60 ${symbol})` },
+      {
+        value: "$$$$",
+        label: `Fine Dining (60+ ${symbol})`,
+      },
+    ],
+    JPY: [
+      { value: "$", label: `Budget Friendly (Under 1500 ${symbol})` },
+      { value: "$$", label: `Moderate (1500-3000 ${symbol})` },
+      {
+        value: "$$$",
+        label: `Upscale (3000-6000 ${symbol})`,
+      },
+      {
+        value: "$$$$",
+        label: `Fine Dining (6000+ ${symbol})`,
+      },
+    ],
+  };
+
+  // Return currency-specific ranges or fallback to generic format
+  return (
+    priceRanges[currency as keyof typeof priceRanges] ||
+    ([
+      { value: "$", label: `Budget Friendly (Under 15 ${symbol})` },
+      { value: "$$", label: `Moderate (15-30 ${symbol})` },
+      { value: "$$$", label: `Upscale (31-60 ${symbol})` },
+      {
+        value: "$$$$",
+        label: `Fine Dining (60+ ${symbol})`,
+      },
+    ] as const)
+  );
+};
+
+const SEATING_CAPACITY_OPTIONS = [
+  { value: "1-10", label: "1-10 seats" },
+  { value: "11-25", label: "11-25 seats" },
+  { value: "26-50", label: "26-50 seats" },
+  { value: "51-100", label: "51-100 seats" },
+  { value: "101-200", label: "101-200 seats" },
+  { value: "201-500", label: "201-500 seats" },
+  { value: "500+", label: "500+ seats" },
 ] as const;
 
 interface FormData {
@@ -98,6 +177,7 @@ interface FormData {
   tax_rate: string;
   vat_number: string;
   price_range: string;
+  seating_capacity: string;
   logo: File | null;
   coverPhoto: File | null;
   address: string;
@@ -143,6 +223,7 @@ export default function SetupPage() {
       tax_rate: "7.7",
       vat_number: "",
       price_range: "",
+      seating_capacity: "",
       logo: null,
       coverPhoto: null,
       address: "",
@@ -307,11 +388,19 @@ export default function SetupPage() {
           : null;
       case "phone":
         if (!value?.trim()) return null; // Optional field
-        const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-        const cleanPhone = value.replace(/[\s\-\(\)]/g, "");
-        return !phoneRegex.test(cleanPhone)
-          ? "Please enter a valid phone number"
-          : null;
+        // Get country for phone validation
+        const selectedCountry =
+          COUNTRIES[formData.country as keyof typeof COUNTRIES];
+        if (selectedCountry?.phoneFormat) {
+          // Basic validation - check if it starts with the country's phone code
+          const cleanPhone = value.replace(/[\s\-\(\)]/g, "");
+          if (
+            !cleanPhone.startsWith(selectedCountry.phoneCode.replace("+", ""))
+          ) {
+            return `Phone number should start with ${selectedCountry.phoneCode}`;
+          }
+        }
+        return null;
       case "website":
         if (!value?.trim()) return null; // Optional field
         try {
@@ -325,7 +414,33 @@ export default function SetupPage() {
       case "city":
         return !value?.trim() ? "City is required" : null;
       case "postal_code":
-        return !value?.trim() ? "Postal code is required" : null;
+        if (!value?.trim()) return "Postal code is required";
+        // Get country for postal code validation
+        const countryForPostal =
+          COUNTRIES[formData.country as keyof typeof COUNTRIES];
+        if (countryForPostal?.postalCodeFormat) {
+          // Basic postal code validation based on format
+          const format = countryForPostal.postalCodeFormat;
+          const cleanPostal = value.replace(/[\s\-]/g, "");
+
+          // Simple validation based on format patterns
+          if (format === "XXXX" && !/^\d{4}$/.test(cleanPostal)) {
+            return "Postal code should be 4 digits (e.g., 8001)";
+          } else if (format === "XXXXX" && !/^\d{5}$/.test(cleanPostal)) {
+            return "Postal code should be 5 digits (e.g., 12345)";
+          } else if (
+            format === "XXX XX" &&
+            !/^\d{3}\s?\d{2}$/.test(cleanPostal)
+          ) {
+            return "Postal code should be 3 digits + 2 digits (e.g., 123 45)";
+          } else if (
+            format === "A1A 1A1" &&
+            !/^[A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d$/.test(cleanPostal)
+          ) {
+            return "Postal code should be in format A1A 1A1";
+          }
+        }
+        return null;
       case "country":
         return !value ? "Country is required" : null;
       case "currency":
@@ -358,7 +473,9 @@ export default function SetupPage() {
 
   // Add a helper to map currency to country
   const getCountryByCurrency = (currency: string) => {
-    const country = COUNTRY_OPTIONS.find((c) => c.currency === currency);
+    const country = COUNTRY_OPTIONS.find(
+      (c: { currency: string }) => c.currency === currency
+    );
     return country ? country.value : "";
   };
 
@@ -377,8 +494,9 @@ export default function SetupPage() {
         const countryForCurrency = getCountryByCurrency(formData.currency);
         if (
           countryForCurrency &&
-          COUNTRY_OPTIONS.find((c) => c.value === formData.country)
-            ?.currency !== formData.currency
+          COUNTRY_OPTIONS.find(
+            (c: { value: string }) => c.value === formData.country
+          )?.currency !== formData.currency
         ) {
           setFormData((prev) => ({ ...prev, country: countryForCurrency }));
         }
@@ -393,60 +511,15 @@ export default function SetupPage() {
       [name]: value,
     };
 
-    let showFeedback = false;
-    let feedbackMessage = "";
-
-    // Auto-set currency based on country selection
-    if (name === "country") {
-      const selectedCountry = COUNTRY_OPTIONS.find(
-        (country) => country.value === value
-      );
-      if (selectedCountry && selectedCountry.currency !== formData.currency) {
-        newFormData.currency = selectedCountry.currency;
-        showFeedback = true;
-        feedbackMessage = `Currency automatically updated to ${selectedCountry.currency} for ${selectedCountry.label.split(" ")[1]}`;
-      }
+    // For Switzerland-only support, ensure country and currency are always set correctly
+    if (name === "country" && value !== "CH") {
+      newFormData.country = "CH";
     }
-
-    // Auto-set country based on currency selection
-    if (name === "currency") {
-      const countryForCurrency = getCountryByCurrency(value);
-      const currentCountry = COUNTRY_OPTIONS.find(
-        (c) => c.value === formData.country
-      );
-
-      // Only update if country is not set or doesn't match the currency
-      if (
-        !formData.country ||
-        (currentCountry && currentCountry.currency !== value)
-      ) {
-        if (countryForCurrency) {
-          newFormData.country = countryForCurrency;
-          showFeedback = true;
-          const countryName =
-            COUNTRY_OPTIONS.find(
-              (c) => c.value === countryForCurrency
-            )?.label.split(" ")[1] || countryForCurrency;
-          feedbackMessage = `Country automatically updated to ${countryName} for ${value} currency`;
-        }
-      }
+    if (name === "currency" && value !== "CHF") {
+      newFormData.currency = "CHF";
     }
-
-    // Update previous values
-    setPreviousValues({
-      country: formData.country,
-      currency: formData.currency,
-    });
 
     setFormData(newFormData);
-
-    // Show feedback toast if automatic update occurred
-    if (showFeedback) {
-      toast.info("Auto-update", {
-        description: feedbackMessage,
-        duration: 3000,
-      });
-    }
   };
 
   const handleSwitchChange = (name: string, checked: boolean) => {
@@ -1091,7 +1164,7 @@ export default function SetupPage() {
                           handleSelectChange("type", value)
                         }
                       >
-                        <SelectTrigger className="h-11">
+                        <SelectTrigger className="w-full h-11">
                           <SelectValue placeholder="Select restaurant type" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1109,7 +1182,7 @@ export default function SetupPage() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="cuisine">Cuisine Type</Label>
                         <Select
@@ -1119,7 +1192,7 @@ export default function SetupPage() {
                             handleSelectChange("cuisine", value)
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full h-11">
                             <SelectValue placeholder="Select cuisine" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1144,13 +1217,40 @@ export default function SetupPage() {
                             handleSelectChange("price_range", value)
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full h-11">
                             <SelectValue placeholder="Select range" />
                           </SelectTrigger>
                           <SelectContent>
-                            {PRICE_RANGES.map((range) => (
+                            {getPriceRanges(formData.currency).map((range) => (
                               <SelectItem key={range.value} value={range.value}>
                                 {range.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="seating_capacity">
+                          Seating Capacity
+                        </Label>
+                        <Select
+                          name="seating_capacity"
+                          value={formData.seating_capacity}
+                          onValueChange={(value) =>
+                            handleSelectChange("seating_capacity", value)
+                          }
+                        >
+                          <SelectTrigger className="w-full h-11">
+                            <SelectValue placeholder="Select capacity" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SEATING_CAPACITY_OPTIONS.map((capacity) => (
+                              <SelectItem
+                                key={capacity.value}
+                                value={capacity.value}
+                              >
+                                {capacity.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1170,7 +1270,7 @@ export default function SetupPage() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="currency">
                           Currency <span className="text-red-500">*</span>
@@ -1182,40 +1282,26 @@ export default function SetupPage() {
                             handleSelectChange("currency", value)
                           }
                           required
+                          disabled
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select currency" />
+                          <SelectTrigger className="w-full h-11">
+                            <SelectValue placeholder="Swiss Franc (CHF)" />
                           </SelectTrigger>
                           <SelectContent>
-                            {CURRENCY_OPTIONS.map((currency) => (
-                              <SelectItem
-                                key={currency.value}
-                                value={currency.value}
-                              >
-                                {currency.label}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="CHF">
+                              Swiss Franc (CHF)
+                            </SelectItem>
                           </SelectContent>
                         </Select>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Currently only supporting Switzerland with CHF
+                          currency
+                        </p>
                         {validationErrors.currency && (
                           <p className="text-red-500 text-xs mt-1">
                             {validationErrors.currency}
                           </p>
                         )}
-                        {/* Show feedback when currency was auto-updated */}
-                        {previousValues.currency &&
-                          previousValues.currency !== formData.currency &&
-                          formData.country && (
-                            <p className="text-blue-600 text-xs mt-1 flex items-center gap-1">
-                              <span>✓</span>
-                              Auto-updated for{" "}
-                              {
-                                COUNTRY_OPTIONS.find(
-                                  (c) => c.value === formData.country
-                                )?.label.split(" ")[1]
-                              }
-                            </p>
-                          )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="tax_rate">
@@ -1302,18 +1388,14 @@ export default function SetupPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                        <Input
-                          id="phone"
-                          name="phone"
-                          type="tel"
-                          value={formData.phone}
-                          onChange={handleChange}
-                          placeholder="Enter your phone number"
-                          className="h-11 pl-10"
-                        />
-                      </div>
+                      <PhoneInput
+                        value={formData.phone}
+                        onChange={(value) =>
+                          setFormData({ ...formData, phone: value })
+                        }
+                        placeholder="Enter your phone number"
+                        className="h-11"
+                      />
                       {validationErrors.phone && (
                         <p className="text-red-500 text-xs mt-1">
                           {validationErrors.phone}
@@ -1550,7 +1632,14 @@ export default function SetupPage() {
                           name="postal_code"
                           value={formData.postal_code}
                           onChange={handleChange}
-                          placeholder="Postal Code"
+                          placeholder={
+                            formData.country &&
+                            COUNTRIES[
+                              formData.country as keyof typeof COUNTRIES
+                            ]?.postalCodeFormat
+                              ? `e.g., ${COUNTRIES[formData.country as keyof typeof COUNTRIES]?.postalCodeFormat}`
+                              : "Postal Code"
+                          }
                           className="h-11"
                           required
                         />
@@ -1573,26 +1662,13 @@ export default function SetupPage() {
                           handleSelectChange("country", value)
                         }
                         required
+                        disabled
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select your country" />
+                        <SelectTrigger className="w-full h-11">
+                          <SelectValue placeholder="Switzerland" />
                         </SelectTrigger>
                         <SelectContent>
-                          {COUNTRY_OPTIONS.map((country) => (
-                            <SelectItem
-                              key={country.value}
-                              value={country.value}
-                            >
-                              <div className="flex items-center justify-between w-full">
-                                <span>{country.label}</span>
-                                {!country.stripeConnect && (
-                                  <span className="text-xs text-amber-600 ml-2">
-                                    Limited payment options
-                                  </span>
-                                )}
-                              </div>
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="CH">Switzerland</SelectItem>
                         </SelectContent>
                       </Select>
                       {validationErrors.country && (
@@ -1600,34 +1676,13 @@ export default function SetupPage() {
                           {validationErrors.country}
                         </p>
                       )}
-                      {/* Show feedback when country was auto-updated */}
-                      {previousValues.country &&
-                        previousValues.country !== formData.country &&
-                        formData.currency && (
-                          <p className="text-blue-600 text-xs mt-1 flex items-center gap-1">
-                            <span>✓</span>
-                            Auto-updated for {formData.currency} currency
-                          </p>
-                        )}
-                      {/* Show Stripe Connect availability */}
-                      {formData.country && (
-                        <div className="text-xs mt-1">
-                          {COUNTRY_OPTIONS.find(
-                            (c) => c.value === formData.country
-                          )?.stripeConnect ? (
-                            <p className="text-green-600 flex items-center gap-1">
-                              <span>✓</span>
-                              Full payment processing available
-                            </p>
-                          ) : (
-                            <p className="text-amber-600 flex items-center gap-1">
-                              <span>⚠</span>
-                              Cash payments only - contact support for payment
-                              processing
-                            </p>
-                          )}
-                        </div>
-                      )}
+                      <p className="text-xs text-gray-500 mt-1">
+                        Currently only supporting Switzerland
+                      </p>
+                      <p className="text-green-600 text-xs mt-1 flex items-center gap-1">
+                        <span>✓</span>
+                        Full payment processing available
+                      </p>
                     </div>
 
                     <div className="pt-6 space-y-4">

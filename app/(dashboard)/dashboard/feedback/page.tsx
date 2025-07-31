@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Star,
@@ -13,6 +13,9 @@ import {
   ExternalLink,
   Filter,
   RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +35,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import {
+  getFeedbackAnalytics,
+  getRecentFeedback,
+} from "@/lib/actions/feedback";
+import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
+import { toast } from "sonner";
 import React from "react";
 
 // Animation variants
@@ -142,29 +151,114 @@ const sentimentColors: Record<FeedbackSentiment, string> = {
 };
 
 export default function FeedbackPage() {
-  const [timeRange, setTimeRange] = useState("week");
+  const { restaurant } = useRestaurantSettings();
+  const [timeRange, setTimeRange] = useState("month");
   const [selectedRating, setSelectedRating] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sentiment, setSentiment] = useState("all");
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [recentFeedback, setRecentFeedback] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filteredFeedback = feedbackItems.filter((item) => {
+  // Load feedback data
+  useEffect(() => {
+    if (restaurant?.id) {
+      loadFeedbackData();
+    }
+  }, [restaurant?.id, timeRange]);
+
+  const loadFeedbackData = async () => {
+    try {
+      setLoading(true);
+      const days =
+        timeRange === "day"
+          ? 1
+          : timeRange === "week"
+            ? 7
+            : timeRange === "month"
+              ? 30
+              : 365;
+
+      const [analyticsResult, recentResult] = await Promise.all([
+        getFeedbackAnalytics(restaurant!.id, days),
+        getRecentFeedback(restaurant!.id, 20),
+      ]);
+
+      if (analyticsResult.success) {
+        setAnalytics(analyticsResult.analytics);
+      }
+
+      if (recentResult.success) {
+        setRecentFeedback(recentResult.feedback);
+      }
+    } catch (error) {
+      console.error("Error loading feedback data:", error);
+      toast.error("Failed to load feedback data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadFeedbackData();
+    setRefreshing(false);
+    toast.success("Feedback data refreshed");
+  };
+
+  const filteredFeedback = recentFeedback.filter((item) => {
     if (sentiment !== "all" && item.sentiment !== sentiment) return false;
     if (selectedRating !== "all" && item.rating !== parseInt(selectedRating))
       return false;
     if (
       searchTerm &&
-      !item.comment.toLowerCase().includes(searchTerm.toLowerCase())
+      !item.comment?.toLowerCase().includes(searchTerm.toLowerCase())
     )
       return false;
     return true;
   });
 
-  const stats = {
-    averageRating: 4.2,
-    totalReviews: feedbackItems.length,
-    positivePercentage: 85,
-    negativePercentage: 15,
-  };
+  const stats = analytics
+    ? {
+        averageRating: analytics.averageRating,
+        totalReviews: analytics.totalFeedback,
+        positivePercentage:
+          analytics.sentimentDistribution.positive > 0
+            ? Math.round(
+                (analytics.sentimentDistribution.positive /
+                  analytics.totalFeedback) *
+                  100
+              )
+            : 0,
+        negativePercentage:
+          analytics.sentimentDistribution.negative > 0
+            ? Math.round(
+                (analytics.sentimentDistribution.negative /
+                  analytics.totalFeedback) *
+                  100
+              )
+            : 0,
+      }
+    : {
+        averageRating: 0,
+        totalReviews: 0,
+        positivePercentage: 0,
+        negativePercentage: 0,
+      };
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-center">
+            <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Loading feedback data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -174,11 +268,30 @@ export default function FeedbackPage() {
       variants={containerVariants}
     >
       {/* Header Section */}
-      <motion.div variants={itemVariants}>
-        <h1 className="text-2xl font-bold text-gray-900">Customer Feedback</h1>
-        <p className="text-gray-500">
-          Monitor and analyze customer feedback and ratings
-        </p>
+      <motion.div
+        variants={itemVariants}
+        className="flex justify-between items-start"
+      >
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Customer Feedback
+          </h1>
+          <p className="text-gray-500">
+            Monitor and analyze customer feedback and ratings
+          </p>
+        </div>
+        <Button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2"
+        >
+          <RefreshCw
+            className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+          />
+          Refresh
+        </Button>
       </motion.div>
 
       {/* Filters Card */}
@@ -504,7 +617,9 @@ export default function FeedbackPage() {
                     <motion.div whileHover={{ scale: 1.1 }}>
                       <Badge
                         variant="secondary"
-                        className={sentimentColors[item.sentiment]}
+                        className={
+                          sentimentColors[item.sentiment as FeedbackSentiment]
+                        }
                       >
                         {item.rating} ★
                       </Badge>
@@ -518,7 +633,7 @@ export default function FeedbackPage() {
                           Items Ordered:
                         </p>
                         <div className="flex flex-wrap gap-2 mt-1">
-                          {item.items.map((itemName, index) => (
+                          {item.items.map((itemName: string, index: number) => (
                             <motion.div
                               key={index}
                               initial={{ opacity: 0, scale: 0 }}

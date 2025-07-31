@@ -127,44 +127,19 @@ export class GoogleBusinessAPI {
   }
 
   // Get reviews (requires separate Reviews API)
+  // Note: This function is temporarily disabled due to API structure changes
   async getReviews(locationId: string) {
-    try {
-      // Note: Reviews API requires separate setup
-      const reviewsService = google.mybusinessaccountmanagement({
-        version: "v1",
-        auth: this.auth,
-      });
-
-      const response = await reviewsService.accounts.locations.reviews.list({
-        parent: locationId,
-      });
-      return response.data.reviews || [];
-    } catch (error) {
-      console.error("Error fetching reviews:", error);
-      throw new Error("Failed to fetch reviews");
-    }
+    throw new Error(
+      "Reviews API is not currently available - API structure has changed"
+    );
   }
 
   // Reply to a review
+  // Note: This function is temporarily disabled due to API structure changes
   async replyToReview(reviewId: string, reply: string) {
-    try {
-      const reviewsService = google.mybusinessaccountmanagement({
-        version: "v1",
-        auth: this.auth,
-      });
-
-      const response =
-        await reviewsService.accounts.locations.reviews.updateReply({
-          name: reviewId,
-          requestBody: {
-            comment: reply,
-          },
-        });
-      return response.data;
-    } catch (error) {
-      console.error("Error replying to review:", error);
-      throw new Error("Failed to reply to review");
-    }
+    throw new Error(
+      "Reviews API is not currently available - API structure has changed"
+    );
   }
 
   // Upload business photo
@@ -203,22 +178,10 @@ export class GoogleBusinessAPI {
         auth: this.auth,
       });
 
-      const response = await insightsService.accounts.locations.reportInsights({
-        name: locationId,
-        requestBody: {
-          locationNames: [locationId],
-          basicRequest: {
-            metricRequests: metrics.map((metric) => ({ metric })),
-            timeRange: {
-              startTime: new Date(
-                Date.now() - 30 * 24 * 60 * 60 * 1000
-              ).toISOString(), // Last 30 days
-              endTime: new Date().toISOString(),
-            },
-          },
-        },
-      });
-      return response.data;
+      // Note: Insights API structure has changed
+      throw new Error(
+        "Insights API is not currently available - API structure has changed"
+      );
     } catch (error) {
       console.error("Error fetching insights:", error);
       throw new Error("Failed to fetch business insights");

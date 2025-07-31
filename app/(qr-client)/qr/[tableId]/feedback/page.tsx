@@ -1,11 +1,19 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, Star, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
+import {
+  submitFeedback,
+  getOrderFeedback,
+  getOrderForFeedback,
+  getFeedbackByOrderNumber,
+} from "@/lib/actions/feedback";
+import { getTableInfo } from "@/lib/actions/qr-client";
+import { toast } from "sonner";
 
 export default function FeedbackPage({
   params,
@@ -21,20 +29,112 @@ export default function FeedbackPage({
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [restaurantId, setRestaurantId] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [existingFeedback, setExistingFeedback] = useState<any>(null);
+  const [orderData, setOrderData] = useState<any>(null);
 
   const orderNumber = resolvedSearchParams.order || "000";
 
+  // Load table and order information
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+
+        // Get table info to get restaurant ID
+        const tableResult = await getTableInfo(resolvedParams.tableId);
+        if (tableResult.success && tableResult.data) {
+          setRestaurantId(tableResult.data.restaurants.id);
+
+          // If we have an order number, try to find the order ID
+          if (orderNumber && orderNumber !== "000") {
+            console.log("Order number for feedback:", orderNumber);
+
+            // Get order information for feedback
+            const orderResult = await getOrderForFeedback(
+              orderNumber,
+              tableResult.data.restaurants.id
+            );
+            if (orderResult.success && orderResult.order) {
+              setOrderData(orderResult.order);
+              setOrderId(orderResult.order.orderId);
+
+              // Check if feedback already exists for this order
+              if (orderResult.order.hasFeedback) {
+                const feedbackResult = await getFeedbackByOrderNumber(
+                  orderNumber,
+                  tableResult.data.restaurants.id
+                );
+                if (feedbackResult.success && feedbackResult.feedback) {
+                  setExistingFeedback(feedbackResult.feedback);
+                }
+              }
+            } else if (orderResult.error) {
+              console.log("Order not found:", orderResult.error);
+              // Order not found, but we can still collect general feedback
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error loading table data:", error);
+        toast.error("Failed to load page data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [resolvedParams.tableId, orderNumber]);
+
   const handleSubmit = async () => {
-    if (rating === 0) return;
+    if (rating === 0) {
+      toast.error("Please select a rating");
+      return;
+    }
+
+    if (!restaurantId) {
+      toast.error("Restaurant information not available");
+      return;
+    }
 
     setIsSubmitting(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const result = await submitFeedback({
+        restaurantId,
+        orderId: orderId || undefined,
+        orderNumber: orderNumber !== "000" ? orderNumber : undefined,
+        rating,
+        comment: comment.trim() || undefined,
+      });
 
-    setIsSubmitting(false);
-    setIsSubmitted(true);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      setIsSubmitted(true);
+      toast.success("Thank you for your feedback!");
+    } catch (error) {
+      console.error("Error submitting feedback:", error);
+      toast.error("Failed to submit feedback. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-gray-300 border-t-green-600 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading feedback form...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isSubmitted) {
     return (
@@ -64,6 +164,37 @@ export default function FeedbackPage({
     );
   }
 
+  // Check if feedback already exists for this order
+  if (existingFeedback) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center px-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="text-center max-w-md"
+        >
+          <div className="w-24 h-24 mx-auto mb-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center shadow-2xl">
+            <span className="text-4xl">✅</span>
+          </div>
+
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">
+            Feedback Submitted!
+          </h1>
+          <p className="text-gray-600 mb-8 text-lg leading-relaxed">
+            You've already provided feedback for this order. Thank you!
+          </p>
+
+          <Link href={`/qr/${resolvedParams.tableId}`}>
+            <Button className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 px-8 py-3 rounded-full text-lg shadow-lg">
+              Back to Menu
+            </Button>
+          </Link>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
       {/* Enhanced Header */}
@@ -85,17 +216,63 @@ export default function FeedbackPage({
           </Link>
           <div className="flex-1">
             <h1 className="text-lg font-bold">Rate Your Experience</h1>
-            <p className="text-sm text-gray-500">Order #{orderNumber}</p>
+            <p className="text-sm text-gray-500">
+              {orderData
+                ? `Order #${orderData.orderNumber}`
+                : `Order #${orderNumber}`}
+            </p>
           </div>
         </div>
       </div>
 
       <div className="px-4 py-8">
+        {/* Order Information */}
+        {orderData && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-8"
+          >
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Order Details
+            </h3>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-gray-500">Order Number:</span>
+                <p className="font-medium text-gray-900">
+                  #{orderData.orderNumber}
+                </p>
+              </div>
+              <div>
+                <span className="text-gray-500">Total Amount:</span>
+                <p className="font-medium text-gray-900">
+                  CHF {orderData.totalAmount.toFixed(2)}
+                </p>
+              </div>
+              {orderData.customerName && (
+                <div>
+                  <span className="text-gray-500">Customer:</span>
+                  <p className="font-medium text-gray-900">
+                    {orderData.customerName}
+                  </p>
+                </div>
+              )}
+              <div>
+                <span className="text-gray-500">Date:</span>
+                <p className="font-medium text-gray-900">
+                  {new Date(orderData.createdAt).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Enhanced Rating Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.5, delay: orderData ? 0.1 : 0 }}
           className="text-center mb-8"
         >
           <h2 className="text-2xl font-bold text-gray-900 mb-3">
@@ -148,7 +325,7 @@ export default function FeedbackPage({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
+          transition={{ duration: 0.5, delay: orderData ? 0.2 : 0.2 }}
           className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-8"
         >
           <label className="block text-lg font-semibold text-gray-900 mb-3">
@@ -166,7 +343,7 @@ export default function FeedbackPage({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
+          transition={{ duration: 0.5, delay: orderData ? 0.3 : 0.4 }}
         >
           <Button
             onClick={handleSubmit}

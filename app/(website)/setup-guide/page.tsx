@@ -134,11 +134,9 @@ export default function SetupGuidePage() {
         {/* Background gradient effects */}
         <div className="absolute inset-0 overflow-hidden">
           <GradientBlob
-            colors={["emerald-500/30", "green-500/30"]}
             className="-top-1/2 -right-1/2 w-full h-full"
           />
           <GradientBlob
-            colors={["emerald-500/20", "green-500/20"]}
             className="-bottom-1/2 -left-1/2 w-full h-full"
           />
         </div>

@@ -25,6 +25,7 @@ interface RestaurantSettings {
   updateRestaurant: (data: Partial<any>) => Promise<void>;
   toggleRestaurantStatus: () => Promise<void>;
   updateNotifications: (settings: any) => Promise<void>;
+  updateRestaurantStatus: (isOpen: boolean) => void;
 
   // Live update methods for images
   updateLogo: (logoUrl: string) => void;
@@ -237,6 +238,19 @@ export const useRestaurantSettings = create<RestaurantSettings>((set, get) => ({
       console.error("Error updating notifications:", error);
       toast.error(error.message || "Failed to update notification settings");
       throw error;
+    }
+  },
+
+  // Update restaurant status in real-time
+  updateRestaurantStatus: (isOpen: boolean) => {
+    const { restaurant } = get();
+    if (restaurant) {
+      set({
+        restaurant: {
+          ...restaurant,
+          is_open: isOpen,
+        },
+      });
     }
   },
 

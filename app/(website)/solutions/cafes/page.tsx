@@ -56,7 +56,7 @@ const features = [
   },
 ];
 
-const StatCard = ({ icon, value, label, className = "" }) => (
+const StatCard = ({ icon, value, label, className = "" }: { icon: React.ReactNode; value: string; label: string; className?: string }) => (
   <motion.div
     initial={{ opacity: 0, scale: 0.8 }}
     whileInView={{ opacity: 1, scale: 1 }}

@@ -30,8 +30,6 @@ import {
   Filter,
   Eye,
   BarChart3,
-  PieChart,
-  LineChart,
 } from "lucide-react";
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 import { formatAmountWithCurrency } from "@/lib/utils/currency";
@@ -197,12 +195,7 @@ const StatCard = ({
           <div className="space-y-2">
             <p className="text-sm font-medium text-gray-600">{title}</p>
             <p className="text-2xl font-bold text-gray-900">
-              {formatter === (val: number) => val.toString() 
-                ? formatter(value)
-                : formatter === (val: number) => `CHF ${val.toFixed(2)}`
-                ? formatAmountWithCurrency(value, currency)
-                : formatter(value)
-              }
+              {formatter(value)}
             </p>
             <div className="flex items-center space-x-1">
               {isPositive ? (

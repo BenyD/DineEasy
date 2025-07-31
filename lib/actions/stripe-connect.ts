@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { redirect } from "next/navigation";
-import { COUNTRY_OPTIONS } from "@/lib/constants/countries";
+import { COUNTRY_OPTIONS } from "@/lib/constants";
 
 export async function createStripeAccount() {
   const supabase = createClient();
