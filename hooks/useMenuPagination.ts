@@ -207,7 +207,7 @@ export function useMenuPagination(
     if (pagination.page !== 1) {
       setPagination((prev) => ({ ...prev, page: 1 }));
     }
-  }, [apiFilters]);
+  }, [apiFilters, pagination.page]);
 
   // Actions
   const setPage = useCallback(

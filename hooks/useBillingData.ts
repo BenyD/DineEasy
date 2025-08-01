@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { PRICING } from "@/lib/constants/pricing";
 import { CURRENCIES } from "@/lib/constants/currencies";
@@ -51,7 +51,7 @@ export function useBillingData(): BillingData & { refresh: () => void } {
     accessEndsAt: null,
   });
 
-  const fetchBillingData = async (retryCount = 0) => {
+  const fetchBillingData = useCallback(async (retryCount = 0) => {
     try {
       const supabase = createClient();
 
@@ -409,11 +409,11 @@ export function useBillingData(): BillingData & { refresh: () => void } {
             : "Failed to load billing data",
       }));
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchBillingData();
-  }, []);
+  }, [fetchBillingData]);
 
   const refresh = () => {
     setData((prev) => ({ ...prev, isLoading: true, error: null }));

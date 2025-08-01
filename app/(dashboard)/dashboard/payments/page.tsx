@@ -957,7 +957,7 @@ export default function PaymentsPage() {
                       )}
                     </Button>
                     <p className="text-xs text-gray-500 text-center mt-3">
-                      You'll be guided through Stripe's secure setup process
+                      You&apos;ll be guided through Stripe&apos;s secure setup process
                     </p>
                   </div>
                 </div>

@@ -84,9 +84,9 @@ export default function TermsPage() {
               </h2>
               <div className="rounded-lg border border-gray-100 bg-white p-6">
                 <p className="text-gray-600">
-                  These Terms of Service ("Terms") govern your access to and use
-                  of DineEasy's website, applications, and services
-                  (collectively, the "Services"). These Terms constitute a
+                  These Terms of Service (&quot;Terms&quot;) govern your access to and use
+                  of DineEasy&apos;s website, applications, and services
+                  (collectively, the &quot;Services&quot;). These Terms constitute a
                   legally binding agreement between you and DineEasy, a company
                   registered in Switzerland.
                 </p>
@@ -288,7 +288,7 @@ export default function TermsPage() {
                       Service Warranty
                     </h4>
                     <p className="text-sm text-gray-600">
-                      Services are provided "as is" without any warranty
+                      Services are provided &quot;as is&quot; without any warranty
                     </p>
                   </div>
                   <div className="rounded-lg bg-gray-50 p-4">

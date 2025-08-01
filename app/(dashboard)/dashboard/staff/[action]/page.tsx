@@ -408,7 +408,7 @@ export default function StaffActionPage({
           <CardHeader>
             <CardTitle>Basic Information</CardTitle>
             <CardDescription>
-              Enter the staff member's personal and contact information
+              Enter the staff member&apos;s personal and contact information
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -469,7 +469,7 @@ export default function StaffActionPage({
           <CardHeader>
             <CardTitle>Role & Status</CardTitle>
             <CardDescription>
-              Set the staff member's role and account status
+              Set the staff member&apos;s role and account status
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -136,7 +136,6 @@ export default function PaymentReturnPage() {
           }))
         );
 
-
         const hasValidSubscription = restaurant.subscriptions.some((sub: any) =>
           validStatuses.includes(sub.status)
         );
@@ -189,32 +188,33 @@ export default function PaymentReturnPage() {
   };
 
   // Enhanced verification function that also checks Stripe directly
-  const enhancedVerifyWebhookProcessing = async (
-    sessionId: string,
-    retryCount = 0
-  ): Promise<{ success: boolean; reason: string; stripeData?: any }> => {
-    try {
-      const supabase = createClient();
+  const enhancedVerifyWebhookProcessing = useCallback(
+    async (
+      sessionId: string,
+      retryCount = 0
+    ): Promise<{ success: boolean; reason: string; stripeData?: any }> => {
+      try {
+        const supabase = createClient();
 
-      // Get current user
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !user) {
-        return { success: false, reason: "User not authenticated" };
-      }
+        // Get current user
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError || !user) {
+          return { success: false, reason: "User not authenticated" };
+        }
 
-      console.log(`🔍 Enhanced verification (attempt ${retryCount + 1}/4):`, {
-        sessionId,
-        userId: user.id,
-      });
+        console.log(`🔍 Enhanced verification (attempt ${retryCount + 1}/4):`, {
+          sessionId,
+          userId: user.id,
+        });
 
-      // First, check database
-      const { data: restaurant, error: restaurantError } = await supabase
-        .from("restaurants")
-        .select(
-          `
+        // First, check database
+        const { data: restaurant, error: restaurantError } = await supabase
+          .from("restaurants")
+          .select(
+            `
           id,
           subscription_status,
           stripe_customer_id,
@@ -228,107 +228,109 @@ export default function PaymentReturnPage() {
             updated_at
           )
         `
-        )
-        .eq("owner_id", user.id)
-        .single();
+          )
+          .eq("owner_id", user.id)
+          .single();
 
-      if (restaurantError) {
-        return { success: false, reason: "Error fetching restaurant data" };
-      }
+        if (restaurantError) {
+          return { success: false, reason: "Error fetching restaurant data" };
+        }
 
-      // Check database first
-      const validStatuses = [
-        "active",
-        "trialing",
-        "past_due",
-        "incomplete",
-        "incomplete_expired",
-      ];
+        // Check database first
+        const validStatuses = [
+          "active",
+          "trialing",
+          "past_due",
+          "incomplete",
+          "incomplete_expired",
+        ];
 
-      if (restaurant.subscriptions && restaurant.subscriptions.length > 0) {
-        const hasValidSubscription = restaurant.subscriptions.some((sub: any) =>
-          validStatuses.includes(sub.status)
-        );
+        if (restaurant.subscriptions && restaurant.subscriptions.length > 0) {
+          const hasValidSubscription = restaurant.subscriptions.some(
+            (sub: any) => validStatuses.includes(sub.status)
+          );
 
-        if (hasValidSubscription) {
+          if (hasValidSubscription) {
+            return {
+              success: true,
+              reason: "Valid subscription found in database",
+              stripeData: restaurant.subscriptions,
+            };
+          }
+        }
+
+        // Check restaurant subscription status
+        if (
+          restaurant.subscription_status &&
+          validStatuses.includes(restaurant.subscription_status)
+        ) {
           return {
             success: true,
-            reason: "Valid subscription found in database",
-            stripeData: restaurant.subscriptions,
+            reason: "Valid subscription status found in restaurant record",
+            stripeData: { status: restaurant.subscription_status },
           };
         }
-      }
 
-      // Check restaurant subscription status
-      if (
-        restaurant.subscription_status &&
-        validStatuses.includes(restaurant.subscription_status)
-      ) {
+        // If we have a session ID, try to check Stripe directly and sync if needed
+        if (sessionId && retryCount >= 1) {
+          // Check Stripe on retry attempts
+          try {
+            console.log("🔍 Checking Stripe directly for session:", sessionId);
+
+            // Make a server-side call to check the session and sync if needed
+            const response = await fetch("/api/stripe/check-session", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                sessionId,
+                syncToDatabase: true, // Flag to sync subscription to database
+                restaurantId: restaurant.id,
+              }),
+            });
+
+            if (response.ok) {
+              const stripeData = await response.json();
+              if (stripeData.success) {
+                return {
+                  success: true,
+                  reason: stripeData.synced
+                    ? "Subscription synced from Stripe"
+                    : "Session verified with Stripe",
+                  stripeData: stripeData.data,
+                };
+              } else if (stripeData.error) {
+                console.log("Stripe check failed:", stripeData.error);
+              }
+            }
+          } catch (stripeError) {
+            console.error("Error checking Stripe directly:", stripeError);
+          }
+        }
+
+        // If not found and we haven't exceeded retries, wait and retry
+        if (retryCount < 3) {
+          const waitTime = Math.pow(2, retryCount + 1) * 1000;
+          console.log(`⏳ Waiting ${waitTime / 1000}s before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+          return enhancedVerifyWebhookProcessing(sessionId, retryCount + 1);
+        }
+
         return {
-          success: true,
-          reason: "Valid subscription status found in restaurant record",
-          stripeData: { status: restaurant.subscription_status },
+          success: false,
+          reason: "Verification failed after all retries",
+        };
+      } catch (error) {
+        console.error("❌ Error in enhanced verification:", error);
+        return {
+          success: false,
+          reason: "Verification error: " + (error as Error).message,
         };
       }
-
-      // If we have a session ID, try to check Stripe directly and sync if needed
-      if (sessionId && retryCount >= 1) {
-        // Check Stripe on retry attempts
-        try {
-          console.log("🔍 Checking Stripe directly for session:", sessionId);
-
-          // Make a server-side call to check the session and sync if needed
-          const response = await fetch("/api/stripe/check-session", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              sessionId,
-              syncToDatabase: true, // Flag to sync subscription to database
-              restaurantId: restaurant.id,
-            }),
-          });
-
-          if (response.ok) {
-            const stripeData = await response.json();
-            if (stripeData.success) {
-              return {
-                success: true,
-                reason: stripeData.synced
-                  ? "Subscription synced from Stripe"
-                  : "Session verified with Stripe",
-                stripeData: stripeData.data,
-              };
-            } else if (stripeData.error) {
-              console.log("Stripe check failed:", stripeData.error);
-            }
-          }
-        } catch (stripeError) {
-          console.error("Error checking Stripe directly:", stripeError);
-        }
-      }
-
-      // If not found and we haven't exceeded retries, wait and retry
-      if (retryCount < 3) {
-        const waitTime = Math.pow(2, retryCount + 1) * 1000;
-        console.log(`⏳ Waiting ${waitTime / 1000}s before retry...`);
-        await new Promise((resolve) => setTimeout(resolve, waitTime));
-        return enhancedVerifyWebhookProcessing(sessionId, retryCount + 1);
-      }
-
-      return {
-        success: false,
-        reason: "Verification failed after all retries",
-      };
-    } catch (error) {
-      console.error("❌ Error in enhanced verification:", error);
-      return {
-        success: false,
-        reason: "Verification error: " + (error as Error).message,
-      };
-    }
-  };
+    },
+    []
+  );
 
   useEffect(() => {
     const processPaymentReturn = async () => {
@@ -536,7 +538,7 @@ export default function PaymentReturnPage() {
     };
 
     processPaymentReturn();
-  }, [searchParams, router]);
+  }, [searchParams, router, enhancedVerifyWebhookProcessing]);
 
   const getStatusIcon = () => {
     switch (paymentStatus.status) {
@@ -851,8 +853,8 @@ export default function PaymentReturnPage() {
                     </div>
                     <p className="text-sm text-purple-700 text-center">
                       Your trial period has ended and regular billing has
-                      started. You'll be charged {paymentStatus.currency} for
-                      your {paymentStatus.plan} plan.
+                      started. You&apos;ll be charged {paymentStatus.currency}{" "}
+                      for your {paymentStatus.plan} plan.
                     </p>
                   </div>
                 )}
@@ -869,8 +871,8 @@ export default function PaymentReturnPage() {
                         </span>
                       </div>
                       <p className="text-sm text-orange-700 text-center">
-                        Your new plan is now active. You'll be charged at your
-                        next billing cycle.
+                        Your new plan is now active. You&apos;ll be charged at
+                        your next billing cycle.
                       </p>
                     </div>
                   )}
@@ -1083,8 +1085,8 @@ export default function PaymentReturnPage() {
 
                 <div className="bg-red-50 rounded-lg p-4 border border-red-200">
                   <p className="text-sm text-red-700 text-center">
-                    Don't worry! You can try again or contact our support team
-                    for assistance.
+                    Don&apos;t worry! You can try again or contact our support
+                    team for assistance.
                   </p>
                 </div>
 

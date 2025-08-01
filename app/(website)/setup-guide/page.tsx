@@ -172,7 +172,7 @@ export default function SetupGuidePage() {
           {/* Video description */}
           <div className="mt-8 text-center">
             <p className="text-base text-gray-600 dark:text-gray-300">
-              Learn how to set up your restaurant's complete digital ordering
+              Learn how to set up your restaurant&apos;s complete digital ordering
               system
             </p>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">

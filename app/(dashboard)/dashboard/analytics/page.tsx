@@ -222,7 +222,8 @@ const StatCard = ({
 };
 
 export default function AnalyticsPage() {
-  const [selectedPeriod, setSelectedPeriod] = useState<keyof typeof mockAnalytics.revenue>("today");
+  const [selectedPeriod, setSelectedPeriod] =
+    useState<keyof typeof mockAnalytics.revenue>("today");
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>([
     "revenue",
     "orders",
@@ -250,7 +251,7 @@ export default function AnalyticsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
           <p className="text-gray-500">
-            Track your restaurant's performance and insights
+            Track your restaurant&apos;s performance and insights
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -282,7 +283,12 @@ export default function AnalyticsPage() {
               <Label htmlFor="period" className="text-sm font-medium">
                 Time Period
               </Label>
-              <Select value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as keyof typeof mockAnalytics.revenue)}>
+              <Select
+                value={selectedPeriod}
+                onValueChange={(value) =>
+                  setSelectedPeriod(value as keyof typeof mockAnalytics.revenue)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -314,7 +320,9 @@ export default function AnalyticsPage() {
                   <SelectItem value="revenue">Revenue Only</SelectItem>
                   <SelectItem value="orders">Orders Only</SelectItem>
                   <SelectItem value="customers">Customers Only</SelectItem>
-                  <SelectItem value="avgOrderValue">Avg Order Value Only</SelectItem>
+                  <SelectItem value="avgOrderValue">
+                    Avg Order Value Only
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -206,7 +206,9 @@ export async function getRestaurantFeedbackStats(restaurantId: string) {
 
     stats.forEach((item) => {
       ratingDistribution[item.rating as keyof typeof ratingDistribution]++;
-      sentimentDistribution[item.sentiment]++;
+      sentimentDistribution[
+        item.sentiment as keyof typeof sentimentDistribution
+      ]++;
     });
 
     return {
@@ -320,7 +322,7 @@ export async function getOrderForFeedback(
       orderId: order.id,
       orderNumber: order.order_number,
       restaurantId: order.restaurant_id,
-      restaurantName: order.restaurants?.name || "Unknown Restaurant",
+      restaurantName: (order.restaurants as any)?.name || "Unknown Restaurant",
       totalAmount: order.total_amount,
       customerName: order.customer_name,
       createdAt: order.created_at,
@@ -330,7 +332,7 @@ export async function getOrderForFeedback(
     return { success: true, order: orderData };
   } catch (error) {
     console.error("Error fetching order for feedback:", error);
-    return { error: "Failed to fetch order information" };
+    return { success: false, error: "Failed to fetch order information" };
   }
 }
 
@@ -441,7 +443,9 @@ export async function getFeedbackAnalytics(
 
     feedback.forEach((item) => {
       ratingDistribution[item.rating as keyof typeof ratingDistribution]++;
-      sentimentDistribution[item.sentiment]++;
+      sentimentDistribution[
+        item.sentiment as keyof typeof sentimentDistribution
+      ]++;
     });
 
     // Get recent feedback (last 10)

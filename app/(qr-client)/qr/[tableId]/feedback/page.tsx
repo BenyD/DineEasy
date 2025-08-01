@@ -182,7 +182,7 @@ export default function FeedbackPage({
             Feedback Submitted!
           </h1>
           <p className="text-gray-600 mb-8 text-lg leading-relaxed">
-            You've already provided feedback for this order. Thank you!
+            You&apos;ve already provided feedback for this order. Thank you!
           </p>
 
           <Link href={`/qr/${resolvedParams.tableId}`}>

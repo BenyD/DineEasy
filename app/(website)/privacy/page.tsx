@@ -48,7 +48,7 @@ export default function PrivacyPolicy() {
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4">1. Introduction</h2>
               <p>
-                DineEasy ("we", "our", or "us") respects your privacy and is
+                DineEasy (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) respects your privacy and is
                 committed to protecting your personal data. This privacy policy
                 explains how we handle your data when you visit our website or
                 use our services in accordance with the Swiss Federal Act on
@@ -190,7 +190,7 @@ export default function PrivacyPolicy() {
               <p>
                 We may update this privacy policy from time to time. We will
                 notify you of any significant changes by posting the new policy
-                on this page and updating the "last updated" date.
+                on this page and updating the &quot;last updated&quot; date.
               </p>
             </section>
 

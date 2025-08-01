@@ -68,42 +68,48 @@ const DEFAULT_CONFIGS: Record<string, RateLimitConfig> = {
   api: {
     windowMs: 15 * 60 * 1000, // 15 minutes
     maxRequests: 100,
-    keyGenerator: (req) => `api:${req.ip || "unknown"}`,
+    keyGenerator: (req) =>
+      `api:${req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown"}`,
   },
 
   // Authentication endpoints
   auth: {
     windowMs: 15 * 60 * 1000, // 15 minutes
     maxRequests: 5,
-    keyGenerator: (req) => `auth:${req.ip || "unknown"}`,
+    keyGenerator: (req) =>
+      `auth:${req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown"}`,
   },
 
   // Webhook endpoints
   webhook: {
     windowMs: 60 * 1000, // 1 minute
     maxRequests: 10,
-    keyGenerator: (req) => `webhook:${req.ip || "unknown"}`,
+    keyGenerator: (req) =>
+      `webhook:${req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown"}`,
   },
 
   // File upload endpoints
   upload: {
     windowMs: 60 * 1000, // 1 minute
     maxRequests: 5,
-    keyGenerator: (req) => `upload:${req.ip || "unknown"}`,
+    keyGenerator: (req) =>
+      `upload:${req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown"}`,
   },
 
   // QR code generation
   qr: {
     windowMs: 60 * 1000, // 1 minute
     maxRequests: 20,
-    keyGenerator: (req) => `qr:${req.ip || "unknown"}`,
+    keyGenerator: (req) =>
+      `qr:${req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown"}`,
   },
 
   // General endpoints
   default: {
     windowMs: 60 * 1000, // 1 minute
     maxRequests: 30,
-    keyGenerator: (req) => `default:${req.ip || "unknown"}`,
+    keyGenerator: (req) =>
+      `default:${req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown"}`,
   },
 };
 
@@ -123,7 +129,7 @@ export function createRateLimit(config: RateLimitConfig) {
       // Generate rate limit key
       const key = config.keyGenerator
         ? config.keyGenerator(req)
-        : `default:${req.ip || "unknown"}`;
+        : `default:${req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown"}`;
 
       // Get current rate limit data
       const data = await store.increment(key, config.windowMs);

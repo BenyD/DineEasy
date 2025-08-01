@@ -120,7 +120,7 @@ export default function ContactPage() {
                   Contact Information
                 </h2>
                 <p className="mt-2 text-gray-600">
-                  Swiss quality support for your restaurant's success.
+                  Swiss quality support for your restaurant&apos;s success.
                 </p>
                 <div className="mt-8 space-y-6">
                   <motion.div
@@ -221,7 +221,8 @@ export default function ContactPage() {
                   <Alert className="mt-4 bg-green-50 text-green-700 border-green-200">
                     <CheckCircle2 className="h-4 w-4" />
                     <span className="ml-2">
-                      Thank you for your message! We'll get back to you soon.
+                      Thank you for your message! We&apos;ll get back to you
+                      soon.
                     </span>
                   </Alert>
                 )}
@@ -337,7 +338,7 @@ export default function ContactPage() {
                 </h3>
                 <p className="text-gray-600 mb-6">
                   Located in the heart of Zürich, our office is easily
-                  accessible by public transport. We'd love to meet you in
+                  accessible by public transport. We&apos;d love to meet you in
                   person and discuss how DineEasy can help your restaurant
                   thrive.
                 </p>

@@ -392,7 +392,8 @@ export default function NotFound() {
               </div>
             </div>
             <p className="text-gray-600 max-w-md mx-auto text-lg">
-              The page you're looking for doesn't exist or has been moved.
+              The page you&apos;re looking for doesn&apos;t exist or has been
+              moved.
             </p>
             <div className="flex items-center justify-center gap-4">
               <Button

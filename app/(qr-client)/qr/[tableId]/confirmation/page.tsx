@@ -444,7 +444,7 @@ export default function ConfirmationPage({
             </h3>
           </div>
           <p className="text-gray-600 mb-4">
-            We'd love to hear your feedback to improve our service.
+            We&apos;d love to hear your feedback to improve our service.
           </p>
           <Link
             href={`/qr/${resolvedParams.tableId}/feedback?order_id=${order?.id}`}

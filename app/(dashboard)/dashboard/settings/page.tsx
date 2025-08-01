@@ -889,7 +889,7 @@ export default function SettingsPage() {
                     <div>
                       <CardTitle>Restaurant Information</CardTitle>
                       <CardDescription>
-                        Update your restaurant's profile and appearance
+                        Update your restaurant&apos;s profile and appearance
                       </CardDescription>
                     </div>
                     <motion.div

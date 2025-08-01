@@ -548,7 +548,7 @@ export default function CheckoutPage({
               </div>
               <div className="text-sm text-amber-600 space-y-1">
                 <p>
-                  This restaurant doesn't have online payment processing set up.
+                  This restaurant doesn&apos;t have online payment processing set up.
                 </p>
                 {cardPaymentIssues.length > 0 && (
                   <div className="mt-2">
@@ -677,7 +677,7 @@ export default function CheckoutPage({
                 required
               />
               <p className="text-xs text-gray-500 mt-2">
-                We'll send your receipt and order confirmation to this email
+                We&apos;ll send your receipt and order confirmation to this email
               </p>
             </div>
           </div>

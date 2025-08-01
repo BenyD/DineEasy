@@ -278,7 +278,7 @@ export default function SignUpPage() {
                     }`}
                   >
                     <Check className="h-4 w-4" />
-                    One special character (!@#$%^&*(),.?":{}|&lt;&gt;)
+                    One special character (!@#$%^&*(),.?&quot;:{}|&lt;&gt;)
                   </li>
                 </ul>
               </div>

@@ -2,17 +2,34 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import {
   getMenuItems,
-  getMenuStats,
   createMenuItem,
   updateMenuItem,
   deleteMenuItem,
-  updateMenuItemStatus,
 } from "@/lib/actions/menu";
 import { getUserRestaurants } from "@/lib/actions/restaurant";
-import type { Database } from "@/types/supabase";
 
-type MenuItem = Database["public"]["Tables"]["menu_items"]["Row"];
-type MenuItemStatus = Database["public"]["Enums"]["menu_item_status"];
+// Define types based on database schema
+type MenuItem = {
+  id: string;
+  restaurant_id: string;
+  category_id: string | null;
+  name: string;
+  description: string | null;
+  price: number;
+  currency: string;
+  image_url: string | null;
+  is_available: boolean;
+  is_featured: boolean;
+  allergens: string[] | null;
+  tags: string[] | null;
+  preparation_time: number | null;
+  calories: number | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type MenuItemStatus = "available" | "unavailable" | "featured";
 
 interface MenuStats {
   total: number;
@@ -219,33 +236,25 @@ export function useMenuOptimized(): UseMenuOptimizedReturn {
       setLoading(true);
       setError(null);
 
-      const [itemsResult, statsResult, restaurantsResult] = await Promise.all([
+      const [itemsResult, restaurantsResult] = await Promise.all([
         getMenuItems(),
-        getMenuStats(),
         getUserRestaurants(),
       ]);
 
       if (itemsResult.success && itemsResult.data) {
         const itemsById = itemsResult.data.reduce(
-          (acc, item) => {
+          (acc: Record<string, any>, item: any) => {
             acc[item.id] = item;
             return acc;
           },
-          {} as Record<string, MenuItem>
+          {} as Record<string, any>
         );
 
         setMenuItemsById(itemsById);
-        setItemIds(itemsResult.data.map((i) => i.id));
+        setItemIds(itemsResult.data.map((i: any) => i.id));
         setCachedData(CACHE_KEYS.MENU_ITEMS, itemsById);
       } else {
         setError(itemsResult.error || "Failed to load menu items");
-      }
-
-      if (statsResult.success && statsResult.data) {
-        setStats(statsResult.data);
-        setCachedData(CACHE_KEYS.STATS, statsResult.data);
-      } else {
-        setError(statsResult.error || "Failed to load menu statistics");
       }
 
       if (
@@ -289,7 +298,9 @@ export function useMenuOptimized(): UseMenuOptimizedReturn {
       updateMenuItemOptimistic(updatedItem);
 
       try {
-        const result = await updateMenuItemStatus(itemId, status);
+        const formData = new FormData();
+        formData.append("status", status);
+        const result = await updateMenuItem(itemId, formData);
         if (!result.success) {
           // Revert on failure
           updateMenuItemOptimistic(item);

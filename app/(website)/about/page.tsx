@@ -199,11 +199,11 @@ export default function AboutPage() {
               <p className="text-lg text-gray-600">
                 After talking to hundreds of restaurant owners, we discovered a
                 common thread: the need for simple, affordable technology that
-                actually works. That's why we built DineEasy with a clear focus
-                on what matters most to restaurants.
+                actually works. That&apos;s why we built DineEasy with a clear
+                focus on what matters most to restaurants.
               </p>
               <p className="text-lg text-gray-600">
-                Today, we're proud to serve over 1,000 restaurants with our
+                Today, we&apos;re proud to serve over 1,000 restaurants with our
                 transparent pricing model: just 2% commission on card payments,
                 no hidden fees, and all the features you need to succeed.
               </p>

@@ -69,8 +69,8 @@ export default function ForgotPasswordPage() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold mb-2">Reset your password</h1>
             <p className="text-gray-500">
-              Enter your email address and we'll send you a link to reset your
-              password
+              Enter your email address and we&apos;ll send you a link to reset
+              your password
             </p>
           </div>
 
@@ -82,16 +82,16 @@ export default function ForgotPasswordPage() {
             >
               <Alert className="bg-green-50 border-green-200 mb-6">
                 <AlertDescription className="text-green-800">
-                  If an account exists with {email}, we've sent a password reset
-                  link to this email address. Please check your inbox and spam
-                  folder.
+                  If an account exists with {email}, we&apos;ve sent a password
+                  reset link to this email address. Please check your inbox and
+                  spam folder.
                 </AlertDescription>
               </Alert>
 
               <div className="text-center">
                 <p className="text-sm text-gray-500 mb-6">
-                  The reset link will expire in 1 hour. If you don't receive an
-                  email, check your spam folder or try again.
+                  The reset link will expire in 1 hour. If you don&apos;t
+                  receive an email, check your spam folder or try again.
                 </p>
 
                 <Button
@@ -204,8 +204,8 @@ export default function ForgotPasswordPage() {
             </h2>
             <p className="text-gray-600 mb-6">
               We take your account security seriously. After resetting your
-              password, you'll regain access to your restaurant dashboard and
-              all your data.
+              password, you&apos;ll regain access to your restaurant dashboard
+              and all your data.
             </p>
           </motion.div>
         </div>

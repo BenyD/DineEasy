@@ -2,7 +2,6 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
-import { redirect } from "next/navigation";
 
 // Utility function to validate currency has all required Stripe price IDs
 function validateCurrency(currency: string): boolean {

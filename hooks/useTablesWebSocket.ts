@@ -1,9 +1,24 @@
 import { useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { getTableWebSocket, disconnectTableWebSocket } from "@/lib/websocket";
-import type { Database } from "@/types/supabase";
 
-type Table = Database["public"]["Tables"]["tables"]["Row"];
+// Define Table type based on database schema
+type Table = {
+  id: string;
+  restaurant_id: string;
+  number: string;
+  capacity: number;
+  status: "available" | "occupied" | "reserved" | "maintenance";
+  qr_code: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  layout_x: number;
+  layout_y: number;
+  layout_rotation: number;
+  layout_width: number;
+  layout_height: number;
+};
 
 interface WebSocketPayload {
   eventType: "INSERT" | "UPDATE" | "DELETE";
@@ -42,6 +57,24 @@ export function useTablesWebSocket({
 
   const connect = useCallback(() => {
     if (!enabled || isConnectedRef.current) return;
+
+    const handleReconnect = () => {
+      if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+        console.error("Max reconnection attempts reached");
+        toast.error("Lost connection to real-time updates");
+        return;
+      }
+
+      reconnectAttemptsRef.current++;
+
+      console.log(
+        `Attempting to reconnect... (${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
+      );
+
+      reconnectTimeoutRef.current = setTimeout(() => {
+        connect();
+      }, reconnectInterval);
+    };
 
     try {
       const webSocket = getTableWebSocket();
@@ -101,7 +134,14 @@ export function useTablesWebSocket({
       console.error("Failed to connect to Tables WebSocket:", error);
       handleReconnect();
     }
-  }, [enabled, onTableAdded, onTableUpdated, onTableDeleted]);
+  }, [
+    enabled,
+    onTableAdded,
+    onTableUpdated,
+    onTableDeleted,
+    reconnectInterval,
+    maxReconnectAttempts,
+  ]);
 
   const disconnect = useCallback(() => {
     if (unsubscribeRef.current) {
@@ -117,24 +157,6 @@ export function useTablesWebSocket({
     isConnectedRef.current = false;
     console.log("Tables WebSocket disconnected");
   }, []);
-
-  const handleReconnect = useCallback(() => {
-    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-      console.error("Max reconnection attempts reached");
-      toast.error("Lost connection to real-time updates");
-      return;
-    }
-
-    reconnectAttemptsRef.current++;
-
-    console.log(
-      `Attempting to reconnect... (${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
-    );
-
-    reconnectTimeoutRef.current = setTimeout(() => {
-      connect();
-    }, reconnectInterval);
-  }, [connect, reconnectInterval, maxReconnectAttempts]);
 
   // Setup WebSocket error handling
   useEffect(() => {

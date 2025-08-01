@@ -236,7 +236,9 @@ export function useMenuForm({
             // For now, return null and filter out
             return null;
           })
-          .filter(Boolean) || [];
+          .filter(
+            (allergen): allergen is MenuItemAllergen => allergen !== null
+          ) || [];
 
       setFormState((prev) => ({
         ...prev,
@@ -252,7 +254,7 @@ export function useMenuForm({
           popular: item.popular || false,
           image: item.image || "",
         },
-        activeTab: activeTabRef.current,
+        activeTab: activeTabRef.current as "basic" | "details" | "image",
         isFormInitialized: true,
       }));
     }

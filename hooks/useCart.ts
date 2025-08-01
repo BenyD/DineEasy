@@ -107,21 +107,6 @@ export function useCart(tableId?: string) {
   const [showTableChangeWarning, setShowTableChangeWarning] = useState(false);
   const [pendingTableId, setPendingTableId] = useState<string | null>(null);
 
-  // Reset cart if table ID changes with warning
-  useEffect(() => {
-    if (tableId && tableId !== currentTableId) {
-      if (cart.length > 0) {
-        // Show warning before clearing cart
-        setShowTableChangeWarning(true);
-        setPendingTableId(tableId);
-        return;
-      } else {
-        // No items in cart, safe to change table
-        resetCartForNewTable(tableId);
-      }
-    }
-  }, [tableId, cart.length]);
-
   const resetCartForNewTable = useCallback((newTableId: string) => {
     console.log("Table ID changed, clearing cart:", {
       old: currentTableId,
@@ -157,6 +142,21 @@ export function useCart(tableId?: string) {
     setShowTableChangeWarning(false);
     setPendingTableId(null);
   }, []);
+
+  // Reset cart if table ID changes with warning
+  useEffect(() => {
+    if (tableId && tableId !== currentTableId) {
+      if (cart.length > 0) {
+        // Show warning before clearing cart
+        setShowTableChangeWarning(true);
+        setPendingTableId(tableId);
+        return;
+      } else {
+        // No items in cart, safe to change table
+        resetCartForNewTable(tableId);
+      }
+    }
+  }, [tableId, cart.length, resetCartForNewTable]);
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
@@ -214,31 +214,6 @@ export function useCart(tableId?: string) {
     }
   }, []);
 
-  // Enhanced update quantity with validation
-  const updateQuantity = useCallback((id: string, quantity: number) => {
-    try {
-      if (quantity < 0) {
-        setLastError("Invalid quantity");
-        return;
-      }
-
-      if (quantity === 0) {
-        removeFromCart(id);
-        return;
-      }
-
-      setLastError(null);
-      setCart((currentCart) =>
-        currentCart.map((item) =>
-          item.id === id ? { ...item, quantity } : item
-        )
-      );
-    } catch (error) {
-      console.error("Error updating quantity:", error);
-      setLastError("Failed to update quantity");
-    }
-  }, []);
-
   // Enhanced remove from cart
   const removeFromCart = useCallback((id: string) => {
     try {
@@ -249,6 +224,34 @@ export function useCart(tableId?: string) {
       setLastError("Failed to remove item from cart");
     }
   }, []);
+
+  // Enhanced update quantity with validation
+  const updateQuantity = useCallback(
+    (id: string, quantity: number) => {
+      try {
+        if (quantity < 0) {
+          setLastError("Invalid quantity");
+          return;
+        }
+
+        if (quantity === 0) {
+          removeFromCart(id);
+          return;
+        }
+
+        setLastError(null);
+        setCart((currentCart) =>
+          currentCart.map((item) =>
+            item.id === id ? { ...item, quantity } : item
+          )
+        );
+      } catch (error) {
+        console.error("Error updating quantity:", error);
+        setLastError("Failed to update quantity");
+      }
+    },
+    [removeFromCart]
+  );
 
   // Enhanced clear cart with state reset
   const clearCart = useCallback(() => {

@@ -15,7 +15,7 @@ export default function UnsubscribePage() {
             Unsubscribe from Newsletter
           </h1>
           <p className="text-gray-600">
-            We're sorry to see you go. You can unsubscribe from our newsletter
+            We&apos;re sorry to see you go. You can unsubscribe from our newsletter
             below.
           </p>
         </div>

@@ -50,6 +50,32 @@ export function useRestaurantWebSocket({
   const connect = useCallback(() => {
     if (!enabled || isConnectedRef.current) return;
 
+    const handleReconnect = () => {
+      if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+        console.error(
+          "Max reconnection attempts reached for Restaurant WebSocket"
+        );
+        return;
+      }
+
+      reconnectAttemptsRef.current++;
+      console.log(
+        `Restaurant WebSocket reconnection attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts}`
+      );
+
+      // Disconnect and reconnect
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+      isConnectedRef.current = false;
+      setIsConnected(false);
+
+      reconnectTimeoutRef.current = setTimeout(() => {
+        connect();
+      }, reconnectInterval);
+    };
+
     try {
       const webSocket = getRestaurantWebSocket();
 
@@ -70,8 +96,8 @@ export function useRestaurantWebSocket({
                   restaurant.is_open !== oldRestaurant.is_open
                 ) {
                   onRestaurantStatusChanged?.(
-                    restaurant.is_open,
-                    oldRestaurant.is_open
+                    restaurant.is_open ?? false,
+                    oldRestaurant.is_open ?? false
                   );
 
                   // Show toast notification for status change
@@ -100,8 +126,8 @@ export function useRestaurantWebSocket({
                   restaurant.is_open !== oldRestaurant.is_open
                 ) {
                   onRestaurantStatusChanged?.(
-                    restaurant.is_open,
-                    oldRestaurant.is_open
+                    restaurant.is_open ?? false,
+                    oldRestaurant.is_open ?? false
                   );
                 }
 
@@ -120,7 +146,14 @@ export function useRestaurantWebSocket({
       console.error("Error connecting to Restaurant WebSocket:", error);
       handleReconnect();
     }
-  }, [enabled, restaurantId, onRestaurantUpdated, onRestaurantStatusChanged]);
+  }, [
+    enabled,
+    restaurantId,
+    onRestaurantUpdated,
+    onRestaurantStatusChanged,
+    reconnectInterval,
+    maxReconnectAttempts,
+  ]);
 
   const disconnect = useCallback(() => {
     if (unsubscribeRef.current) {
@@ -137,26 +170,6 @@ export function useRestaurantWebSocket({
 
     console.log("Restaurant WebSocket disconnected");
   }, []);
-
-  const handleReconnect = useCallback(() => {
-    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-      console.error(
-        "Max reconnection attempts reached for Restaurant WebSocket"
-      );
-      return;
-    }
-
-    reconnectAttemptsRef.current++;
-    console.log(
-      `Restaurant WebSocket reconnection attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts}`
-    );
-
-    disconnect();
-
-    reconnectTimeoutRef.current = setTimeout(() => {
-      connect();
-    }, reconnectInterval);
-  }, [disconnect, connect, reconnectInterval, maxReconnectAttempts]);
 
   useEffect(() => {
     connect();

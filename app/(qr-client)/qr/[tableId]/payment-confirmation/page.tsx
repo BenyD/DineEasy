@@ -949,7 +949,7 @@ export default function PaymentConfirmationPage({
                 <span className="font-medium">Track Your Order</span>
               </div>
               <p className="text-sm text-green-600">
-                You'll be redirected to the order tracking page where you can
+                You&apos;ll be redirected to the order tracking page where you can
                 see real-time updates of your order status.
               </p>
             </div>

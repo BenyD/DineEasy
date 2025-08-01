@@ -1,9 +1,27 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { toast } from "sonner";
 import { getMenuWebSocket, disconnectMenuWebSocket } from "@/lib/websocket";
-import type { Database } from "@/types/supabase";
 
-type MenuItem = Database["public"]["Tables"]["menu_items"]["Row"];
+// Define MenuItem type based on database schema
+type MenuItem = {
+  id: string;
+  restaurant_id: string;
+  category_id: string | null;
+  name: string;
+  description: string | null;
+  price: number;
+  currency: string;
+  image_url: string | null;
+  is_available: boolean;
+  is_featured: boolean;
+  allergens: string[] | null;
+  tags: string[] | null;
+  preparation_time: number | null;
+  calories: number | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
 
 interface WebSocketPayload {
   eventType: "INSERT" | "UPDATE" | "DELETE";
@@ -43,6 +61,24 @@ export function useMenuWebSocket({
 
   const connect = useCallback(() => {
     if (!enabled || isConnectedRef.current) return;
+
+    const handleReconnect = () => {
+      if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+        console.error("Max reconnection attempts reached");
+        toast.error("Lost connection to real-time updates");
+        return;
+      }
+
+      reconnectAttemptsRef.current++;
+
+      console.log(
+        `Attempting to reconnect... (${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
+      );
+
+      reconnectTimeoutRef.current = setTimeout(() => {
+        connect();
+      }, reconnectInterval);
+    };
 
     try {
       const webSocket = getMenuWebSocket();
@@ -106,7 +142,14 @@ export function useMenuWebSocket({
       console.error("Failed to connect to Menu WebSocket:", error);
       handleReconnect();
     }
-  }, [enabled, onItemAdded, onItemUpdated, onItemDeleted]);
+  }, [
+    enabled,
+    onItemAdded,
+    onItemUpdated,
+    onItemDeleted,
+    reconnectInterval,
+    maxReconnectAttempts,
+  ]);
 
   const disconnect = useCallback(() => {
     if (unsubscribeRef.current) {
@@ -123,24 +166,6 @@ export function useMenuWebSocket({
     setIsConnected(false);
     console.log("Menu WebSocket disconnected");
   }, []);
-
-  const handleReconnect = useCallback(() => {
-    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-      console.error("Max reconnection attempts reached");
-      toast.error("Lost connection to real-time updates");
-      return;
-    }
-
-    reconnectAttemptsRef.current++;
-
-    console.log(
-      `Attempting to reconnect... (${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
-    );
-
-    reconnectTimeoutRef.current = setTimeout(() => {
-      connect();
-    }, reconnectInterval);
-  }, [connect, reconnectInterval, maxReconnectAttempts]);
 
   // Handle enabled state changes
   useEffect(() => {

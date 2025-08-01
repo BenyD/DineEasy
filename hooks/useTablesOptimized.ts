@@ -10,10 +10,26 @@ import {
   updateTable,
 } from "@/lib/actions/tables";
 import { getUserRestaurants } from "@/lib/actions/restaurant";
-import type { Database } from "@/types/supabase";
 
-type Table = Database["public"]["Tables"]["tables"]["Row"];
-type TableStatus = Database["public"]["Enums"]["table_status"];
+// Define types based on database schema
+type Table = {
+  id: string;
+  restaurant_id: string;
+  number: string;
+  capacity: number;
+  status: "available" | "occupied" | "reserved" | "maintenance";
+  qr_code: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  layout_x: number;
+  layout_y: number;
+  layout_rotation: number;
+  layout_width: number;
+  layout_height: number;
+};
+
+type TableStatus = "available" | "occupied" | "reserved" | "maintenance";
 
 interface TableStats {
   total: number;

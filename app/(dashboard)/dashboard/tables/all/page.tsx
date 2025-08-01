@@ -815,7 +815,7 @@ function TablesPage() {
             </div>
             {!table && (
               <p className="text-xs text-muted-foreground">
-                Auto-fills the next available number. Click "Auto" to
+                Auto-fills the next available number. Click &quot;Auto&quot; to
                 regenerate.
               </p>
             )}

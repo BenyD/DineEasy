@@ -28,7 +28,6 @@ export type Currency = "CHF";
 // | "JPY"
 // | "HKD"
 // | "KRW";
-export type PriceRange = "$" | "$$" | "$$$" | "$$$$";
 
 export type OrderStatus =
   | "pending"
@@ -89,7 +88,7 @@ export interface Restaurant {
   currency: Currency;
   taxRate: number;
   vatNumber?: string;
-  priceRange?: PriceRange;
+  priceRange?: string;
   seatingCapacity?: number;
   acceptsReservations: boolean;
   deliveryAvailable: boolean;

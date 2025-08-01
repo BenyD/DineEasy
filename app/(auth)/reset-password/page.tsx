@@ -287,7 +287,7 @@ export default function ResetPasswordPage() {
                       }`}
                     >
                       <Check className="h-4 w-4" />
-                      One special character (!@#$%^&*(),.?":{}|&lt;&gt;)
+                      One special character (!@#$%^&*(),.?&quot;:{}|&lt;&gt;)
                     </li>
                   </ul>
                 </div>
@@ -400,9 +400,9 @@ export default function ResetPasswordPage() {
               Create a Strong Password
             </h2>
             <p className="text-gray-600 mb-6">
-              Choose a strong, unique password that you haven't used elsewhere.
-              This helps keep your account secure and protects your restaurant's
-              data.
+              Choose a strong, unique password that you haven&apos;t used
+              elsewhere. This helps keep your account secure and protects your
+              restaurant&apos;s data.
             </p>
           </motion.div>
         </div>

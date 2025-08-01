@@ -4,11 +4,54 @@ import {
   getOrdersWebSocket,
   disconnectOrdersWebSocket,
 } from "@/lib/websocket/orders";
-import type { Database } from "@/types/supabase";
 
-type Order = Database["public"]["Tables"]["orders"]["Row"];
-type OrderItem = Database["public"]["Tables"]["order_items"]["Row"];
-type Payment = Database["public"]["Tables"]["payments"]["Row"];
+// Define types based on database schema
+type Order = {
+  id: string;
+  restaurant_id: string;
+  table_id: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  status:
+    | "pending"
+    | "confirmed"
+    | "preparing"
+    | "ready"
+    | "delivered"
+    | "cancelled"
+    | "completed";
+  total_amount: number;
+  currency: string;
+  order_number: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type OrderItem = {
+  id: string;
+  order_id: string;
+  menu_item_id: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type Payment = {
+  id: string;
+  order_id: string;
+  amount: number;
+  currency: string;
+  status: "pending" | "completed" | "failed" | "refunded";
+  payment_method: string;
+  stripe_payment_intent_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 interface WebSocketPayload {
   eventType: "INSERT" | "UPDATE" | "DELETE";
@@ -59,6 +102,7 @@ export function useOrdersWebSocket({
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const connectRef = useRef<(() => void) | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   const connect = useCallback(() => {
@@ -200,7 +244,23 @@ export function useOrdersWebSocket({
       console.log("Orders WebSocket connected");
     } catch (error) {
       console.error("Failed to connect to Orders WebSocket:", error);
-      handleReconnect();
+      // Use setTimeout to avoid dependency issues
+      setTimeout(() => {
+        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          reconnectAttemptsRef.current++;
+          console.log(
+            `Attempting to reconnect... (${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
+          );
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (!isConnectedRef.current && connectRef.current) {
+              connectRef.current();
+            }
+          }, reconnectInterval);
+        } else {
+          console.error("Max reconnection attempts reached");
+          toast.error("Lost connection to real-time order updates");
+        }
+      }, 0);
     }
   }, [
     enabled,
@@ -214,7 +274,12 @@ export function useOrdersWebSocket({
     onPaymentAdded,
     onPaymentUpdated,
     onPaymentDeleted,
+    maxReconnectAttempts,
+    reconnectInterval,
   ]);
+
+  // Store connect function in ref
+  connectRef.current = connect;
 
   const disconnect = useCallback(() => {
     if (unsubscribeRef.current) {
@@ -231,24 +296,6 @@ export function useOrdersWebSocket({
     setIsConnected(false);
     console.log("Orders WebSocket disconnected");
   }, []);
-
-  const handleReconnect = useCallback(() => {
-    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-      console.error("Max reconnection attempts reached");
-      toast.error("Lost connection to real-time order updates");
-      return;
-    }
-
-    reconnectAttemptsRef.current++;
-
-    console.log(
-      `Attempting to reconnect... (${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
-    );
-
-    reconnectTimeoutRef.current = setTimeout(() => {
-      connect();
-    }, reconnectInterval);
-  }, [connect, reconnectInterval, maxReconnectAttempts]);
 
   // Handle enabled state changes
   useEffect(() => {

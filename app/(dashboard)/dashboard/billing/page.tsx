@@ -344,7 +344,7 @@ export default function BillingPage() {
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <p className="text-sm text-gray-600">
-                  Before you can start your subscription, you'll need to:
+                  Before you can start your subscription, you&apos;ll need to:
                 </p>
                 <ul className="space-y-3">
                   <li className="flex items-center gap-2 text-sm">
@@ -373,7 +373,7 @@ export default function BillingPage() {
                   Choose a Plan
                 </Button>
                 <p className="text-xs text-gray-500 text-center mt-3">
-                  You'll be guided through a secure payment setup process
+                  You&apos;ll be guided through a secure payment setup process
                 </p>
               </div>
             </CardContent>
@@ -533,8 +533,9 @@ export default function BillingPage() {
                       <div>
                         <p className="font-medium">What happens next?</p>
                         <p className="mt-1">
-                          After your access ends, you'll be downgraded to the
-                          free plan. You can reactivate anytime to restore all
+                          After your access ends, you&apos;ll be downgraded to
+                          the free plan. You can reactivate anytime to restore
+                          all
                           {billingData.plan.toLowerCase()} features.
                         </p>
                       </div>
@@ -567,11 +568,11 @@ export default function BillingPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-lg font-semibold text-blue-800">
-                        🎉 You're on your 14-day free trial!
+                        🎉 You&apos;re on your 14-day free trial!
                       </h3>
                       <p className="text-sm text-blue-700 mt-1">
-                        You're currently on the {billingData.plan} plan with
-                        full access to all features.
+                        You&apos;re currently on the {billingData.plan} plan
+                        with full access to all features.
                       </p>
                     </div>
                     <Badge

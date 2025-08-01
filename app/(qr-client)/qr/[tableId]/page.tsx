@@ -461,7 +461,7 @@ export default function QRClientPage({
             {restaurantOpenStatus.autoManaged &&
               restaurantOpenStatus.nextOpen && (
                 <span className="block mt-2 text-sm">
-                  We'll be open again at{" "}
+                  We&apos;ll be open again at{" "}
                   {new Date(restaurantOpenStatus.nextOpen).toLocaleTimeString(
                     [],
                     { hour: "2-digit", minute: "2-digit" }
@@ -512,7 +512,7 @@ export default function QRClientPage({
             <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
               <div className="flex items-center gap-2 text-amber-700">
                 <AlertCircle className="w-4 h-4" />
-                <span className="text-sm font-medium">You're offline</span>
+                <span className="text-sm font-medium">You&apos;re offline</span>
               </div>
               <p className="text-xs text-amber-600 mt-1">
                 Some features may be limited. Please check your connection.

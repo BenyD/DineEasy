@@ -827,16 +827,26 @@ export async function completeOnboarding(restaurantId: string) {
     );
 
     // Send welcome email after onboarding completion, but only once
-    // Only send if Stripe Connect is enabled (completed) or explicitly skipped
+    // Send welcome email for new restaurants during setup, regardless of Stripe Connect status
     const stripeConnectEnabled =
       !!restaurant.stripe_account_id && restaurant.stripe_account_enabled;
     const stripeConnectSkipped =
       restaurant.onboarding_completed &&
       !restaurant.stripe_account_id &&
       restaurant.subscription_status !== "incomplete";
-    if (restaurant.welcome_email_sent) {
-      console.log("Welcome email already sent, skipping.");
-    } else if (stripeConnectEnabled || stripeConnectSkipped) {
+
+    // Send welcome email if:
+    // 1. Not already sent, AND
+    // 2. Either Stripe Connect is enabled, OR onboarding is completed, OR this is a new restaurant setup
+    const shouldSendWelcomeEmail =
+      !restaurant.welcome_email_sent &&
+      (stripeConnectEnabled ||
+        stripeConnectSkipped ||
+        restaurant.subscription_status === "trialing" ||
+        restaurant.subscription_status === "active" ||
+        restaurant.subscription_status === "incomplete");
+
+    if (shouldSendWelcomeEmail) {
       try {
         console.log("📧 Starting welcome email process...");
         console.log("👤 User email:", user.email);
@@ -845,6 +855,7 @@ export async function completeOnboarding(restaurantId: string) {
           subscription_status: restaurant.subscription_status,
           stripe_account_id: restaurant.stripe_account_id,
           stripe_account_enabled: restaurant.stripe_account_enabled,
+          onboarding_completed: restaurant.onboarding_completed,
         });
 
         // Validate user email
@@ -1545,17 +1556,196 @@ export async function checkAndSendWelcomeEmail(restaurantId: string) {
   }
 }
 
+export async function sendWelcomeEmailForRestaurant(restaurantId: string) {
+  const supabase = createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  try {
+    // Get the restaurant to verify ownership
+    const { data: restaurant, error: restaurantError } = await supabase
+      .from("restaurants")
+      .select("*")
+      .eq("id", restaurantId)
+      .eq("owner_id", user.id)
+      .single();
+
+    if (restaurantError || !restaurant) {
+      return { error: "Restaurant not found or not authorized" };
+    }
+
+    console.log("Manually sending welcome email for restaurant:", {
+      restaurantId: restaurant.id,
+      restaurantName: restaurant.name,
+      welcomeEmailSent: restaurant.welcome_email_sent,
+    });
+
+    // Check if welcome email was already sent
+    if (restaurant.welcome_email_sent) {
+      return { error: "Welcome email already sent for this restaurant" };
+    }
+
+    // Validate user email
+    if (!user.email) {
+      return { error: "User email is required for welcome email" };
+    }
+
+    // Get plan features based on subscription status
+    const getPlanFeatures = (planType: string) => {
+      switch (planType.toLowerCase()) {
+        case "starter":
+          return [
+            "Up to 100 orders per month",
+            "Basic menu management",
+            "QR code ordering",
+            "Email support",
+          ];
+        case "pro":
+          return [
+            "Up to 500 orders per month",
+            "Advanced menu management",
+            "QR code ordering",
+            "Kitchen display system",
+            "Analytics dashboard",
+            "Priority support",
+          ];
+        case "elite":
+          return [
+            "Unlimited orders",
+            "Advanced menu management",
+            "QR code ordering",
+            "Kitchen display system",
+            "Advanced analytics",
+            "Staff management",
+            "Multi-location support",
+            "Dedicated support",
+          ];
+        default:
+          return [
+            "Basic menu management",
+            "QR code ordering",
+            "Email support",
+            "Order tracking",
+          ];
+      }
+    };
+
+    // Get next steps based on setup status
+    const getNextSteps = (
+      hasStripeConnect: boolean,
+      stripeConnectEnabled: boolean
+    ) => {
+      const steps = [
+        "Set up your menu items with descriptions and photos",
+        "Configure your business hours and service types",
+        "Test your QR code ordering system",
+      ];
+
+      if (!hasStripeConnect || !stripeConnectEnabled) {
+        steps.push("Complete your Stripe Connect setup to accept payments");
+      } else {
+        steps.push("Start accepting orders and payments from customers");
+      }
+
+      steps.push("Review your analytics and optimize operations");
+
+      return steps;
+    };
+
+    // Determine plan and trial information
+    const plan =
+      restaurant.subscription_status === "trialing"
+        ? "starter"
+        : restaurant.subscription_status === "active"
+          ? "starter"
+          : "starter";
+    const interval = "monthly"; // Default, could be enhanced to get from subscription
+    const trialEndDate =
+      restaurant.subscription_status === "trialing"
+        ? new Date(
+            Date.now() + 14 * 24 * 60 * 60 * 1000
+          ).toLocaleDateString()
+        : undefined;
+
+    // Get Stripe Connect details if available
+    let stripeConnectData = {};
+    if (restaurant.stripe_account_id && restaurant.stripe_account_enabled) {
+      try {
+        const account = await stripe.accounts.retrieve(
+          restaurant.stripe_account_id
+        );
+
+        stripeConnectData = {
+          stripeAccountId: account.id,
+          stripeCountry: restaurant.country || account.country,
+          stripeBusinessType: account.business_type,
+          stripeChargesEnabled: account.charges_enabled,
+          stripePayoutsEnabled: account.payouts_enabled,
+          stripeSetupDate: new Date().toLocaleDateString(),
+        };
+      } catch (stripeError) {
+        console.error("Error fetching Stripe Connect details:", stripeError);
+        // Continue without Stripe Connect data if there's an error
+      }
+    }
+
+    const emailData = {
+      restaurantName: restaurant.name,
+      customerName: user.user_metadata?.full_name || restaurant.name,
+      plan: plan,
+      interval: interval,
+      trialEndDate: trialEndDate,
+      hasStripeConnect: !!restaurant.stripe_account_id,
+      stripeConnectEnabled: restaurant.stripe_account_enabled || false,
+      features: getPlanFeatures(plan),
+      nextSteps: getNextSteps(
+        !!restaurant.stripe_account_id,
+        restaurant.stripe_account_enabled || false
+      ),
+      ...stripeConnectData,
+    };
+
+    console.log("📧 Calling sendWelcomeToDineEasyEmail with data:", emailData);
+
+    const emailResult = await sendWelcomeToDineEasyEmail(
+      user.email!,
+      emailData
+    );
+
+    // Mark as sent
+    await supabase
+      .from("restaurants")
+      .update({
+        welcome_email_sent: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", restaurantId);
+
+    console.log("✅ Welcome email sent and marked as sent.");
+    console.log("📧 Email result:", emailResult);
+
+    return { success: true, emailResult };
+  } catch (error) {
+    console.error("Error sending welcome email:", error);
+    return { error: "Failed to send welcome email" };
+  }
+}
+
 export async function checkRestaurantOpenStatus(restaurantId: string) {
   try {
     const supabase = createClient();
-    
-    const { data, error } = await supabase
-      .rpc('check_restaurant_open_status', {
-        p_restaurant_id: restaurantId
-      });
+
+    const { data, error } = await supabase.rpc("check_restaurant_open_status", {
+      p_restaurant_id: restaurantId,
+    });
 
     if (error) {
-      console.error('Error checking restaurant open status:', error);
+      console.error("Error checking restaurant open status:", error);
       return { isOpen: false, autoManaged: false, error: error.message };
     }
 
@@ -1566,13 +1756,17 @@ export async function checkRestaurantOpenStatus(restaurantId: string) {
         autoManaged: status.auto_managed,
         currentTime: status.current_time,
         nextOpen: status.next_open,
-        nextClose: status.next_close
+        nextClose: status.next_close,
       };
     }
 
-    return { isOpen: false, autoManaged: false, error: 'No data returned' };
+    return { isOpen: false, autoManaged: false, error: "No data returned" };
   } catch (error) {
-    console.error('Error checking restaurant open status:', error);
-    return { isOpen: false, autoManaged: false, error: 'Failed to check status' };
+    console.error("Error checking restaurant open status:", error);
+    return {
+      isOpen: false,
+      autoManaged: false,
+      error: "Failed to check status",
+    };
   }
 }

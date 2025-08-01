@@ -533,7 +533,7 @@ export default function ConnectPage() {
                             Express Setup
                           </h4>
                           <p className="text-sm text-blue-700 mt-1">
-                            Takes just 5 minutes with Stripe's streamlined
+                            Takes just 5 minutes with Stripe&apos;s streamlined
                             Express onboarding.
                           </p>
                         </div>
@@ -571,7 +571,7 @@ export default function ConnectPage() {
                         onClick={() => setShowWarningDialog(true)}
                         className="text-sm text-gray-500 hover:text-gray-700 underline"
                       >
-                        Skip for now - I'll set this up later
+                        Skip for now - I&apos;ll set this up later
                       </button>
                     </div>
                   </div>
@@ -665,7 +665,7 @@ export default function ConnectPage() {
               </div>
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                 <h4 className="font-medium text-amber-800 mb-2">
-                  You'll need to set up payments later to:
+                  You&apos;ll need to set up payments later to:
                 </h4>
                 <ul className="text-sm text-amber-700 space-y-1">
                   <li>• Accept customer payments</li>
