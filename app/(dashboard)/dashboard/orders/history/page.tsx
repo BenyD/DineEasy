@@ -63,6 +63,7 @@ import {
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 import {
   getRestaurantOrders,
+  refundOrder,
   type Order,
   type OrderFilters,
 } from "@/lib/actions/orders";
@@ -73,6 +74,140 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+
+// Order Timeline Component
+const OrderTimeline = ({ order }: { order: Order }) => {
+  const timelineEvents = [];
+
+  // Order placed (always present)
+  timelineEvents.push({
+    id: "placed",
+    title: "Order Placed",
+    description: "Order was created and submitted",
+    timestamp: order.time,
+    status: "completed",
+    icon: "📋",
+    color: "blue",
+  });
+
+  // Payment processing (if card payment)
+  if (order.stripe_payment_intent_id) {
+    timelineEvents.push({
+      id: "payment_processing",
+      title: "Payment Processing",
+      description: "Card payment being processed",
+      timestamp: order.time, // Same as order time for card payments
+      status: "completed",
+      icon: "💳",
+      color: "blue",
+    });
+  }
+
+  // Payment completed
+  if (order.paymentStatus === "completed") {
+    timelineEvents.push({
+      id: "payment_completed",
+      title: "Payment Completed",
+      description: order.stripe_payment_intent_id
+        ? "Card payment successful"
+        : "Cash payment received",
+      timestamp: order.time, // For now, using order time
+      status: "completed",
+      icon: order.stripe_payment_intent_id ? "✅" : "💰",
+      color: "green",
+    });
+  }
+
+  // Order status changes (if we had timestamps for these)
+  if (order.status === "completed") {
+    timelineEvents.push({
+      id: "order_completed",
+      title: "Order Completed",
+      description: "Order was successfully completed",
+      timestamp: order.updated_at || order.time,
+      status: "completed",
+      icon: "🎉",
+      color: "green",
+    });
+  }
+
+  // Refund (if applicable)
+  if (order.status === "cancelled" && order.paymentStatus === "refunded") {
+    timelineEvents.push({
+      id: "refunded",
+      title: "Payment Refunded",
+      description:
+        order.paymentMethod === "card"
+          ? "Payment refunded via Stripe"
+          : "Cash refund processed - restaurant handled manually",
+      timestamp: order.updated_at || order.time,
+      status: "completed",
+      icon: "↩️",
+      color: "amber",
+    });
+  }
+
+  // Order cancelled (without refund)
+  if (order.status === "cancelled" && order.paymentStatus !== "refunded") {
+    timelineEvents.push({
+      id: "cancelled",
+      title: "Order Cancelled",
+      description:
+        order.paymentMethod === "cash"
+          ? "Order cancelled - no payment was made"
+          : "Order cancelled before payment confirmation",
+      timestamp: order.updated_at || order.time,
+      status: "completed",
+      icon: "❌",
+      color: "red",
+    });
+  }
+
+  const getColorClasses = (color: string) => {
+    switch (color) {
+      case "blue":
+        return "bg-blue-500 ring-blue-50";
+      case "green":
+        return "bg-green-500 ring-green-50";
+      case "amber":
+        return "bg-amber-500 ring-amber-50";
+      case "red":
+        return "bg-red-500 ring-red-50";
+      default:
+        return "bg-gray-500 ring-gray-50";
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {timelineEvents.map((event, index) => (
+        <div key={event.id} className="flex gap-3">
+          {/* Timeline dot and connector */}
+          <div className="flex-none flex flex-col items-center">
+            <div
+              className={`w-3 h-3 rounded-full ring-4 ${getColorClasses(event.color)}`}
+            />
+            {index < timelineEvents.length - 1 && (
+              <div className="w-0.5 h-8 bg-gray-200 mt-2" />
+            )}
+          </div>
+
+          {/* Event content */}
+          <div className="flex-1 pb-4">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg">{event.icon}</span>
+              <p className="text-sm font-medium text-gray-900">{event.title}</p>
+            </div>
+            <p className="text-xs text-gray-500 mb-1">{event.description}</p>
+            <p className="text-xs text-gray-400">
+              {safeFormat(event.timestamp, "MMM d, yyyy h:mm a")}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 // Status color mapping
 const getStatusColor = (status: string) => {
@@ -299,8 +434,8 @@ export default function OrderHistoryPage() {
         restaurant_id: newOrder.restaurant_id,
         table_id: newOrder.table_id || "",
         total_amount: newOrder.total_amount,
-        tax_amount: newOrder.tax_amount,
-        tip_amount: newOrder.tip_amount,
+        tax_amount: (newOrder as any).tax_amount || 0,
+        tip_amount: (newOrder as any).tip_amount || 0,
         created_at: newOrder.created_at,
         updated_at: newOrder.updated_at,
         stripe_payment_intent_id: (newOrder as any).stripe_payment_intent_id,
@@ -336,8 +471,8 @@ export default function OrderHistoryPage() {
           restaurant_id: updatedOrder.restaurant_id,
           table_id: updatedOrder.table_id || "",
           total_amount: updatedOrder.total_amount,
-          tax_amount: updatedOrder.tax_amount,
-          tip_amount: updatedOrder.tip_amount,
+          tax_amount: (updatedOrder as any).tax_amount || 0,
+          tip_amount: (updatedOrder as any).tip_amount || 0,
           created_at: updatedOrder.created_at,
           updated_at: updatedOrder.updated_at,
           stripe_payment_intent_id: (updatedOrder as any)
@@ -353,8 +488,8 @@ export default function OrderHistoryPage() {
                   ...order,
                   status: updatedOrder.status,
                   total_amount: updatedOrder.total_amount,
-                  tax_amount: updatedOrder.tax_amount,
-                  tip_amount: updatedOrder.tip_amount,
+                  tax_amount: (updatedOrder as any).tax_amount || 0,
+                  tip_amount: (updatedOrder as any).tip_amount || 0,
                   notes: updatedOrder.notes || undefined,
                   updated_at: updatedOrder.updated_at,
                 }
@@ -369,38 +504,38 @@ export default function OrderHistoryPage() {
   });
 
   // Fetch orders data
-  useEffect(() => {
-    const fetchOrders = async () => {
-      if (!restaurant?.id) return;
+  const fetchOrders = async () => {
+    if (!restaurant?.id) return;
 
-      setLoading(true);
-      try {
-        const filters: OrderFilters = {
-          historyOnly: true, // Only fetch completed, cancelled, or refunded orders
-        };
-        if (statusFilter && statusFilter !== "all") {
-          filters.status = statusFilter;
-        }
-        if (searchTerm) {
-          filters.search = searchTerm;
-        }
-
-        const result = await getRestaurantOrders(restaurant.id, filters);
-
-        if (result.success && result.data) {
-          setOrders(result.data);
-        } else {
-          console.error("Failed to fetch orders:", result.error);
-          toast.error("Failed to load orders");
-        }
-      } catch (error) {
-        console.error("Error fetching orders:", error);
-        toast.error("Failed to load orders");
-      } finally {
-        setLoading(false);
+    setLoading(true);
+    try {
+      const filters: OrderFilters = {
+        historyOnly: true, // Only fetch completed, cancelled, or refunded orders
+      };
+      if (statusFilter && statusFilter !== "all") {
+        filters.status = statusFilter;
       }
-    };
+      if (searchTerm) {
+        filters.search = searchTerm;
+      }
 
+      const result = await getRestaurantOrders(restaurant.id, filters);
+
+      if (result.success && result.data) {
+        setOrders(result.data);
+      } else {
+        console.error("Failed to fetch orders:", result.error);
+        toast.error("Failed to load orders");
+      }
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      toast.error("Failed to load orders");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchOrders();
   }, [restaurant?.id, statusFilter, searchTerm]);
 
@@ -703,212 +838,291 @@ export default function OrderHistoryPage() {
 
       {/* Orders Table */}
       <motion.div variants={itemVariants}>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Orders</CardTitle>
-            <CardDescription>
-              Showing {filteredOrders.length} of {orders.length} orders
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="rounded-md border">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="h-12 px-4 text-left align-middle font-medium text-gray-500">
+        <div className="bg-white rounded-lg border shadow-sm">
+          {/* Table Header */}
+          <div className="px-6 py-4 border-b bg-gray-50/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Order History
+                </h3>
+                <p className="text-sm text-gray-500">
+                  Showing {filteredOrders.length} of {orders.length} orders
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Refresh the data
+                    window.location.reload();
+                  }}
+                >
+                  <RefreshCcw className="w-4 h-4 mr-2" />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Table Content */}
+          {loading ? (
+            <motion.div
+              className="flex flex-col items-center justify-center py-16 px-6"
+              variants={itemVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              <motion.div
+                className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6"
+                variants={iconVariants}
+              >
+                <RefreshCcw className="w-12 h-12 text-gray-400 animate-spin" />
+              </motion.div>
+
+              <motion.h3
+                className="text-xl font-semibold text-gray-900 mb-2 text-center"
+                variants={itemVariants}
+              >
+                Loading order history...
+              </motion.h3>
+
+              <motion.p
+                className="text-gray-500 text-center max-w-md"
+                variants={itemVariants}
+              >
+                Please wait while we fetch your order history from the database.
+              </motion.p>
+            </motion.div>
+          ) : filteredOrders.length === 0 ? (
+            <motion.div
+              className="flex flex-col items-center justify-center py-16 px-6"
+              variants={itemVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              <motion.div
+                className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6"
+                variants={iconVariants}
+              >
+                <FileText className="w-12 h-12 text-gray-400" />
+              </motion.div>
+
+              <motion.h3
+                className="text-xl font-semibold text-gray-900 mb-2 text-center"
+                variants={itemVariants}
+              >
+                No orders found
+              </motion.h3>
+
+              <motion.p
+                className="text-gray-500 text-center mb-6 max-w-md"
+                variants={itemVariants}
+              >
+                No orders match your current filters. Try adjusting your search
+                criteria or check back later for new orders.
+              </motion.p>
+
+              <motion.div
+                className="flex flex-col sm:flex-row gap-3"
+                variants={itemVariants}
+              >
+                <Button
+                  variant="outline"
+                  onClick={resetFilters}
+                  className="flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Clear Filters
+                </Button>
+                <Button
+                  onClick={() => router.push("/dashboard/orders/active")}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  View Active Orders
+                </Button>
+              </motion.div>
+            </motion.div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-[160px]">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="font-medium -ml-3"
+                        className="font-medium h-auto p-0 hover:bg-transparent"
                         onClick={() => toggleSort("id")}
                       >
                         Order ID
                         <ArrowUpDown className="ml-2 h-3 w-3" />
                       </Button>
-                    </th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-gray-500">
+                    </TableHead>
+                    <TableHead className="w-[160px]">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="font-medium -ml-3"
+                        className="font-medium h-auto p-0 hover:bg-transparent"
                         onClick={() => toggleSort("time")}
                       >
-                        Date
+                        Date & Time
                         <ArrowUpDown className="ml-2 h-3 w-3" />
                       </Button>
-                    </th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-gray-500">
-                      Table
-                    </th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-gray-500">
-                      Customer
-                    </th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-gray-500">
-                      Items
-                    </th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-gray-500">
+                    </TableHead>
+                    <TableHead className="w-[100px]">Table</TableHead>
+                    <TableHead className="w-[120px]">Customer</TableHead>
+                    <TableHead className="w-[150px]">Items</TableHead>
+                    <TableHead className="w-[120px]">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="font-medium -ml-3"
+                        className="font-medium h-auto p-0 hover:bg-transparent"
                         onClick={() => toggleSort("total")}
                       >
                         Total
                         <ArrowUpDown className="ml-2 h-3 w-3" />
                       </Button>
-                    </th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-gray-500">
-                      Status
-                    </th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-gray-500">
-                      Payment
-                    </th>
-                    <th className="h-12 px-4 text-right align-middle font-medium text-gray-500">
+                    </TableHead>
+                    <TableHead className="w-[100px]">Status</TableHead>
+                    <TableHead className="w-[100px]">Payment</TableHead>
+                    <TableHead className="w-[80px] text-right">
                       Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   <AnimatePresence mode="wait">
-                    {filteredOrders.length === 0 ? (
+                    {filteredOrders.map((order, index) => (
                       <motion.tr
-                        key="no-orders"
+                        key={order.id}
                         variants={tableRowVariants}
                         initial="hidden"
                         animate="visible"
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="group hover:bg-gray-50/50 cursor-pointer border-b"
+                        onClick={() => setSelectedOrder(order)}
                       >
-                        <td colSpan={9} className="h-24 text-center">
-                          <motion.div
-                            className="flex flex-col items-center justify-center text-gray-500"
-                            variants={itemVariants}
-                          >
-                            <motion.div variants={iconVariants}>
-                              <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                            </motion.div>
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">
-                              No orders found
-                            </h3>
-                            <p className="text-gray-500">
-                              Try adjusting your filters or search terms
-                            </p>
-                          </motion.div>
-                        </td>
-                      </motion.tr>
-                    ) : (
-                      filteredOrders.map((order, index) => (
-                        <motion.tr
-                          key={order.id}
-                          variants={tableRowVariants}
-                          initial="hidden"
-                          animate="visible"
-                          transition={{ delay: index * 0.05 }}
-                          className="group hover:bg-gray-50 cursor-pointer"
-                          onClick={() => setSelectedOrder(order)}
-                        >
-                          <td className="p-4 align-middle font-medium">
+                        <TableCell className="font-medium">
+                          <span className="font-mono text-sm">
                             {getOrderNumber(order)}
-                          </td>
-                          <td className="p-4 align-middle">
-                            <div className="flex flex-col">
-                              <span>
-                                {safeFormat(order.time, "MMM d, yyyy")}
-                              </span>
-                              <span className="text-xs text-gray-500">
-                                {safeFormat(order.time, "h:mm a")}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="p-4 align-middle">
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">
+                              {safeFormat(order.time, "MMM d, yyyy")}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {safeFormat(order.time, "h:mm a")}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             Table {order.tableNumber}
-                          </td>
-                          <td className="p-4 align-middle">
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">
                             {order.customerName || "Guest"}
-                          </td>
-                          <td className="p-4 align-middle">
-                            <div className="max-w-[200px] truncate">
-                              {order.items.map((item: any, i: number) => (
-                                <span key={item.id}>
-                                  {item.quantity}x {item.name}
-                                  {i < order.items.length - 1 && ", "}
-                                </span>
-                              ))}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div
+                            className="w-[130px] cursor-pointer hover:text-blue-600 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedOrder(order);
+                            }}
+                            title={`Click to view ${order.items.length} items`}
+                          >
+                            <div className="text-sm text-gray-900 truncate">
+                              {order.items.length === 1
+                                ? `${order.items[0].quantity}x ${order.items[0].name}`
+                                : order.items.length === 2
+                                  ? `${order.items[0].quantity}x ${order.items[0].name}, ${order.items[1].quantity}x ${order.items[1].name}`
+                                  : `${order.items[0].quantity}x ${order.items[0].name} +${order.items.length - 1} more`}
                             </div>
-                          </td>
-                          <td className="p-4 align-middle font-medium">
+                            <div className="text-xs text-gray-500 mt-1">
+                              {order.items.length} item
+                              {order.items.length !== 1 ? "s" : ""}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium text-sm">
                             {formatCurrency(order.total)}
-                          </td>
-                          <td className="p-4 align-middle">
-                            <Badge className={getStatusColor(order.status)}>
-                              {order.status.charAt(0).toUpperCase() +
-                                order.status.slice(1)}
-                            </Badge>
-                          </td>
-                          <td className="p-4 align-middle">
-                            <Badge
-                              variant="outline"
-                              className={getPaymentStatusColor(
-                                order.paymentStatus
-                              )}
-                            >
-                              {getPaymentStatusText(order.paymentStatus)}
-                            </Badge>
-                          </td>
-                          <td className="p-4 align-middle text-right">
-                            <Popover>
-                              <PopoverTrigger asChild>
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getStatusColor(order.status)}>
+                            {order.status.charAt(0).toUpperCase() +
+                              order.status.slice(1)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={getPaymentStatusColor(
+                              order.paymentStatus
+                            )}
+                          >
+                            {getPaymentStatusText(order.paymentStatus)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Open menu</span>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-48" align="end">
+                              <div className="space-y-1">
                                 <Button
                                   variant="ghost"
-                                  size="icon"
-                                  onClick={(e) => e.stopPropagation()}
+                                  size="sm"
+                                  className="w-full justify-start"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    console.log("Print receipt for", order.id);
+                                  }}
                                 >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                  <span className="sr-only">Open menu</span>
+                                  <Printer className="h-4 w-4 mr-2" />
+                                  Print Receipt
                                 </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-48" align="end">
-                                <div className="space-y-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="w-full justify-start"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      console.log(
-                                        "Print receipt for",
-                                        order.id
-                                      );
-                                    }}
-                                  >
-                                    <Printer className="h-4 w-4 mr-2" />
-                                    Print Receipt
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="w-full justify-start"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedOrder(order);
-                                    }}
-                                  >
-                                    <FileText className="h-4 w-4 mr-2" />
-                                    View Details
-                                  </Button>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </td>
-                        </motion.tr>
-                      ))
-                    )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full justify-start"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedOrder(order);
+                                  }}
+                                >
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  View Details
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </TableCell>
+                      </motion.tr>
+                    ))}
                   </AnimatePresence>
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </motion.div>
 
       {/* Order Details Sheet */}
@@ -1093,92 +1307,7 @@ export default function OrderHistoryPage() {
                           Order Timeline
                         </h3>
                         <div className="bg-white rounded-lg border p-4">
-                          <div className="space-y-4">
-                            <div className="flex gap-3">
-                              <div className="flex-none">
-                                <div className="w-2 h-2 mt-2 rounded-full bg-blue-500 ring-4 ring-blue-50" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium">
-                                  Order Placed
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {safeFormat(
-                                    selectedOrder.orderTime ||
-                                      selectedOrder.time,
-                                    "MMM d, yyyy h:mm a"
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-
-                            {selectedOrder.completedTime && (
-                              <div className="flex gap-3">
-                                <div className="flex-none">
-                                  <div className="w-2 h-2 mt-2 rounded-full bg-green-500 ring-4 ring-green-50" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium">
-                                    Order Completed
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {safeFormat(
-                                      selectedOrder.completedTime,
-                                      "MMM d, yyyy h:mm a"
-                                    )}
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-
-                            {selectedOrder.refundedTime && (
-                              <div className="flex gap-3">
-                                <div className="flex-none">
-                                  <div className="w-2 h-2 mt-2 rounded-full bg-amber-500 ring-4 ring-amber-50" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium">
-                                    Payment Refunded
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {safeFormat(
-                                      selectedOrder.refundedTime,
-                                      "MMM d, yyyy h:mm a"
-                                    )}
-                                  </p>
-                                  {selectedOrder.refundReason && (
-                                    <p className="text-xs bg-amber-50 p-2 rounded-md mt-1">
-                                      {selectedOrder.refundReason}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
-                            {selectedOrder.cancelledTime && (
-                              <div className="flex gap-3">
-                                <div className="flex-none">
-                                  <div className="w-2 h-2 mt-2 rounded-full bg-red-500 ring-4 ring-red-50" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium">
-                                    Order Cancelled
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {safeFormat(
-                                      selectedOrder.cancelledTime,
-                                      "MMM d, yyyy h:mm a"
-                                    )}
-                                  </p>
-                                  {selectedOrder.cancellationReason && (
-                                    <p className="text-xs bg-red-50 p-2 rounded-md mt-1">
-                                      {selectedOrder.cancellationReason}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                          <OrderTimeline order={selectedOrder} />
                         </div>
                       </div>
                     </div>
@@ -1186,22 +1315,67 @@ export default function OrderHistoryPage() {
 
                   {/* Footer Actions */}
                   <div className="flex-none border-t px-6 py-4 bg-gray-50">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          console.log("Print receipt for", selectedOrder.id)
-                        }
-                      >
-                        <Printer className="w-4 h-4 mr-2" />
-                        Print Receipt
-                      </Button>
-                      <Button
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                        onClick={() => setSelectedOrder(null)}
-                      >
-                        Close
-                      </Button>
+                    <div className="flex justify-between items-center">
+                      {/* Left side - Refund button (only for completed orders) */}
+                      {selectedOrder.status === "completed" &&
+                        selectedOrder.paymentStatus === "completed" && (
+                          <Button
+                            variant="outline"
+                            className="text-amber-600 border-amber-200 hover:bg-amber-50"
+                            onClick={async () => {
+                              if (
+                                confirm(
+                                  `Are you sure you want to refund this ${selectedOrder.paymentMethod} order?`
+                                )
+                              ) {
+                                try {
+                                  const result = await refundOrder(
+                                    selectedOrder.id
+                                  );
+                                  if (result.success) {
+                                    toast.success(
+                                      selectedOrder.paymentMethod === "card"
+                                        ? "Refund processed successfully via Stripe"
+                                        : "Order marked as refunded - please handle cash refund manually"
+                                    );
+                                    // Refresh orders to show updated status
+                                    fetchOrders();
+                                    setSelectedOrder(null);
+                                  } else {
+                                    toast.error(
+                                      result.error || "Failed to process refund"
+                                    );
+                                  }
+                                } catch (error) {
+                                  console.error("Refund error:", error);
+                                  toast.error("Failed to process refund");
+                                }
+                              }
+                            }}
+                          >
+                            <RefreshCcw className="w-4 h-4 mr-2" />
+                            Refund Order
+                          </Button>
+                        )}
+
+                      {/* Right side - Print and Close buttons */}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            console.log("Print receipt for", selectedOrder.id)
+                          }
+                        >
+                          <Printer className="w-4 h-4 mr-2" />
+                          Print Receipt
+                        </Button>
+                        <Button
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => setSelectedOrder(null)}
+                        >
+                          Close
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </motion.div>

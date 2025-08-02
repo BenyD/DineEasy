@@ -96,6 +96,7 @@ const clearCartStorage = () => {
 
 // Load cart on module initialization
 loadCartFromStorage();
+console.log("Initial cart loaded:", { initialCart, currentTableId });
 
 export function useCart(tableId?: string) {
   const [cart, setCart] = useState<CartItem[]>(initialCart);
@@ -111,6 +112,7 @@ export function useCart(tableId?: string) {
     console.log("Table ID changed, clearing cart:", {
       old: currentTableId,
       new: newTableId,
+      stack: new Error().stack?.split("\n").slice(1, 4).join("\n"),
     });
 
     setCart([]);
@@ -145,7 +147,34 @@ export function useCart(tableId?: string) {
 
   // Reset cart if table ID changes with warning
   useEffect(() => {
-    if (tableId && tableId !== currentTableId) {
+    console.log("Cart tableId effect:", {
+      tableId,
+      currentTableId,
+      cartLength: cart.length,
+      initialCartLength: initialCart.length,
+    });
+
+    // Skip if tableId is undefined (still loading)
+    if (!tableId) {
+      console.log("TableId is undefined, skipping cart reset");
+      return;
+    }
+
+    // Handle initial tableId setting (from null to valid value)
+    if (currentTableId === null && tableId) {
+      console.log("Initial tableId setting:", tableId);
+      currentTableId = tableId;
+      // Don't clear cart if we have items for this table
+      if (cart.length === 0 && initialCart.length > 0) {
+        console.log("Restoring cart from initialCart on first load");
+        setCart(initialCart);
+      }
+      return;
+    }
+
+    // Don't reset cart if tableId is changing from null/undefined to a valid value (initial load)
+    if (tableId !== currentTableId && currentTableId !== null) {
+      console.log("Table ID changed, clearing cart");
       if (cart.length > 0) {
         // Show warning before clearing cart
         setShowTableChangeWarning(true);
@@ -155,12 +184,25 @@ export function useCart(tableId?: string) {
         // No items in cart, safe to change table
         resetCartForNewTable(tableId);
       }
+    } else if (
+      tableId === currentTableId &&
+      cart.length === 0 &&
+      initialCart.length > 0
+    ) {
+      // If we have the same tableId but empty cart, but initialCart has items, restore them
+      console.log("Restoring cart from initialCart");
+      setCart(initialCart);
     }
   }, [tableId, cart.length, resetCartForNewTable]);
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
-    console.log("Saving cart to localStorage:", cart);
+    console.log("Saving cart to localStorage:", {
+      cart,
+      currentTableId,
+      cartLength: cart.length,
+      stack: new Error().stack?.split("\n").slice(1, 4).join("\n"), // Get call stack
+    });
     try {
       if (cart.length > 0 || initialCart.length === 0) {
         // Only save if cart has items or was initially empty
@@ -180,6 +222,10 @@ export function useCart(tableId?: string) {
         };
         localStorage.setItem("qr-cart-state", JSON.stringify(stateToSave));
         cartState = stateToSave;
+
+        // Update initialCart to match current cart
+        initialCart = cart;
+        console.log("Cart saved successfully:", { cart, currentTableId });
       }
     } catch (error) {
       console.error("Error saving cart to localStorage:", error);
@@ -190,23 +236,35 @@ export function useCart(tableId?: string) {
   // Enhanced add to cart with error handling
   const addToCart = useCallback((item: MenuItem) => {
     try {
-      console.log("Adding item to cart:", item);
+      console.log(
+        "Adding item to cart:",
+        item,
+        "current tableId:",
+        tableId,
+        "currentTableId:",
+        currentTableId
+      );
       setLastError(null); // Clear any previous errors
 
       setCart((currentCart) => {
+        console.log("Current cart before adding:", currentCart);
         const existingItem = currentCart.find(
           (cartItem) => cartItem.id === item.id
         );
 
+        let newCart;
         if (existingItem) {
-          return currentCart.map((cartItem) =>
+          newCart = currentCart.map((cartItem) =>
             cartItem.id === item.id
               ? { ...cartItem, quantity: cartItem.quantity + 1 }
               : cartItem
           );
         } else {
-          return [...currentCart, { ...item, quantity: 1 }];
+          newCart = [...currentCart, { ...item, quantity: 1 }];
         }
+
+        console.log("New cart after adding:", newCart);
+        return newCart;
       });
     } catch (error) {
       console.error("Error adding item to cart:", error);

@@ -4,67 +4,57 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   try {
-    const { clientSecret, orderId, tableId } = await request.json();
+    const { sessionId, orderId, tableId } = await request.json();
 
     // Validate required parameters
-    if (!clientSecret || !orderId || !tableId) {
+    if (!sessionId || !orderId || !tableId) {
       return NextResponse.json(
         { success: false, error: "Missing required parameters" },
         { status: 400 }
       );
     }
 
-    // Validate client secret format
-    if (!clientSecret.includes("_secret_")) {
+    // Validate session ID format
+    if (!sessionId.startsWith("cs_")) {
       return NextResponse.json(
-        { success: false, error: "Invalid client secret format" },
+        { success: false, error: "Invalid session ID format" },
         { status: 400 }
       );
     }
 
-    // Extract payment intent ID from client secret
-    // Client secret format: pi_xxx_secret_xxx
-    const paymentIntentId = clientSecret.split("_secret_")[0];
+    console.log("Validating checkout session:", sessionId);
 
-    if (!paymentIntentId.startsWith("pi_")) {
-      return NextResponse.json(
-        { success: false, error: "Invalid payment intent ID format" },
-        { status: 400 }
-      );
-    }
-
-    console.log("Extracted payment intent ID:", paymentIntentId);
-
-    // Retrieve payment intent from Stripe using the ID
-    let paymentIntent;
+    // Retrieve checkout session from Stripe
+    let session;
     try {
-      paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-      console.log("Payment intent retrieved successfully:", {
-        id: paymentIntent.id,
-        status: paymentIntent.status,
-        amount: paymentIntent.amount,
-        currency: paymentIntent.currency,
-        metadata: paymentIntent.metadata,
+      session = await stripe.checkout.sessions.retrieve(sessionId);
+      console.log("Checkout session retrieved successfully:", {
+        id: session.id,
+        status: session.status,
+        paymentStatus: session.payment_status,
+        amount: session.amount_total,
+        currency: session.currency,
+        metadata: session.metadata,
       });
     } catch (error: any) {
-      console.error("Error retrieving payment intent:", error);
+      console.error("Error retrieving checkout session:", error);
       return NextResponse.json(
-        { success: false, error: "Invalid payment intent" },
+        { success: false, error: "Invalid checkout session" },
         { status: 400 }
       );
     }
 
-    // Validate payment intent status
-    if (paymentIntent.status === "succeeded") {
+    // Validate session status
+    if (session.status === "expired") {
       return NextResponse.json(
-        { success: false, error: "Payment already completed" },
+        { success: false, error: "Checkout session has expired" },
         { status: 400 }
       );
     }
 
-    if (paymentIntent.status === "canceled") {
+    if (session.status === "open") {
       return NextResponse.json(
-        { success: false, error: "Payment was canceled" },
+        { success: false, error: "Payment not completed" },
         { status: 400 }
       );
     }
@@ -116,15 +106,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate payment intent metadata matches order
-    const paymentOrderId = paymentIntent.metadata?.orderId;
-    if (paymentOrderId !== orderId) {
+    // Validate session metadata matches order
+    const sessionOrderId = session.metadata?.orderId;
+    if (sessionOrderId !== orderId) {
       console.error("Order ID mismatch:", {
-        paymentOrderId,
+        sessionOrderId,
         requestOrderId: orderId,
       });
       return NextResponse.json(
-        { success: false, error: "Payment intent does not match order" },
+        { success: false, error: "Checkout session does not match order" },
         { status: 403 }
       );
     }
@@ -142,11 +132,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      paymentIntent: {
-        id: paymentIntent.id,
-        status: paymentIntent.status,
-        amount: paymentIntent.amount,
-        currency: paymentIntent.currency,
+      session: {
+        id: session.id,
+        status: session.status,
+        paymentStatus: session.payment_status,
+        amount: session.amount_total,
+        currency: session.currency,
+        paymentIntentId: session.payment_intent as string,
       },
       order: {
         id: order.id,
@@ -155,9 +147,9 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("Payment validation error:", error);
+    console.error("Session validation error:", error);
     return NextResponse.json(
-      { success: false, error: "Payment validation failed" },
+      { success: false, error: "Session validation failed" },
       { status: 500 }
     );
   }

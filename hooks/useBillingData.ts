@@ -40,8 +40,8 @@ export function useBillingData(): BillingData & { refresh: () => void } {
     hasActiveSubscription: false,
     currency: "USD", // Default currency
     usage: {
-      tables: { used: 0, limit: 5 },
-      menuItems: { used: 0, limit: 50 },
+      tables: { used: 0, limit: 6 },
+      menuItems: { used: 0, limit: 25 },
       staff: { used: 1, limit: 1 },
     },
     isLoading: true,
@@ -212,20 +212,20 @@ export function useBillingData(): BillingData & { refresh: () => void } {
           interval as keyof (typeof planPricing.price)[keyof typeof planPricing.price]
         ] || 0;
 
-      // Get plan limits
+      // Get plan limits - match pricing page promises
       const getPlanLimits = (planName: string) => {
         switch (planName.toLowerCase()) {
           case "starter":
             return {
-              tables: 5,
-              menuItems: 50,
+              tables: 6,
+              menuItems: 25,
               staff: 1,
             };
           case "pro":
             return {
-              tables: 20,
-              menuItems: 200,
-              staff: 5,
+              tables: 12,
+              menuItems: 100,
+              staff: 3,
             };
           case "elite":
             return {
@@ -235,8 +235,8 @@ export function useBillingData(): BillingData & { refresh: () => void } {
             };
           default:
             return {
-              tables: 5,
-              menuItems: 50,
+              tables: 6,
+              menuItems: 25,
               staff: 1,
             };
         }
@@ -253,7 +253,14 @@ export function useBillingData(): BillingData & { refresh: () => void } {
       if (currentSubscription) {
         // Set trial end date - check for preserved trial period from upgrades
         if (currentSubscription.trial_end) {
+          // trial_end is already a timestamp string from the database
           trialEndsAt = new Date(currentSubscription.trial_end);
+
+          console.log("Trial end date calculation:", {
+            trialEnd: currentSubscription.trial_end,
+            trialEndsAt: trialEndsAt.toISOString(),
+            trialEndsAtLocal: trialEndsAt.toString(),
+          });
         }
 
         // Check if this is a trial upgrade (trial preserved during plan change)
@@ -264,10 +271,12 @@ export function useBillingData(): BillingData & { refresh: () => void } {
 
         if (isTrialUpgrade && originalTrialEnd) {
           // Use the original trial end date for trial upgrades
-          trialEndsAt = new Date(parseInt(originalTrialEnd) * 1000);
+          // originalTrialEnd is stored as a timestamp string
+          trialEndsAt = new Date(originalTrialEnd);
           console.log("Detected trial upgrade - using original trial end:", {
             originalTrialEnd: originalTrialEnd,
             trialEndsAt: trialEndsAt.toISOString(),
+            trialEndsAtLocal: trialEndsAt.toString(),
           });
         }
 

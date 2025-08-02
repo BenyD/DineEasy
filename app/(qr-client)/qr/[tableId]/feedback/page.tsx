@@ -202,7 +202,7 @@ export default function FeedbackPage({
         <div className="flex items-center gap-4 px-4 py-4">
           <Link
             href={{
-              pathname: `/qr/${resolvedParams.tableId}/confirmation`,
+              pathname: `/qr/${resolvedParams.tableId}/order-tracking/${orderId}`,
               query: { order: orderNumber },
             }}
           >

@@ -107,6 +107,7 @@ export const PRICING = {
     ],
     limits: {
       staff: 1,
+      menuItems: 25,
       analytics: false,
       roles: false,
       tables: 6,
@@ -226,6 +227,7 @@ export const PRICING = {
     ],
     limits: {
       staff: 3,
+      menuItems: 100,
       analytics: "basic",
       roles: true,
       tables: 12,
@@ -347,6 +349,7 @@ export const PRICING = {
     ],
     limits: {
       staff: -1, // Unlimited
+      menuItems: -1, // Unlimited
       analytics: "advanced",
       roles: true,
       tables: -1, // Unlimited

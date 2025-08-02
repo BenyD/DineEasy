@@ -2,11 +2,28 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Database } from "@/types/supabase";
 import { stripe } from "@/lib/stripe";
 import { PRICING, SUBSCRIPTION, getStripePriceId } from "@/lib/constants";
 
-type Subscription = Database["public"]["Tables"]["subscriptions"]["Insert"];
+interface Subscription {
+  id: string;
+  restaurant_id: string;
+  stripe_subscription_id: string | null;
+  stripe_customer_id: string | null;
+  stripe_price_id: string | null;
+  plan: "starter" | "pro" | "elite";
+  interval: "monthly" | "yearly";
+  status: string;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  trial_start: string | null;
+  trial_end: string | null;
+  cancel_at: string | null;
+  canceled_at: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export async function createSubscription(formData: FormData) {
   const supabase = createClient();
@@ -96,6 +113,9 @@ export async function createSubscription(formData: FormData) {
         },
       ],
       mode: "subscription",
+      metadata: {
+        isNewSubscription: "true",
+      },
       subscription_data: {
         trial_period_days: SUBSCRIPTION.TRIAL_DAYS,
         metadata: {

@@ -126,6 +126,18 @@ const navigationData = {
       href: "/dashboard/kitchen",
       icon: ChefHat,
       description: "Kitchen display system",
+      subItems: [
+        {
+          name: "Kitchen Editor",
+          href: "/dashboard/kitchen/editor",
+          description: "Real-time order management",
+        },
+        {
+          name: "Full Screen Display",
+          href: "/dashboard/kitchen/display",
+          description: "Kitchen overhead display",
+        },
+      ],
     },
     {
       name: "Menu",
@@ -550,18 +562,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       .slice(0, 2)}
                   </AvatarFallback>
                 </Avatar>
-                {/* Subscription Plan Badge */}
+                {/* Plan Badge - Always show the plan */}
                 {restaurant.subscription_plan && (
                   <Badge
                     variant="outline"
-                    className="absolute -bottom-1 -right-1 h-5 px-1.5 bg-white border-gray-200 text-xs font-medium shadow-sm"
+                    className="absolute -bottom-1 -right-1 h-5 px-1.5 bg-white border-gray-200 text-gray-700 text-xs font-medium shadow-sm"
                   >
                     {restaurant.subscription_plan.charAt(0).toUpperCase() +
                       restaurant.subscription_plan.slice(1).toLowerCase()}
                   </Badge>
                 )}
 
-                {/* Pending Subscription Badge */}
+                {/* Pending Badge - Show when no subscription plan */}
                 {!restaurant.subscription_plan && (
                   <Badge
                     variant="outline"
@@ -605,6 +617,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     {restaurant.status}
                   </span>
                 </div>
+                {/* Trial Status - Show below restaurant status */}
+                {restaurant.subscription_plan && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <Badge
+                      variant="outline"
+                      className="h-4 px-1.5 bg-blue-50 border-blue-200 text-blue-700 text-xs font-medium"
+                    >
+                      Trial
+                    </Badge>
+                  </div>
+                )}
               </div>
             </div>
           </div>

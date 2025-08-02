@@ -63,6 +63,7 @@ export default function QRClientPage({
     nextOpen?: string;
     nextClose?: string;
   } | null>(null);
+  const [urlTableId, setUrlTableId] = useState<string>("");
   const maxRetries = 3;
 
   const {
@@ -74,7 +75,18 @@ export default function QRClientPage({
     showTableChangeWarning,
     confirmTableChange,
     cancelTableChange,
-  } = useCart(tableData?.id);
+  } = useCart(urlTableId);
+
+  // Debug cart state
+  useEffect(() => {
+    console.log("Main page cart state:", {
+      cartLength: cart.length,
+      totalItems: getTotalItems(),
+      tableDataId: tableData?.id,
+      urlTableId,
+      cartTableId: urlTableId,
+    });
+  }, [cart, getTotalItems, tableData?.id, urlTableId]);
 
   // Restaurant WebSocket for real-time status updates
   const { isConnected: isRestaurantWebSocketConnected } =
@@ -118,6 +130,7 @@ export default function QRClientPage({
         setError(null);
 
         const { tableId } = await params;
+        setUrlTableId(tableId);
 
         // Validate table ID format
         if (!tableId || tableId.length < 10) {
@@ -325,6 +338,12 @@ export default function QRClientPage({
       return;
     }
 
+    console.log(
+      "Adding item to cart from main page:",
+      item,
+      "current cart length:",
+      cart.length
+    );
     addToCart(item);
     toast.success(`${item.name} added to cart`);
   };
@@ -551,14 +570,27 @@ export default function QRClientPage({
                 )}
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowSearch(!showSearch)}
-              className="p-2 h-10 w-10 rounded-xl border border-gray-200 hover:bg-gray-50"
-            >
-              <Search className="w-5 h-5 text-gray-600" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSearch(!showSearch)}
+                className="p-2 h-10 w-10 rounded-xl border border-gray-200 hover:bg-gray-50"
+              >
+                <Search className="w-5 h-5 text-gray-600" />
+              </Button>
+              <Link href={`/qr/${urlTableId}/feedback`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="px-3 py-2 h-10 rounded-xl border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 flex items-center gap-2 text-sm font-medium"
+                  title="Rate your experience"
+                >
+                  <span className="text-lg">⭐</span>
+                  <span className="hidden sm:inline">Feedback</span>
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Search Bar */}
@@ -586,7 +618,22 @@ export default function QRClientPage({
 
           {/* Restaurant Information Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            {/* Address Section */}
+            {/* Description - About Card (First) */}
+            {restaurantData?.description && (
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Info className="w-4 h-4 text-green-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 mb-1">About</p>
+                  <p className="text-gray-600 leading-relaxed">
+                    {restaurantData.description}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Address Section (Second) */}
             {restaurantData?.address && (
               <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
                 <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -601,7 +648,7 @@ export default function QRClientPage({
               </div>
             )}
 
-            {/* Contact Section */}
+            {/* Contact Section (Third) */}
             {(restaurantData?.phone || restaurantData?.email) && (
               <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
                 <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -637,21 +684,6 @@ export default function QRClientPage({
                   </p>
                   <p className="text-gray-600 leading-relaxed">
                     {restaurantData.opening_hours}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Description */}
-            {restaurantData?.description && (
-              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Info className="w-4 h-4 text-green-600" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-900 mb-1">About</p>
-                  <p className="text-gray-600 leading-relaxed">
-                    {restaurantData.description}
                   </p>
                 </div>
               </div>
@@ -815,7 +847,7 @@ export default function QRClientPage({
         <CartButton
           totalItems={getTotalItems()}
           totalPrice={getTotalPrice()}
-          tableId={tableData?.id}
+          tableId={urlTableId}
           currency={restaurantData?.currency || "CHF"}
           disabled={restaurantOpenStatus ? !restaurantOpenStatus.isOpen : false}
         />

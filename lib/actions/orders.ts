@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export interface OrderItem {
@@ -190,10 +190,33 @@ export async function updateOrderStatus(
   orderId: string,
   newStatus: string
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   try {
-    const { error } = await supabase
+    // First, get the current order details to check payment status
+    const { data: order, error: fetchError } = await supabase
+      .from("orders")
+      .select(
+        `
+        id,
+        status,
+        stripe_payment_intent_id,
+        payments (
+          status,
+          method
+        )
+      `
+      )
+      .eq("id", orderId)
+      .single();
+
+    if (fetchError) {
+      console.error("Error fetching order details:", fetchError);
+      return { success: false, error: "Failed to fetch order details" };
+    }
+
+    // Update the order status
+    const { error: updateError } = await supabase
       .from("orders")
       .update({
         status: newStatus,
@@ -201,9 +224,39 @@ export async function updateOrderStatus(
       })
       .eq("id", orderId);
 
-    if (error) {
-      console.error("Error updating order status:", error);
+    if (updateError) {
+      console.error("Error updating order status:", updateError);
       return { success: false, error: "Failed to update order status" };
+    }
+
+    // Check if order should be automatically completed
+    // For card orders: auto-complete when served (since already paid)
+    // For cash orders: auto-complete when paid (since already served)
+    if (newStatus === "served") {
+      const payment = order.payments?.[0];
+      const isPaid = payment?.status === "completed";
+      const isCardOrder = order.stripe_payment_intent_id;
+
+      if (isCardOrder && isPaid) {
+        // Card orders: auto-complete when served (already paid)
+        const { error: completeError } = await supabase
+          .from("orders")
+          .update({
+            status: "completed",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", orderId);
+
+        if (completeError) {
+          console.error("Error auto-completing card order:", completeError);
+          // Don't fail the original status update, just log the error
+        } else {
+          console.log(
+            `Card order ${orderId} automatically completed (paid and served)`
+          );
+        }
+      }
+      // Cash orders: don't auto-complete when served, wait for payment
     }
 
     revalidatePath("/dashboard/orders");
@@ -337,15 +390,26 @@ export async function deleteOrder(
 }
 
 export async function refundOrder(
-  orderId: string
-): Promise<{ success: boolean; error?: string }> {
-  const supabase = createClient();
+  orderId: string,
+  refundReason?: string
+): Promise<{ success: boolean; error?: string; refundId?: string }> {
+  const supabase = createAdminClient();
 
   try {
-    // First, just get the basic order to check if it exists
+    // Get order with payment details
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("*")
+      .select(
+        `
+        *,
+        payments (
+          id,
+          method,
+          status,
+          stripe_payment_id
+        )
+      `
+      )
       .eq("id", orderId)
       .single();
 
@@ -358,52 +422,54 @@ export async function refundOrder(
       orderId,
       orderStatus: order.status,
       stripePaymentIntentId: order.stripe_payment_intent_id,
+      paymentMethod: order.payments?.[0]?.method,
+      paymentStatus: order.payments?.[0]?.status,
     });
 
-    // Since customers pay first, refund and cancel are essentially the same
-    // Both operations return money to the customer
+    // Check if order can be refunded
+    if (order.status === "cancelled") {
+      return { success: false, error: "Order is already cancelled/refunded" };
+    }
 
-    // Check if this is a Stripe payment that needs refund
-    if (order.stripe_payment_intent_id) {
-      // Get payment details for Stripe refund
-      const { data: payment, error: paymentError } = await supabase
-        .from("payments")
-        .select("method, status")
-        .eq("order_id", orderId)
-        .single();
+    const payment = order.payments?.[0];
+    if (!payment || payment.status !== "completed") {
+      return { success: false, error: "No completed payment found for refund" };
+    }
 
-      if (
-        payment &&
-        payment.method === "card" &&
-        payment.status === "completed"
-      ) {
-        try {
-          // Import stripe here to avoid issues
-          const { stripe } = await import("@/lib/stripe");
+    let refundId: string | undefined;
 
-          // Create refund in Stripe
-          const refund = await stripe.refunds.create({
-            payment_intent: order.stripe_payment_intent_id,
-            reason: "requested_by_customer",
-          });
+    // Handle refund based on payment method
+    if (payment.method === "card" && order.stripe_payment_intent_id) {
+      // Card payment - process Stripe refund
+      try {
+        const { stripe } = await import("@/lib/stripe");
 
-          console.log("Stripe refund created:", refund.id);
-        } catch (stripeError) {
-          console.error("Stripe refund error:", stripeError);
-          return { success: false, error: "Failed to process Stripe refund" };
-        }
-      } else {
-        console.log("No completed card payment found for refund");
-        return {
-          success: false,
-          error: "No completed card payment found for refund",
-        };
+        // Create refund in Stripe
+        const stripeRefund = await stripe.refunds.create({
+          payment_intent: order.stripe_payment_intent_id,
+          reason:
+            (refundReason as
+              | "duplicate"
+              | "fraudulent"
+              | "requested_by_customer") || "requested_by_customer",
+          metadata: {
+            order_id: orderId,
+            restaurant_id: order.restaurant_id,
+          },
+        });
+
+        refundId = stripeRefund.id;
+        console.log("Stripe refund created:", refundId);
+      } catch (stripeError) {
+        console.error("Stripe refund error:", stripeError);
+        return { success: false, error: "Failed to process Stripe refund" };
       }
+    } else if (payment.method === "cash") {
+      // Cash payment - just mark as refunded (restaurant handles physical refund)
+      console.log("Cash order refund - restaurant to handle physical refund");
+      refundId = `cash-${Date.now()}`; // Generate a cash refund ID
     } else {
-      console.log(
-        "No Stripe payment intent found - this might be a cash order"
-      );
-      // For cash orders, we just mark as refunded without Stripe processing
+      return { success: false, error: "Unsupported payment method for refund" };
     }
 
     // Update order status to cancelled (we use cancelled for refunded orders)
@@ -420,25 +486,28 @@ export async function refundOrder(
       return { success: false, error: "Failed to update order status" };
     }
 
-    // Update payment status to refunded if payment record exists
+    // Update payment status to refunded
     const { error: paymentUpdateError } = await supabase
       .from("payments")
       .update({
         status: "refunded",
+        refund_id: refundId,
         updated_at: new Date().toISOString(),
       })
-      .eq("order_id", orderId);
+      .eq("id", payment.id);
 
     if (paymentUpdateError) {
       console.error("Error updating payment status:", paymentUpdateError);
-      // Don't fail the whole operation if payment update fails
+      return { success: false, error: "Failed to update payment status" };
     }
 
     console.log("Order refunded successfully:", {
       orderId,
-      orderStatus: order.status,
+      refundId,
+      paymentMethod: payment.method,
     });
-    return { success: true };
+
+    return { success: true, refundId };
   } catch (error) {
     console.error("Error refunding order:", error);
     return { success: false, error: "Failed to refund order" };
@@ -446,15 +515,26 @@ export async function refundOrder(
 }
 
 export async function cancelOrder(
-  orderId: string
-): Promise<{ success: boolean; error?: string }> {
-  const supabase = createClient();
+  orderId: string,
+  cancellationReason?: string
+): Promise<{ success: boolean; error?: string; refundId?: string }> {
+  const supabase = createAdminClient();
 
   try {
-    // First, just get the basic order to check if it exists
+    // Get order with payment details
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("*")
+      .select(
+        `
+        *,
+        payments (
+          id,
+          method,
+          status,
+          stripe_payment_id
+        )
+      `
+      )
       .eq("id", orderId)
       .single();
 
@@ -470,52 +550,55 @@ export async function cancelOrder(
       orderId,
       orderStatus: order.status,
       stripePaymentIntentId: order.stripe_payment_intent_id,
+      paymentMethod: order.payments?.[0]?.method,
+      paymentStatus: order.payments?.[0]?.status,
     });
 
-    // Since customers pay first, cancellation always requires a refund
-    if (order.stripe_payment_intent_id) {
-      // Get payment details for Stripe refund
-      const { data: payment, error: paymentError } = await supabase
-        .from("payments")
-        .select("method, status")
-        .eq("order_id", orderId)
-        .single();
+    // Check if order can be cancelled
+    if (order.status === "cancelled") {
+      return { success: false, error: "Order is already cancelled" };
+    }
 
-      if (
-        payment &&
-        payment.method === "card" &&
-        payment.status === "completed"
-      ) {
+    const payment = order.payments?.[0];
+    let refundId: string | undefined;
+
+    // Handle cancellation based on order status and payment method
+    if (order.status === "pending") {
+      // Order is still pending - can be cancelled without refund
+      console.log("Cancelling pending order - no refund needed");
+    } else if (payment && payment.status === "completed") {
+      // Order has been paid - need to handle refund
+      if (payment.method === "card" && order.stripe_payment_intent_id) {
+        // Card payment - process Stripe refund
         try {
-          // Import stripe here to avoid issues
           const { stripe } = await import("@/lib/stripe");
 
-          // Create refund in Stripe for cancelled order
-          const refund = await stripe.refunds.create({
+          const stripeRefund = await stripe.refunds.create({
             payment_intent: order.stripe_payment_intent_id,
             reason: "requested_by_customer",
+            metadata: {
+              order_id: orderId,
+              restaurant_id: order.restaurant_id,
+              cancellation_reason: cancellationReason || "customer_request",
+            },
           });
 
-          console.log("Stripe refund created for cancelled order:", refund.id);
+          refundId = stripeRefund.id;
+          console.log("Stripe refund created for cancelled order:", refundId);
         } catch (stripeError) {
           console.error("Stripe refund error:", stripeError);
           return { success: false, error: "Failed to process Stripe refund" };
         }
-      } else {
-        console.log("No completed card payment found for refund");
-        return {
-          success: false,
-          error: "No completed card payment found for refund",
-        };
+      } else if (payment.method === "cash") {
+        // Cash payment - restaurant handles physical refund
+        console.log(
+          "Cash order cancellation - restaurant to handle physical refund"
+        );
+        refundId = `cash-${Date.now()}`; // Generate a cash refund ID
       }
-    } else {
-      console.log(
-        "No Stripe payment intent found - this might be a cash order"
-      );
-      // For cash orders, we just mark as cancelled without Stripe processing
     }
 
-    // Update order status to cancelled (works for both cash and card orders)
+    // Update order status to cancelled
     const { error: updateError } = await supabase
       .from("orders")
       .update({
@@ -529,25 +612,30 @@ export async function cancelOrder(
       return { success: false, error: "Failed to update order status" };
     }
 
-    // Update payment status to cancelled if payment record exists
-    const { error: paymentUpdateError } = await supabase
-      .from("payments")
-      .update({
-        status: "cancelled",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("order_id", orderId);
+    // Update payment status if payment record exists
+    if (payment) {
+      const { error: paymentUpdateError } = await supabase
+        .from("payments")
+        .update({
+          status: refundId ? "refunded" : "cancelled",
+          refund_id: refundId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.id);
 
-    if (paymentUpdateError) {
-      console.error("Error updating payment status:", paymentUpdateError);
-      // Don't fail the whole operation if payment update fails
+      if (paymentUpdateError) {
+        console.error("Error updating payment status:", paymentUpdateError);
+        return { success: false, error: "Failed to update payment status" };
+      }
     }
 
     console.log("Order cancelled successfully:", {
       orderId,
-      orderStatus: order.status,
+      refundId,
+      paymentMethod: payment?.method,
     });
-    return { success: true };
+
+    return { success: true, refundId };
   } catch (error) {
     console.error("Error cancelling order:", error);
     return { success: false, error: "Failed to cancel order" };

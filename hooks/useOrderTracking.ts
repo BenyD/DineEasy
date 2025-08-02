@@ -39,8 +39,21 @@ export function useOrderTracking({
   const supabase = createClient();
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const subscriptionRef = useRef<any>(null);
+  const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
   const reconnectDelay = 2000; // 2 seconds
+
+  // Store current callback values to avoid stale closure issues
+  const onStatusUpdateRef = useRef(onStatusUpdate);
+  const onConnectionChangeRef = useRef(onConnectionChange);
+  const onErrorRef = useRef(onError);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onStatusUpdateRef.current = onStatusUpdate;
+    onConnectionChangeRef.current = onConnectionChange;
+    onErrorRef.current = onError;
+  }, [onStatusUpdate, onConnectionChange, onError]);
 
   const connect = useCallback(async () => {
     if (!enabled || !orderId) {
@@ -91,7 +104,7 @@ export function useOrderTracking({
               }));
 
               // Call the callback if provided
-              onStatusUpdate?.(newStatus);
+              onStatusUpdateRef.current?.(newStatus);
             }
           }
         )
@@ -110,7 +123,7 @@ export function useOrderTracking({
               error: "Order was cancelled or deleted",
               connectionStatus: "error",
             }));
-            onError?.("Order was cancelled or deleted");
+            onErrorRef.current?.("Order was cancelled or deleted");
           }
         )
         .subscribe((status) => {
@@ -118,13 +131,14 @@ export function useOrderTracking({
 
           if (status === "SUBSCRIBED") {
             console.log("Successfully connected to order tracking WebSocket");
+            reconnectAttemptsRef.current = 0;
             setState((prev) => ({
               ...prev,
               isConnected: true,
               reconnectAttempts: 0,
               connectionStatus: "connected",
             }));
-            onConnectionChange?.(true);
+            onConnectionChangeRef.current?.(true);
           } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
             console.error(
               "Order tracking WebSocket connection failed:",
@@ -136,27 +150,24 @@ export function useOrderTracking({
               error: `Connection failed: ${status}`,
               connectionStatus: "error",
             }));
-            onConnectionChange?.(false);
-            onError?.(`Connection failed: ${status}`);
+            onConnectionChangeRef.current?.(false);
+            onErrorRef.current?.(`Connection failed: ${status}`);
 
             // Attempt to reconnect
-            if (state.reconnectAttempts < maxReconnectAttempts) {
+            if (reconnectAttemptsRef.current < maxReconnectAttempts) {
               const delay =
-                reconnectDelay * Math.pow(2, state.reconnectAttempts);
+                reconnectDelay * Math.pow(2, reconnectAttemptsRef.current);
               console.log(
-                `Attempting to reconnect in ${delay}ms (attempt ${state.reconnectAttempts + 1}/${maxReconnectAttempts})`
+                `Attempting to reconnect in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})`
               );
 
+              reconnectAttemptsRef.current += 1;
               reconnectTimeoutRef.current = setTimeout(() => {
-                setState((prev) => ({
-                  ...prev,
-                  reconnectAttempts: prev.reconnectAttempts + 1,
-                }));
                 connect();
               }, delay);
             } else {
               console.error("Max reconnection attempts reached");
-              onError?.("Failed to connect after multiple attempts");
+              onErrorRef.current?.("Failed to connect after multiple attempts");
             }
           } else if (status === "CLOSED") {
             console.log("Order tracking WebSocket connection closed");
@@ -165,7 +176,7 @@ export function useOrderTracking({
               isConnected: false,
               connectionStatus: "disconnected",
             }));
-            onConnectionChange?.(false);
+            onConnectionChangeRef.current?.(false);
           }
         });
 
@@ -188,18 +199,10 @@ export function useOrderTracking({
         error: errorMessage,
         connectionStatus: "error",
       }));
-      onConnectionChange?.(false);
-      onError?.(errorMessage);
+      onConnectionChangeRef.current?.(false);
+      onErrorRef.current?.(errorMessage);
     }
-  }, [
-    enabled,
-    orderId,
-    supabase,
-    state.reconnectAttempts,
-    onStatusUpdate,
-    onConnectionChange,
-    onError,
-  ]);
+  }, [enabled, orderId, supabase]);
 
   const disconnect = useCallback(() => {
     console.log("Disconnecting order tracking WebSocket");
@@ -210,13 +213,14 @@ export function useOrderTracking({
       subscriptionRef.current.unsubscribe();
       subscriptionRef.current = null;
     }
+    reconnectAttemptsRef.current = 0;
     setState((prev) => ({
       ...prev,
       isConnected: false,
       connectionStatus: "disconnected",
     }));
-    onConnectionChange?.(false);
-  }, [onConnectionChange]);
+    onConnectionChangeRef.current?.(false);
+  }, []);
 
   // Connect on mount and when dependencies change
   useEffect(() => {
@@ -230,14 +234,14 @@ export function useOrderTracking({
     return () => {
       disconnect();
     };
-  }, [enabled, orderId, connect, disconnect]);
+  }, [enabled, orderId]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       disconnect();
     };
-  }, [disconnect]);
+  }, []);
 
   return {
     ...state,

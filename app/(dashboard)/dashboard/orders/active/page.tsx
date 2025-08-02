@@ -23,6 +23,7 @@ import {
   Loader2,
   MessageSquare,
   CreditCard,
+  DollarSign as DollarSignIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -188,8 +189,8 @@ export default function ActiveOrdersPage() {
         restaurant_id: newOrder.restaurant_id,
         table_id: newOrder.table_id || "",
         total_amount: newOrder.total_amount,
-        tax_amount: newOrder.tax_amount,
-        tip_amount: newOrder.tip_amount,
+        tax_amount: (newOrder as any).tax_amount || 0,
+        tip_amount: (newOrder as any).tip_amount || 0,
         created_at: newOrder.created_at,
         updated_at: newOrder.updated_at,
         stripe_payment_intent_id: (newOrder as any).stripe_payment_intent_id,
@@ -221,10 +222,13 @@ export default function ActiveOrdersPage() {
                   ...order,
                   status: updatedOrder.status,
                   total_amount: updatedOrder.total_amount,
-                  tax_amount: updatedOrder.tax_amount,
-                  tip_amount: updatedOrder.tip_amount,
+                  tax_amount: (updatedOrder as any).tax_amount || 0,
+                  tip_amount: (updatedOrder as any).tip_amount || 0,
                   notes: updatedOrder.notes || undefined,
                   updated_at: updatedOrder.updated_at,
+                  // Update payment status if available
+                  paymentStatus:
+                    (updatedOrder as any).paymentStatus || order.paymentStatus,
                 }
               : order
           )
@@ -459,6 +463,42 @@ export default function ActiveOrdersPage() {
       // Set loading state for this specific order
       setUpdatingOrders((prev) => new Set(prev).add(orderId));
 
+      // Get the current order to check payment method and status
+      const currentOrder = orders.find((order) => order.id === orderId);
+      if (!currentOrder) {
+        toast.error("Order not found");
+        return;
+      }
+
+      // Check if this is a completion attempt
+      if (newStatus === "completed") {
+        // For cash orders: only allow completion if already paid
+        if (
+          !currentOrder.stripe_payment_intent_id &&
+          currentOrder.paymentStatus !== "completed"
+        ) {
+          toast.error("Cash orders must be marked as paid before completion");
+          return;
+        }
+
+        // For card orders: only allow completion if status is "served" and already paid
+        if (
+          currentOrder.stripe_payment_intent_id &&
+          currentOrder.status !== "served"
+        ) {
+          toast.error("Card orders must be served before completion");
+          return;
+        }
+
+        if (
+          currentOrder.stripe_payment_intent_id &&
+          currentOrder.paymentStatus !== "completed"
+        ) {
+          toast.error("Card orders must be paid before completion");
+          return;
+        }
+      }
+
       // Optimistically update the UI immediately
       setOrders((prev) =>
         prev.map((order) =>
@@ -513,10 +553,24 @@ export default function ActiveOrdersPage() {
     try {
       setUpdatingOrders((prev) => new Set(prev).add(orderId));
 
-      const result = await cancelOrder(orderId);
+      // Find the order to determine the appropriate message
+      const order = orders.find((o) => o.id === orderId);
+      const isPending = order?.status === "pending";
+      const isCashOrder = !order?.stripe_payment_intent_id;
+      const isPaid = order?.paymentStatus === "completed";
+
+      const result = await cancelOrder(orderId, "restaurant_cancellation");
 
       if (result.success) {
-        toast.success("Order cancelled successfully");
+        if (isPending) {
+          toast.success("Order cancelled successfully");
+        } else if (isCashOrder && isPaid) {
+          toast.success("Order cancelled - please handle cash refund manually");
+        } else if (!isCashOrder && isPaid) {
+          toast.success("Order cancelled and refund processed via Stripe");
+        } else {
+          toast.success("Order cancelled successfully");
+        }
         setCancelOrderId(null);
       } else {
         toast.error(result.error || "Failed to cancel order");
@@ -541,18 +595,24 @@ export default function ActiveOrdersPage() {
 
       if (result.success) {
         toast.success("Order marked as paid successfully");
-        // Update the order in the list to reflect the payment status change
+
+        // Immediately update the local state to reflect payment completion
+        // This prevents the "waiting for payment" message from appearing
         setOrders((prev) =>
           prev.map((order) =>
             order.id === orderId
               ? {
                   ...order,
                   paymentStatus: "completed",
+                  // If the order was auto-completed, update status as well
+                  status: "completed",
                   updated_at: new Date().toISOString(),
                 }
               : order
           )
         );
+
+        // The WebSocket will handle the final state update and removal from active orders
       } else {
         toast.error(result.error || "Failed to mark order as paid");
       }
@@ -990,24 +1050,6 @@ export default function ActiveOrdersPage() {
                               >
                                 {getPaymentStatusText(order.paymentStatus)}
                               </Badge>
-                              {canMarkAsPaid(order) && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-xs h-7 px-3 bg-white text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400 hover:text-green-800 shadow-sm"
-                                  disabled={markingAsPaid.has(order.id)}
-                                  onClick={() => handleMarkAsPaid(order.id)}
-                                >
-                                  {markingAsPaid.has(order.id) ? (
-                                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                                  ) : (
-                                    <CheckCircle className="w-3 h-3 mr-1" />
-                                  )}
-                                  {markingAsPaid.has(order.id)
-                                    ? "Marking..."
-                                    : "Mark Paid"}
-                                </Button>
-                              )}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" size="sm">
@@ -1084,64 +1126,141 @@ export default function ActiveOrdersPage() {
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <CreditCard className="h-4 w-4 text-gray-500" />
-                                <span className="text-sm text-gray-600">
-                                  {order.paymentMethod === "card"
-                                    ? "Card Payment"
-                                    : order.paymentMethod === "cash"
-                                      ? "Cash Payment"
-                                      : order.paymentMethod === "other"
-                                        ? "Other Payment"
-                                        : order.paymentMethod
-                                          ? order.paymentMethod
-                                              .charAt(0)
-                                              .toUpperCase() +
-                                            order.paymentMethod.slice(1)
-                                          : "Unknown Payment"}
-                                </span>
+                                {order.stripe_payment_intent_id ? (
+                                  <>
+                                    <CreditCard className="h-4 w-4 text-blue-500" />
+                                    <span className="text-sm text-gray-600">
+                                      Card Payment
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <DollarSignIcon className="h-4 w-4 text-green-500" />
+                                    <span className="text-sm text-gray-600">
+                                      Cash Payment
+                                    </span>
+                                  </>
+                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-3">
                               <span className="font-medium">
                                 Total: {formatCurrency(order.total)}
                               </span>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                                disabled={updatingOrders.has(order.id)}
-                                onClick={() => {
-                                  const nextStatus = {
-                                    pending: "preparing",
-                                    preparing: "ready",
-                                    ready: "served",
-                                    served: "completed",
-                                  }[order.status];
-                                  if (nextStatus) {
-                                    handleUpdateOrderStatus(
-                                      order.id,
-                                      nextStatus
-                                    );
-                                  }
-                                }}
-                              >
-                                {updatingOrders.has(order.id) ? (
-                                  <div className="flex items-center gap-2">
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    Updating...
-                                  </div>
-                                ) : (
-                                  <>
-                                    {order.status === "pending" &&
-                                      "Start Preparing"}
-                                    {order.status === "preparing" &&
-                                      "Mark Ready"}
-                                    {order.status === "ready" && "Mark Served"}
-                                    {order.status === "served" &&
-                                      "Complete Order"}
-                                  </>
-                                )}
-                              </Button>
+                              {(() => {
+                                // Determine if the action button should be shown and what it should do
+                                const isCashOrder =
+                                  !order.stripe_payment_intent_id;
+                                const isPaid =
+                                  order.paymentStatus === "completed";
+
+                                // For cash orders: show "Mark Paid" only when served and not paid
+                                if (
+                                  isCashOrder &&
+                                  !isPaid &&
+                                  order.status === "served"
+                                ) {
+                                  return (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-xs h-7 px-3 bg-white text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400 hover:text-green-800 shadow-sm"
+                                      disabled={markingAsPaid.has(order.id)}
+                                      onClick={() => handleMarkAsPaid(order.id)}
+                                    >
+                                      {markingAsPaid.has(order.id) ? (
+                                        <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                      ) : (
+                                        <CheckCircle className="w-3 h-3 mr-1" />
+                                      )}
+                                      {markingAsPaid.has(order.id)
+                                        ? "Marking..."
+                                        : "Mark Paid"}
+                                    </Button>
+                                  );
+                                }
+
+                                // For card orders: payment is already completed when order is created
+                                // So we should always show status progression for card orders
+                                if (!isCashOrder && !isPaid) {
+                                  // This should rarely happen for card orders, but handle it gracefully
+                                  return (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs text-amber-600 border-amber-200 bg-amber-50"
+                                    >
+                                      Payment Processing
+                                    </Badge>
+                                  );
+                                }
+
+                                // Show status progression buttons for all orders
+                                // Cash orders: show progression regardless of payment status
+                                // Card orders: payment is already completed, so always show progression
+                                const canShowProgression = true;
+                                const nextStatus = {
+                                  pending: "preparing",
+                                  preparing: "ready",
+                                  ready: "served",
+                                }[order.status];
+
+                                if (nextStatus && canShowProgression) {
+                                  return (
+                                    <Button
+                                      variant="default"
+                                      size="sm"
+                                      className="bg-green-600 hover:bg-green-700 text-white"
+                                      disabled={updatingOrders.has(order.id)}
+                                      onClick={() => {
+                                        handleUpdateOrderStatus(
+                                          order.id,
+                                          nextStatus
+                                        );
+                                      }}
+                                    >
+                                      {updatingOrders.has(order.id) ? (
+                                        <div className="flex items-center gap-2">
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                          Updating...
+                                        </div>
+                                      ) : (
+                                        <>
+                                          {order.status === "pending" &&
+                                            "Start Preparing"}
+                                          {order.status === "preparing" &&
+                                            "Mark Ready"}
+                                          {order.status === "ready" &&
+                                            "Mark Served"}
+                                        </>
+                                      )}
+                                    </Button>
+                                  );
+                                }
+
+                                // If no next status, show appropriate message
+                                if (order.status === "served") {
+                                  const isCardOrder =
+                                    order.stripe_payment_intent_id;
+                                  return (
+                                    <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1 rounded-lg border border-amber-200">
+                                      <Clock className="w-3 h-3" />
+                                      <span className="text-xs font-medium">
+                                        {isCardOrder
+                                          ? "Auto-completing..."
+                                          : "Waiting for payment..."}
+                                      </span>
+                                    </div>
+                                  );
+                                }
+
+                                // If completed, show completion badge
+                                return (
+                                  <Badge className="bg-green-100 text-green-800 border-green-200">
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                    Completed
+                                  </Badge>
+                                );
+                              })()}
                             </div>
                           </div>
                         </CardContent>
@@ -1329,88 +1448,167 @@ export default function ActiveOrdersPage() {
 
                   {/* Action Buttons */}
                   <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                    {selectedOrder.status === "pending" && (
-                      <Button
-                        disabled={updatingOrders.has(selectedOrder.id)}
-                        onClick={() => {
-                          handleUpdateOrderStatus(
-                            selectedOrder.id,
-                            "preparing"
-                          );
-                          setSelectedOrder(null);
-                        }}
-                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
-                      >
-                        {updatingOrders.has(selectedOrder.id) ? (
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Updating...
+                    {(() => {
+                      const isCashOrder =
+                        !selectedOrder.stripe_payment_intent_id;
+                      const isPaid =
+                        selectedOrder.paymentStatus === "completed";
+
+                      // For cash orders: show "Mark Paid" only when served and not paid
+                      if (
+                        isCashOrder &&
+                        !isPaid &&
+                        selectedOrder.status === "served"
+                      ) {
+                        return (
+                          <Button
+                            disabled={markingAsPaid.has(selectedOrder.id)}
+                            onClick={() => {
+                              handleMarkAsPaid(selectedOrder.id);
+                              setSelectedOrder(null);
+                            }}
+                            className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
+                          >
+                            {markingAsPaid.has(selectedOrder.id) ? (
+                              <div className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Marking as Paid...
+                              </div>
+                            ) : (
+                              "Mark as Paid"
+                            )}
+                          </Button>
+                        );
+                      }
+
+                      // For card orders: payment is already completed when order is created
+                      // So we should always show status progression for card orders
+                      if (!isCashOrder && !isPaid) {
+                        // This should rarely happen for card orders, but handle it gracefully
+                        return (
+                          <div className="flex items-center gap-2 text-amber-600">
+                            <AlertCircle className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                              Payment Processing
+                            </span>
                           </div>
-                        ) : (
-                          "Start Preparing"
-                        )}
-                      </Button>
-                    )}
-                    {selectedOrder.status === "preparing" && (
-                      <Button
-                        disabled={updatingOrders.has(selectedOrder.id)}
-                        onClick={() => {
-                          handleUpdateOrderStatus(selectedOrder.id, "ready");
-                          setSelectedOrder(null);
-                        }}
-                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
-                      >
-                        {updatingOrders.has(selectedOrder.id) ? (
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Updating...
+                        );
+                      }
+
+                      // Show status progression buttons for all orders
+                      // Cash orders: show progression regardless of payment status
+                      // Card orders: payment is already completed, so always show progression
+                      const canShowProgression = true;
+
+                      if (
+                        selectedOrder.status === "pending" &&
+                        canShowProgression
+                      ) {
+                        return (
+                          <Button
+                            disabled={updatingOrders.has(selectedOrder.id)}
+                            onClick={() => {
+                              handleUpdateOrderStatus(
+                                selectedOrder.id,
+                                "preparing"
+                              );
+                              setSelectedOrder(null);
+                            }}
+                            className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
+                          >
+                            {updatingOrders.has(selectedOrder.id) ? (
+                              <div className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Updating...
+                              </div>
+                            ) : (
+                              "Start Preparing"
+                            )}
+                          </Button>
+                        );
+                      }
+
+                      if (
+                        selectedOrder.status === "preparing" &&
+                        canShowProgression
+                      ) {
+                        return (
+                          <Button
+                            disabled={updatingOrders.has(selectedOrder.id)}
+                            onClick={() => {
+                              handleUpdateOrderStatus(
+                                selectedOrder.id,
+                                "ready"
+                              );
+                              setSelectedOrder(null);
+                            }}
+                            className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
+                          >
+                            {updatingOrders.has(selectedOrder.id) ? (
+                              <div className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Updating...
+                              </div>
+                            ) : (
+                              "Mark Ready"
+                            )}
+                          </Button>
+                        );
+                      }
+
+                      if (
+                        selectedOrder.status === "ready" &&
+                        canShowProgression
+                      ) {
+                        return (
+                          <Button
+                            disabled={updatingOrders.has(selectedOrder.id)}
+                            onClick={() => {
+                              handleUpdateOrderStatus(
+                                selectedOrder.id,
+                                "served"
+                              );
+                              setSelectedOrder(null);
+                            }}
+                            className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
+                          >
+                            {updatingOrders.has(selectedOrder.id) ? (
+                              <div className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Updating...
+                              </div>
+                            ) : (
+                              "Mark Served"
+                            )}
+                          </Button>
+                        );
+                      }
+
+                      if (selectedOrder.status === "served") {
+                        const isCardOrder =
+                          selectedOrder.stripe_payment_intent_id;
+                        return (
+                          <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-2 rounded-lg border border-amber-200">
+                            <Clock className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                              {isCardOrder
+                                ? "Order will be auto-completed when payment is confirmed"
+                                : "Order will be auto-completed when customer pays"}
+                            </span>
                           </div>
-                        ) : (
-                          "Mark Ready"
-                        )}
-                      </Button>
-                    )}
-                    {selectedOrder.status === "ready" && (
-                      <Button
-                        disabled={updatingOrders.has(selectedOrder.id)}
-                        onClick={() => {
-                          handleUpdateOrderStatus(selectedOrder.id, "served");
-                          setSelectedOrder(null);
-                        }}
-                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
-                      >
-                        {updatingOrders.has(selectedOrder.id) ? (
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Updating...
-                          </div>
-                        ) : (
-                          "Mark Served"
-                        )}
-                      </Button>
-                    )}
-                    {selectedOrder.status === "served" && (
-                      <Button
-                        disabled={updatingOrders.has(selectedOrder.id)}
-                        onClick={() => {
-                          handleUpdateOrderStatus(
-                            selectedOrder.id,
-                            "completed"
-                          );
-                          setSelectedOrder(null);
-                        }}
-                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
-                      >
-                        {updatingOrders.has(selectedOrder.id) ? (
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Updating...
-                          </div>
-                        ) : (
-                          "Complete Order"
-                        )}
-                      </Button>
-                    )}
+                        );
+                      }
+
+                      // If completed, show completion message
+                      return (
+                        <div className="flex items-center gap-2 text-green-600">
+                          <CheckCircle className="h-4 w-4" />
+                          <span className="text-sm font-medium">
+                            Order Completed
+                          </span>
+                        </div>
+                      );
+                    })()}
                     <Button
                       variant="outline"
                       onClick={() => setSelectedOrder(null)}

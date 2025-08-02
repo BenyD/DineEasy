@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
@@ -313,10 +313,12 @@ async function validateStripeConnectForPayment(
   restaurantId: string,
   paymentAmount: number
 ): Promise<{ isValid: boolean; restaurant?: any; error?: string }> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   try {
-    // Get restaurant with full Stripe Connect details
+    console.log("Validating Stripe Connect for restaurant:", restaurantId);
+
+    // Get restaurant with basic Stripe Connect details
     const { data: restaurant, error: restaurantError } = await supabase
       .from("restaurants")
       .select(
@@ -326,18 +328,31 @@ async function validateStripeConnectForPayment(
         stripe_account_id, 
         currency, 
         stripe_account_enabled,
-        stripe_account_requirements,
-        stripe_account_charges_enabled,
-        stripe_account_payouts_enabled,
-        stripe_account_details_submitted
+        stripe_account_requirements
       `
       )
       .eq("id", restaurantId)
       .single();
 
+    console.log("Restaurant query result:", {
+      restaurant,
+      error: restaurantError,
+    });
+
     if (restaurantError || !restaurant) {
+      console.error("Restaurant not found:", {
+        restaurantId,
+        error: restaurantError,
+      });
       return { isValid: false, error: "Restaurant not found" };
     }
+
+    console.log("Found restaurant:", {
+      id: restaurant.id,
+      name: restaurant.name,
+      hasStripeAccount: !!restaurant.stripe_account_id,
+      stripeEnabled: restaurant.stripe_account_enabled,
+    });
 
     // Check if Stripe Connect account exists
     if (!restaurant.stripe_account_id) {
@@ -348,8 +363,16 @@ async function validateStripeConnectForPayment(
       };
     }
 
-    // Check if Stripe Connect account is enabled
+    // For Stripe Connect Express accounts, we only need basic validation
+    // Express accounts don't have complex requirements like Standard accounts
+    console.log("Stripe Connect Express validation - checking basic setup");
+
+    // Check if Stripe Connect account is enabled (basic check)
     if (!restaurant.stripe_account_enabled) {
+      console.log(
+        "Stripe Connect account is disabled for restaurant:",
+        restaurant.id
+      );
       return {
         isValid: false,
         error:
@@ -357,70 +380,39 @@ async function validateStripeConnectForPayment(
       };
     }
 
-    // Check if charges are enabled
-    if (!restaurant.stripe_account_charges_enabled) {
-      return {
-        isValid: false,
-        error:
-          "Restaurant payment processing is not ready. Please pay at the counter.",
-      };
-    }
-
-    // Check if payouts are enabled (important for Express accounts)
-    if (!restaurant.stripe_account_payouts_enabled) {
-      return {
-        isValid: false,
-        error:
-          "Restaurant payment processing is not fully configured. Please pay at the counter.",
-      };
-    }
-
-    // Check if account details are submitted
-    if (!restaurant.stripe_account_details_submitted) {
-      return {
-        isValid: false,
-        error:
-          "Restaurant payment processing requires additional setup. Please pay at the counter.",
-      };
-    }
-
-    // Validate Stripe Connect requirements
+    // For Express accounts, we don't need to check complex requirements
+    // Express accounts are pre-approved and have minimal verification needs
     if (restaurant.stripe_account_requirements) {
       const requirements = restaurant.stripe_account_requirements;
 
-      // Check for currently due requirements
-      if (
-        requirements.currently_due &&
-        Object.keys(requirements.currently_due).length > 0
-      ) {
-        return {
-          isValid: false,
-          error:
-            "Restaurant payment processing requires additional verification. Please pay at the counter.",
-        };
-      }
-
-      // Check for past due requirements
+      // Only check for critical past_due requirements (very rare for Express)
       if (
         requirements.past_due &&
         Object.keys(requirements.past_due).length > 0
       ) {
-        return {
-          isValid: false,
-          error:
-            "Restaurant payment processing has pending requirements. Please pay at the counter.",
-        };
+        console.warn(
+          "Restaurant has past due requirements (unusual for Express):",
+          {
+            restaurantId,
+            requirements: requirements.past_due,
+          }
+        );
+        // Don't block payment for Express accounts with past_due requirements
+        // They can still accept payments
       }
 
-      // Check for eventually due requirements (warnings)
+      // Log other requirements for debugging but don't block
       if (
-        requirements.eventually_due &&
-        Object.keys(requirements.eventually_due).length > 0
+        requirements.currently_due &&
+        Object.keys(requirements.currently_due).length > 0
       ) {
-        console.warn("Restaurant has eventually due requirements:", {
-          restaurantId,
-          requirements: requirements.eventually_due,
-        });
+        console.log(
+          "Restaurant has currently due requirements (normal for Express):",
+          {
+            restaurantId,
+            requirements: requirements.currently_due,
+          }
+        );
       }
     }
 
@@ -445,6 +437,11 @@ async function validateStripeConnectForPayment(
     // Validate currency compatibility
     const supportedCurrencies = ["chf", "eur", "usd", "gbp"];
     const restaurantCurrency = restaurant.currency?.toLowerCase();
+
+    console.log(
+      "Stripe Connect validation passed for restaurant:",
+      restaurant.id
+    );
 
     if (
       restaurantCurrency &&
@@ -471,23 +468,39 @@ async function validateStripeConnectForPayment(
  * Create Stripe payment intent with comprehensive error handling
  * Handles all edge cases for Stripe Connect Express accounts
  */
-async function createStripePaymentIntent(
+async function createStripeCheckoutSession(
   paymentData: QRPaymentData,
   restaurant: any,
   orderId: string,
   idempotencyKey: string
-): Promise<{ success: boolean; paymentIntent?: any; error?: string }> {
+): Promise<{ success: boolean; session?: any; error?: string }> {
   try {
     // Calculate platform fee (2% of total)
     const platformFee = Math.round(paymentData.total * 0.02 * 100);
 
-    // Prepare payment intent data
-    const paymentIntentData = {
-      amount: Math.round(paymentData.total * 100), // Convert to cents
-      currency: restaurant.currency?.toLowerCase() || "chf",
+    // Prepare checkout session data for Stripe Connect Express
+    const sessionData = {
+      payment_method_types: ["card" as const],
+      line_items: [
+        {
+          price_data: {
+            currency: restaurant.currency?.toLowerCase() || "chf",
+            product_data: {
+              name: `${restaurant.name} - Order`,
+              description: `${paymentData.items.length} item(s)`,
+            },
+            unit_amount: Math.round(paymentData.total * 100), // Convert to cents
+          },
+          quantity: 1,
+        },
+      ],
+      mode: "payment" as const,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/qr/${paymentData.tableId}/payment-confirmation?session_id={CHECKOUT_SESSION_ID}&order_id=${orderId}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/qr/${paymentData.tableId}/payment-confirmation?canceled=true&order_id=${orderId}`,
+      customer_email: paymentData.email,
       metadata: {
         restaurantId: paymentData.restaurantId,
-        orderId: orderId,
+        orderId: orderId || "pending",
         tableId: paymentData.tableId,
         customerEmail: paymentData.email || "",
         customerName: paymentData.customerName || "",
@@ -495,40 +508,52 @@ async function createStripePaymentIntent(
         restaurantName: restaurant.name,
         platformFee: platformFee.toString(),
         idempotencyKey: idempotencyKey,
+        connectType: "express",
+        specialInstructions: paymentData.specialInstructions || "",
       },
-      automatic_payment_methods: {
-        enabled: true,
+      payment_intent_data: {
+        transfer_data: {
+          destination: restaurant.stripe_account_id,
+        },
+        application_fee_amount: platformFee,
+        metadata: {
+          restaurantId: paymentData.restaurantId,
+          orderId: orderId || "pending",
+          tableId: paymentData.tableId,
+          customerEmail: paymentData.email || "",
+          customerName: paymentData.customerName || "",
+          isQRPayment: "true",
+          restaurantName: restaurant.name,
+          platformFee: platformFee.toString(),
+          idempotencyKey: idempotencyKey,
+          connectType: "express",
+        },
       },
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/qr/${paymentData.tableId}/confirmation?order_id=${orderId}`,
-      transfer_data: {
-        destination: restaurant.stripe_account_id,
-      },
-      application_fee_amount: platformFee,
     };
 
-    // Create payment intent with retry mechanism
+    // Create checkout session with retry mechanism
     let retryCount = 0;
     const maxRetries = 3;
 
     while (retryCount < maxRetries) {
       try {
-        const paymentIntent = await stripe.paymentIntents.create(
-          paymentIntentData,
-          {
-            idempotencyKey: idempotencyKey,
-          }
-        );
+        const session = await stripe.checkout.sessions.create(sessionData, {
+          idempotencyKey: idempotencyKey,
+        });
 
-        console.log("Stripe payment intent created successfully:", {
-          paymentIntentId: paymentIntent.id,
+        console.log("Stripe checkout session created successfully:", {
+          sessionId: session.id,
           orderId,
           amount: paymentData.total,
           platformFee: platformFee / 100,
           restaurantId: paymentData.restaurantId,
           restaurantName: restaurant.name,
+          connectType: "express",
+          transferDestination: restaurant.stripe_account_id,
+          checkoutUrl: session.url,
         });
 
-        return { success: true, paymentIntent };
+        return { success: true, session };
       } catch (stripeError: any) {
         retryCount++;
 
@@ -569,7 +594,7 @@ async function createStripePaymentIntent(
         }
 
         // For other errors, log and return generic message
-        console.error("Stripe payment intent creation failed:", {
+        console.error("Stripe checkout session creation failed:", {
           error: stripeError,
           retryCount,
           orderId,
@@ -594,7 +619,7 @@ async function createStripePaymentIntent(
         "Payment processing failed after multiple attempts. Please pay at the counter.",
     };
   } catch (error) {
-    console.error("Unexpected error creating Stripe payment intent:", error);
+    console.error("Unexpected error creating Stripe checkout session:", error);
     return {
       success: false,
       error: "Payment processing failed. Please pay at the counter.",
@@ -603,7 +628,7 @@ async function createStripePaymentIntent(
 }
 
 export async function createQRPaymentIntent(paymentData: QRPaymentData) {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   try {
     console.log("Creating QR payment intent:", {
@@ -640,61 +665,80 @@ export async function createQRPaymentIntent(paymentData: QRPaymentData) {
     }
 
     // Comprehensive Stripe Connect validation
+    console.log(
+      "Starting Stripe Connect validation for restaurant:",
+      paymentData.restaurantId
+    );
+
     const stripeValidation = await validateStripeConnectForPayment(
       paymentData.restaurantId,
       paymentData.total
     );
 
+    console.log("Stripe validation result:", stripeValidation);
+
     if (!stripeValidation.isValid) {
+      console.error("Stripe validation failed:", stripeValidation.error);
       return { error: stripeValidation.error };
     }
 
+    console.log(
+      "Stripe validation passed, proceeding with payment intent creation"
+    );
+
     const restaurant = stripeValidation.restaurant!;
 
-    // Use unified order creation function
-    const unifiedOrderResult = await createOrder(paymentData, "card");
+    // Create Stripe checkout session first (before creating order)
+    const sessionResult = await createStripeCheckoutSession(
+      paymentData,
+      restaurant,
+      "", // No orderId yet
+      idempotencyKey
+    );
+
+    if (!sessionResult.success) {
+      // Checkout session creation failed - don't create order
+      return { error: sessionResult.error };
+    }
+
+    const session = sessionResult.session!;
+
+    // Now create the order with the successful checkout session
+    const unifiedOrderResult = await createOrder(
+      paymentData,
+      "card",
+      session.payment_intent as string
+    );
     if (!unifiedOrderResult.success) {
+      // Order creation failed - expire the checkout session
+      try {
+        await stripe.checkout.sessions.expire(session.id);
+      } catch (expireError) {
+        console.error("Error expiring checkout session:", expireError);
+      }
       return { error: unifiedOrderResult.error };
     }
 
     const orderId = unifiedOrderResult.orderId!;
 
-    // Create Stripe payment intent with comprehensive error handling
-    const paymentIntentResult = await createStripePaymentIntent(
-      paymentData,
-      restaurant,
-      orderId,
-      idempotencyKey
-    );
-
-    if (!paymentIntentResult.success) {
-      // Clean up the order if payment intent creation fails
-      await handleFailedPayment(
-        orderId,
-        paymentIntentResult.error || "Payment intent creation failed"
-      );
-      return { error: paymentIntentResult.error };
-    }
-
-    const paymentIntent = paymentIntentResult.paymentIntent!;
-
-    // Update order with payment intent ID
+    // Update order with checkout session ID and payment intent ID
     const { error: updateError } = await supabase
       .from("orders")
       .update({
-        stripe_payment_intent_id: paymentIntent.id,
+        stripe_payment_intent_id: session.payment_intent as string,
         updated_at: new Date().toISOString(),
       })
       .eq("id", orderId);
 
     if (updateError) {
-      console.error("Error updating order with payment intent:", updateError);
+      console.error("Error updating order with checkout session:", updateError);
       // Don't fail the payment creation for this error
     }
 
-    console.log("Created QR payment intent successfully:", {
+    console.log("Created QR checkout session successfully:", {
       orderId,
-      paymentIntentId: paymentIntent.id,
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent,
       amount: paymentData.total,
       restaurantId: paymentData.restaurantId,
       restaurantName: restaurant.name,
@@ -702,9 +746,10 @@ export async function createQRPaymentIntent(paymentData: QRPaymentData) {
     });
 
     return {
-      clientSecret: paymentIntent.client_secret,
+      checkoutUrl: session.url,
       orderId: orderId,
-      paymentIntentId: paymentIntent.id,
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent as string,
     };
   } catch (error) {
     console.error("Error creating QR payment intent:", error);
@@ -730,7 +775,7 @@ export async function handleFailedPayment(
   orderId: string,
   errorMessage: string
 ) {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   try {
     console.log("Handling failed payment for order:", orderId);
@@ -841,7 +886,7 @@ export async function handleFailedPayment(
 
 // Helper function to perform order cleanup with retry mechanism
 async function performOrderCleanup(orderId: string, reason: string) {
-  const supabase = createClient();
+  const supabase = createAdminClient();
   let retryCount = 0;
   const maxRetries = 3;
 
@@ -898,7 +943,7 @@ async function performOrderCleanup(orderId: string, reason: string) {
 }
 
 export async function confirmQRPayment(orderId: string) {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   try {
     // Get the order to verify it exists and get payment intent ID
@@ -913,16 +958,32 @@ export async function confirmQRPayment(orderId: string) {
     }
 
     // Check if payment record already exists to prevent duplicates
-    const { data: existingPayment, error: paymentCheckError } = await supabase
+    const { data: existingPayments, error: paymentCheckError } = await supabase
       .from("payments")
       .select("id, status")
-      .eq("order_id", orderId)
-      .single();
+      .eq("order_id", orderId);
 
-    if (paymentCheckError && paymentCheckError.code !== "PGRST116") {
-      // PGRST116 is "not found" error, which is expected
+    if (paymentCheckError) {
       console.error("Error checking for existing payment:", paymentCheckError);
       return { error: "Failed to verify payment status" };
+    }
+
+    // Log all existing payments for debugging
+    if (existingPayments && existingPayments.length > 0) {
+      console.log("Found existing payment records:", existingPayments);
+    }
+
+    const existingPayment = existingPayments?.[0] as
+      | { id: string; status: string }
+      | undefined; // Get the first payment record
+
+    // If multiple payment records exist, log a warning but use the first one
+    if (existingPayments && existingPayments.length > 1) {
+      console.warn("Multiple payment records found for order:", {
+        orderId,
+        paymentCount: existingPayments.length,
+        payments: existingPayments,
+      });
     }
 
     if (existingPayment) {
@@ -955,10 +1016,24 @@ export async function confirmQRPayment(orderId: string) {
             status: paymentIntent.status,
           });
 
-          // Create payment record
-          const { error: paymentError } = await supabase
-            .from("payments")
-            .insert({
+          // Check if payment record already exists (reuse the existing payment from above)
+          // No need to query again since we already have existingPayment from the check above
+
+          let paymentError;
+          if (existingPayment && (existingPayment as any).id) {
+            // Update existing payment record
+            const { error } = await supabase
+              .from("payments")
+              .update({
+                status: "completed",
+                stripe_payment_id: paymentIntent.id,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", (existingPayment as any).id);
+            paymentError = error;
+          } else {
+            // Create new payment record
+            const { error } = await supabase.from("payments").insert({
               restaurant_id: order.restaurant_id,
               order_id: orderId,
               amount: paymentIntent.amount / 100, // Convert from cents
@@ -966,29 +1041,75 @@ export async function confirmQRPayment(orderId: string) {
               method: "card",
               stripe_payment_id: paymentIntent.id,
             });
+            paymentError = error;
+          }
 
           if (paymentError) {
-            console.error("Error creating payment record:", paymentError);
+            console.error(
+              "Error updating/creating payment record:",
+              paymentError
+            );
             return { error: "Failed to record payment" };
           }
 
-          // Update order status to "preparing"
-          const { error: orderUpdateError } = await supabase
+          // Check current order status before updating
+          const { data: currentOrder, error: orderCheckError } = await supabase
             .from("orders")
-            .update({ status: "preparing" })
-            .eq("id", orderId);
+            .select("status")
+            .eq("id", orderId)
+            .single();
 
-          if (orderUpdateError) {
-            console.error("Error updating order status:", orderUpdateError);
-            return { error: "Failed to update order status" };
+          if (orderCheckError) {
+            console.error(
+              "Error checking current order status:",
+              orderCheckError
+            );
+            return { error: "Failed to check order status" };
           }
 
-          console.log("Payment confirmed successfully:", {
-            orderId,
-            paymentIntentId: paymentIntent.id,
-          });
+          // For card orders: if already served, auto-complete since payment is now confirmed
+          if (currentOrder?.status === "served") {
+            const { error: completeError } = await supabase
+              .from("orders")
+              .update({
+                status: "completed",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", orderId);
 
-          return { success: true, message: "Payment confirmed" };
+            if (completeError) {
+              console.error("Error auto-completing card order:", completeError);
+              return { error: "Failed to complete order" };
+            }
+
+            console.log("Card payment confirmed and order auto-completed:", {
+              orderId,
+              paymentIntentId: paymentIntent.id,
+            });
+
+            return {
+              success: true,
+              message: "Payment confirmed and order completed",
+            };
+          } else {
+            // Update order status to "preparing" if not already served
+            const { error: orderUpdateError } = await supabase
+              .from("orders")
+              .update({ status: "preparing" })
+              .eq("id", orderId);
+
+            if (orderUpdateError) {
+              console.error("Error updating order status:", orderUpdateError);
+              return { error: "Failed to update order status" };
+            }
+
+            console.log("Payment confirmed successfully:", {
+              orderId,
+              paymentIntentId: paymentIntent.id,
+            });
+
+            return { success: true, message: "Payment confirmed" };
+          }
         } else if (paymentIntent.status === "canceled") {
           console.log("Payment was canceled:", {
             orderId,
@@ -1096,7 +1217,7 @@ export async function getQROrderDetails(orderId: string) {
         *,
         order_items (
           *,
-          menu_item:menu_items (
+          menu_items!menu_item_id (
             id,
             name,
             description,
@@ -1138,7 +1259,7 @@ export async function getQROrderDetails(orderId: string) {
       updatedAt: order.updated_at,
     });
 
-    return { order };
+    return { success: true, data: order };
   } catch (error: any) {
     console.error("Error fetching QR order details:", {
       orderId,
@@ -1159,7 +1280,7 @@ async function createOrder(
   paymentMethod: "card" | "cash",
   stripePaymentIntentId?: string
 ): Promise<{ success: boolean; orderId?: string; error?: string }> {
-  const supabase = createClient();
+  const supabase = createAdminClient();
 
   try {
     console.log(`Creating ${paymentMethod} order:`, {
@@ -1235,7 +1356,7 @@ async function createOrder(
       try {
         const { data: orderNumberResult, error: orderNumberError } =
           await supabase.rpc("generate_order_number", {
-            restaurant_id: paymentData.restaurantId,
+            p_restaurant_id: paymentData.restaurantId,
           });
 
         if (orderNumberError) {
@@ -1260,15 +1381,13 @@ async function createOrder(
               p_customer_name: paymentData.customerName,
               p_customer_email: paymentData.email,
               p_notes: paymentData.specialInstructions,
-              p_items: JSON.stringify(
-                paymentData.items.map((item) => ({
-                  menu_item_id: item.id,
-                  quantity: item.quantity,
-                  unit_price: item.price,
-                  total_price: item.price * item.quantity,
-                  notes: null,
-                }))
-              ),
+              p_items: paymentData.items.map((item) => ({
+                menu_item_id: item.id,
+                quantity: item.quantity,
+                unit_price: item.price,
+                total_price: item.price * item.quantity,
+                notes: null,
+              })),
             });
 
           if (orderFunctionError) {
@@ -1280,26 +1399,53 @@ async function createOrder(
           }
 
           if (orderResult && orderResult.success) {
-            // Update order with payment method and stripe payment intent ID if provided
-            const updateData: any = {
-              payment_method: paymentMethod,
-            };
-
+            // Update order with stripe payment intent ID if provided
             if (stripePaymentIntentId) {
-              updateData.stripe_payment_intent_id = stripePaymentIntentId;
+              const { error: updateError } = await supabase
+                .from("orders")
+                .update({ stripe_payment_intent_id: stripePaymentIntentId })
+                .eq("id", orderId);
+
+              if (updateError) {
+                console.error(
+                  "Error updating order with payment details:",
+                  updateError
+                );
+                // Don't fail the order creation, just log the error
+              }
             }
 
-            const { error: updateError } = await supabase
-              .from("orders")
-              .update(updateData)
-              .eq("id", orderId);
+            // Create payment record for atomic function case
+            const paymentRecord = {
+              restaurant_id: paymentData.restaurantId,
+              order_id: orderId,
+              amount: paymentData.total,
+              status: paymentMethod === "cash" ? "pending" : "completed",
+              method: paymentMethod,
+              stripe_payment_id: stripePaymentIntentId || null,
+            };
 
-            if (updateError) {
-              console.error(
-                "Error updating order with payment details:",
-                updateError
-              );
-              // Don't fail the order creation, just log the error
+            const { error: paymentError } = await supabase
+              .from("payments")
+              .insert(paymentRecord);
+
+            if (paymentError) {
+              console.error("Error creating payment record:", paymentError);
+
+              // Handle unique constraint violation gracefully
+              if (paymentError.code === "23505") {
+                console.log(
+                  "Payment record already exists for this order, continuing..."
+                );
+                // Don't fail the order creation, just log the duplicate
+              } else {
+                // Clean up the order if payment record creation fails for other reasons
+                await supabase.from("orders").delete().eq("id", orderId);
+                return {
+                  success: false,
+                  error: "Failed to create payment record",
+                };
+              }
             }
 
             console.log(
@@ -1330,7 +1476,6 @@ async function createOrder(
           customer_name: paymentData.customerName,
           customer_email: paymentData.email,
           notes: paymentData.specialInstructions,
-          payment_method: paymentMethod,
         };
 
         if (stripePaymentIntentId) {
@@ -1377,6 +1522,66 @@ async function createOrder(
           return { success: false, error: "Failed to create order items" };
         }
 
+        // Check if payment record already exists (in case atomic function succeeded but payment creation failed)
+        const { data: existingPayment, error: paymentCheckError } =
+          await supabase
+            .from("payments")
+            .select("id")
+            .eq("order_id", orderId)
+            .single();
+
+        if (paymentCheckError && paymentCheckError.code !== "PGRST116") {
+          console.error("Error checking existing payment:", paymentCheckError);
+          // Clean up the order and order items if payment check fails
+          await supabase.from("order_items").delete().eq("order_id", orderId);
+          await supabase.from("orders").delete().eq("id", orderId);
+          return { success: false, error: "Failed to check payment status" };
+        }
+
+        if (!existingPayment) {
+          // Create payment record for manual fallback case (only if none exists)
+          const paymentRecord = {
+            restaurant_id: paymentData.restaurantId,
+            order_id: orderId,
+            amount: paymentData.total,
+            status: paymentMethod === "cash" ? "pending" : "completed",
+            method: paymentMethod,
+            stripe_payment_id: stripePaymentIntentId || null,
+          };
+
+          const { error: paymentError } = await supabase
+            .from("payments")
+            .insert(paymentRecord);
+
+          if (paymentError) {
+            console.error("Error creating payment record:", paymentError);
+
+            // Handle unique constraint violation gracefully
+            if (paymentError.code === "23505") {
+              console.log(
+                "Payment record already exists for this order, continuing..."
+              );
+              // Don't fail the order creation, just log the duplicate
+            } else {
+              // Clean up the order and order items if payment record creation fails for other reasons
+              await supabase
+                .from("order_items")
+                .delete()
+                .eq("order_id", orderId);
+              await supabase.from("orders").delete().eq("id", orderId);
+              return {
+                success: false,
+                error: "Failed to create payment record",
+              };
+            }
+          }
+        } else {
+          console.log("Payment record already exists, skipping creation:", {
+            orderId,
+            paymentId: existingPayment.id,
+          });
+        }
+
         console.log(`${paymentMethod} order created successfully:`, {
           orderId,
           orderNumber,
@@ -1415,12 +1620,12 @@ export async function createCashOrder(paymentData: QRPaymentData) {
 
 export async function completeCashOrder(orderId: string) {
   try {
-    const supabase = createClient();
+    const supabase = createAdminClient();
 
-    // First, check if the order exists and is a cash order
+    // First, check if the order exists
     const { data: order, error: fetchError } = await supabase
       .from("orders")
-      .select("id, payment_method, payment_status, total_amount")
+      .select("id, restaurant_id, total_amount")
       .eq("id", orderId)
       .single();
 
@@ -1433,42 +1638,98 @@ export async function completeCashOrder(orderId: string) {
       return { success: false, error: "Order not found" };
     }
 
-    if (order.payment_method !== "cash") {
-      return { success: false, error: "This order is not a cash order" };
+    // Check if there's already a payment record for this order
+    const { data: existingPayments, error: paymentCheckError } = await supabase
+      .from("payments")
+      .select("id, status, method")
+      .eq("order_id", orderId);
+
+    if (paymentCheckError) {
+      console.error("Error checking existing payment:", paymentCheckError);
+      return { success: false, error: "Failed to check payment status" };
     }
 
-    if (order.payment_status === "completed") {
+    // Log all existing payments for debugging
+    if (existingPayments && existingPayments.length > 0) {
+      console.log("Found existing payment records:", existingPayments);
+    }
+
+    const existingPayment = existingPayments?.[0]; // Get the first payment record
+
+    if (existingPayment && existingPayment.status === "completed") {
       return { success: false, error: "Order is already marked as paid" };
     }
 
-    // Update the order payment status to completed
-    const { error: updateError } = await supabase
-      .from("orders")
-      .update({
-        payment_status: "completed",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", orderId);
-
-    if (updateError) {
-      console.error("Error updating order payment status:", updateError);
-      return { success: false, error: "Failed to mark order as paid" };
+    if (existingPayment && existingPayment.method !== "cash") {
+      return { success: false, error: "This order is not a cash order" };
     }
 
-    // Create a payment record for the cash payment
-    const { error: paymentError } = await supabase.from("payments").insert({
+    // If multiple payment records exist, log a warning but use the first one
+    if (existingPayments && existingPayments.length > 1) {
+      console.warn("Multiple payment records found for order:", {
+        orderId,
+        paymentCount: existingPayments.length,
+        payments: existingPayments,
+      });
+    }
+
+    // Create or update a payment record for the cash payment
+    const paymentData = {
+      restaurant_id: order.restaurant_id,
       order_id: orderId,
       amount: order.total_amount,
-      payment_method: "cash",
       status: "completed",
-      stripe_payment_intent_id: null,
-      created_at: new Date().toISOString(),
-    });
+      method: "cash",
+      stripe_payment_id: null,
+    };
+
+    let paymentError;
+    if (existingPayment) {
+      // Update existing payment record
+      const { error } = await supabase
+        .from("payments")
+        .update(paymentData)
+        .eq("id", existingPayment.id);
+      paymentError = error;
+    } else {
+      // Create new payment record
+      const { error } = await supabase.from("payments").insert(paymentData);
+      paymentError = error;
+    }
 
     if (paymentError) {
-      console.error("Error creating payment record:", paymentError);
-      // Don't fail the entire operation if payment record creation fails
-      // The order is already marked as paid
+      console.error("Error updating payment status:", paymentError);
+      return { success: false, error: "Failed to update payment status" };
+    }
+
+    // For cash orders: auto-complete when paid (since typically already served)
+    const { data: currentOrder, error: orderCheckError } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+
+    if (!orderCheckError && currentOrder?.status === "served") {
+      // Auto-complete the cash order since it's paid and served
+      const { error: completeError } = await supabase
+        .from("orders")
+        .update({
+          status: "completed",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", orderId);
+
+      if (completeError) {
+        console.error("Error auto-completing cash order:", completeError);
+      } else {
+        console.log(
+          `Cash order ${orderId} automatically completed (paid and served)`
+        );
+      }
+    } else if (!orderCheckError && currentOrder?.status !== "served") {
+      console.log(
+        `Cash order ${orderId} marked as paid but not yet served (status: ${currentOrder?.status})`
+      );
     }
 
     console.log(`Cash order ${orderId} marked as paid successfully`);

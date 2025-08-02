@@ -1,11 +1,47 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import type { Database } from "@/types/supabase";
+// Define interfaces for the tables we need
+interface Table {
+  id: string;
+  restaurant_id: string;
+  number: string;
+  status: string;
+  is_active: boolean;
+  restaurants?: Restaurant;
+}
 
-type Table = Database["public"]["Tables"]["tables"]["Row"];
-type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
-type MenuItem = Database["public"]["Tables"]["menu_items"]["Row"];
+interface Restaurant {
+  id: string;
+  name: string;
+  logo_url?: string;
+  address?: string;
+  cuisine?: string;
+  opening_hours?: any;
+  currency?: string;
+  phone?: string;
+  email?: string;
+  description?: string;
+  stripe_account_enabled?: boolean;
+  stripe_account_id?: string;
+  payment_methods?: any;
+  tax_rate?: number;
+}
+
+interface MenuItem {
+  id: string;
+  restaurant_id: string;
+  name: string;
+  description?: string;
+  price: string;
+  image_url?: string;
+  is_available: boolean;
+  tags?: string[];
+  is_popular?: boolean;
+  preparation_time?: string;
+  menu_categories?: { id: string; name: string };
+  menu_items_allergens?: Array<{ allergens?: { id: string; name: string } }>;
+}
 
 // Get table information by table ID
 export async function getTableInfo(tableId: string) {
@@ -144,7 +180,10 @@ export async function getRestaurantMenu(restaurantId: string) {
           // Transform allergens
           const allergens =
             item.menu_items_allergens
-              ?.map((allergen) => allergen.allergens?.name)
+              ?.map(
+                (allergen: { allergens?: { id: string; name: string } }) =>
+                  allergen.allergens?.name
+              )
               .filter(Boolean) || [];
 
           acc[categoryName].push({

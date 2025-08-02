@@ -72,7 +72,7 @@ export default function CheckoutPage({
   const resolvedParams = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { cart, getTotalPrice, clearCart } = useCart();
+  const { cart, getTotalPrice, clearCart } = useCart(resolvedParams.tableId);
   const [selectedPayment, setSelectedPayment] = useState("");
   const [email, setEmail] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -218,20 +218,40 @@ export default function CheckoutPage({
           specialInstructions: sanitizedSpecialInstructions,
         };
 
+        // Save cart data to sessionStorage for potential cash fallback
+        const cartData = {
+          restaurantId,
+          items: cart.map((item) => ({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+          })),
+          subtotal,
+          tax,
+          tip,
+          total,
+          email: sanitizedEmail,
+          customerName: sanitizedCustomerName,
+          specialInstructions: sanitizedSpecialInstructions,
+        };
+        sessionStorage.setItem(
+          `cart_${resolvedParams.tableId}`,
+          JSON.stringify(cartData)
+        );
+
         const result = await createQRPaymentIntent(paymentData);
 
         if (result.error) {
           throw new Error(result.error);
         }
 
-        if (result.clientSecret && result.orderId) {
-          // Only clear cart after successful payment intent creation
+        if (result.checkoutUrl && result.orderId) {
+          // Only clear cart after successful checkout session creation
           clearCart();
 
-          // Redirect to payment confirmation
-          router.push(
-            `/qr/${resolvedParams.tableId}/payment-confirmation?client_secret=${result.clientSecret}&order_id=${result.orderId}`
-          );
+          // Redirect to Stripe hosted checkout
+          window.location.href = result.checkoutUrl;
         } else {
           throw new Error("Failed to create payment. Please try again.");
         }
@@ -265,9 +285,9 @@ export default function CheckoutPage({
           // Only clear cart after successful order creation
           clearCart();
 
-          // Redirect to confirmation page
+          // Redirect to order tracking page with success parameter
           router.push(
-            `/qr/${resolvedParams.tableId}/confirmation?order_id=${result.orderId}&payment=cash&success=true`
+            `/qr/${resolvedParams.tableId}/order-tracking/${result.orderId}?payment_success=true`
           );
         } else {
           throw new Error("Failed to create order. Please try again.");
@@ -305,7 +325,7 @@ export default function CheckoutPage({
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-gray-300 border-t-green-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Redirecting to confirmation...</p>
+          <p className="text-gray-600">Redirecting to order tracking...</p>
         </div>
       </div>
     );
@@ -313,20 +333,79 @@ export default function CheckoutPage({
 
   if (cart.length === 0 && !isPaymentSuccessful) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">
-            Your cart is empty
-          </h1>
-          <p className="text-gray-600 mb-8">
-            Add some items to your cart before proceeding to checkout.
-          </p>
-          <Link href={`/qr/${resolvedParams.tableId}`}>
-            <Button className="bg-green-600 hover:bg-green-700">
-              Back to Menu
-            </Button>
-          </Link>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center px-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center max-w-md"
+        >
+          {/* Enhanced Empty Cart Illustration */}
+          <motion.div
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 200, damping: 20 }}
+            className="relative mx-auto mb-8"
+          >
+            <div className="w-32 h-32 bg-gradient-to-br from-amber-50 to-orange-100 rounded-full flex items-center justify-center border-4 border-amber-200 shadow-lg">
+              <div className="relative">
+                <span className="text-5xl">🛒</span>
+                <motion.div
+                  animate={{
+                    scale: [1, 1.1, 1],
+                    opacity: [0.7, 1, 0.7],
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center"
+                >
+                  <span className="text-white text-xs font-bold">0</span>
+                </motion.div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Enhanced Content */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-4">
+              Your cart is empty
+            </h1>
+            <p className="text-gray-600 mb-8 leading-relaxed">
+              Add some delicious items to your cart before proceeding to
+              checkout.
+            </p>
+          </motion.div>
+
+          {/* Enhanced Action Buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="space-y-4"
+          >
+            <Link href={`/qr/${resolvedParams.tableId}`}>
+              <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-6 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 font-semibold w-full">
+                <span className="mr-2">🍽️</span>
+                Back to Menu
+              </Button>
+            </Link>
+            <Link href={`/qr/${resolvedParams.tableId}/feedback`}>
+              <Button
+                variant="outline"
+                className="w-full border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
+              >
+                <span className="mr-2">⭐</span>
+                Rate Your Experience
+              </Button>
+            </Link>
+          </motion.div>
+        </motion.div>
       </div>
     );
   }
@@ -384,12 +463,22 @@ export default function CheckoutPage({
                 <ArrowLeft className="w-5 h-5" />
               </Button>
             </Link>
-            <div>
+            <div className="flex-1">
               <h1 className="text-lg font-semibold text-gray-900">Checkout</h1>
               <p className="text-sm text-gray-600">
                 {restaurant?.name} • Table {tableData?.number}
               </p>
             </div>
+            <Link href={`/qr/${resolvedParams.tableId}/feedback`}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-2"
+                title="Rate your experience"
+              >
+                <span className="text-lg">🙏</span>
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
@@ -548,7 +637,8 @@ export default function CheckoutPage({
               </div>
               <div className="text-sm text-amber-600 space-y-1">
                 <p>
-                  This restaurant doesn&apos;t have online payment processing set up.
+                  This restaurant doesn&apos;t have online payment processing
+                  set up.
                 </p>
                 {cardPaymentIssues.length > 0 && (
                   <div className="mt-2">
@@ -677,7 +767,8 @@ export default function CheckoutPage({
                 required
               />
               <p className="text-xs text-gray-500 mt-2">
-                We&apos;ll send your receipt and order confirmation to this email
+                We&apos;ll send your receipt and order confirmation to this
+                email
               </p>
             </div>
           </div>

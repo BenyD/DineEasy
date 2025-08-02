@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import type { Database } from "@/types/supabase";
 import { stripe } from "@/lib/stripe";
@@ -1667,9 +1668,7 @@ export async function sendWelcomeEmailForRestaurant(restaurantId: string) {
     const interval = "monthly"; // Default, could be enhanced to get from subscription
     const trialEndDate =
       restaurant.subscription_status === "trialing"
-        ? new Date(
-            Date.now() + 14 * 24 * 60 * 60 * 1000
-          ).toLocaleDateString()
+        ? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toLocaleDateString()
         : undefined;
 
     // Get Stripe Connect details if available

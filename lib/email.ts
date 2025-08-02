@@ -885,7 +885,7 @@ export const sendWelcomeToDineEasyEmail = async (
     const isStripeConnectComplete =
       welcomeData.hasStripeConnect &&
       welcomeData.stripeConnectEnabled &&
-      welcomeData.stripeAccountId;
+      (welcomeData.stripeAccountId || welcomeData.stripeChargesEnabled);
 
     console.log("📧 Preparing email with:", {
       from: "DineEasy <noreply@dineeasy.ch>",
@@ -894,6 +894,12 @@ export const sendWelcomeToDineEasyEmail = async (
       formattedPlan,
       greeting,
       isStripeConnectComplete,
+      stripeData: {
+        hasStripeConnect: welcomeData.hasStripeConnect,
+        stripeConnectEnabled: welcomeData.stripeConnectEnabled,
+        stripeAccountId: welcomeData.stripeAccountId,
+        stripeChargesEnabled: welcomeData.stripeChargesEnabled,
+      },
     });
 
     // Create the email HTML content

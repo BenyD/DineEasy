@@ -1,24 +1,13 @@
--- Create a function for atomic order creation with items
-CREATE OR REPLACE FUNCTION create_order_with_items(
-  p_order_id uuid,
-  p_restaurant_id uuid,
-  p_table_id uuid,
-  p_order_number text,
-  p_total_amount numeric,
-  p_tax_amount numeric,
-  p_tip_amount numeric DEFAULT 0,
-  p_customer_name text DEFAULT NULL,
-  p_customer_email text DEFAULT NULL,
-  p_notes text DEFAULT NULL,
-  p_items jsonb DEFAULT '[]'::jsonb
-)
+-- Fix create_order_with_items function JSON parsing issue
+CREATE OR REPLACE FUNCTION public.create_order_with_items(p_order_id uuid, p_restaurant_id uuid, p_table_id uuid, p_order_number text, p_total_amount numeric, p_tax_amount numeric, p_tip_amount numeric DEFAULT 0, p_customer_name text DEFAULT NULL::text, p_customer_email text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_items jsonb DEFAULT '[]'::jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-AS $$
+SET search_path TO 'public'
+AS $function$
 DECLARE
   v_order_id uuid;
-  v_item record;
+  v_item jsonb;
   v_result jsonb;
 BEGIN
   -- Start transaction
@@ -62,7 +51,6 @@ BEGIN
         menu_item_id,
         quantity,
         unit_price,
-        total_price,
         notes,
         created_at
       ) VALUES (
@@ -70,8 +58,7 @@ BEGIN
         (v_item->>'menu_item_id')::uuid,
         (v_item->>'quantity')::integer,
         (v_item->>'unit_price')::numeric,
-        (v_item->>'total_price')::numeric,
-        v_item->>'notes',
+        CASE WHEN v_item ? 'notes' THEN v_item->>'notes' ELSE NULL END,
         NOW()
       );
     END LOOP;
@@ -92,4 +79,4 @@ BEGIN
       RAISE EXCEPTION 'Failed to create order: %', SQLERRM;
   END;
 END;
-$$; 
+$function$; 

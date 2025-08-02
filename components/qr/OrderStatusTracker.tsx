@@ -3,443 +3,144 @@
 import { motion } from "framer-motion";
 import {
   Clock,
-  ChefHat,
   CheckCircle,
+  ChefHat,
   Truck,
-  Utensils,
-  AlertCircle,
-  Wifi,
-  WifiOff,
-  RefreshCw,
+  Check,
+  XCircle,
 } from "lucide-react";
-import { useOrderTracking } from "@/hooks/useOrderTracking";
-import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
-import { getQROrderDetails } from "@/lib/actions/qr-payments";
+import { Badge } from "@/components/ui/badge";
 
 interface OrderStatusTrackerProps {
-  orderId: string;
-  initialStatus?: string;
+  status: string;
+  showLabels?: boolean;
+  compact?: boolean;
+  className?: string;
 }
 
-const ORDER_STATUSES = [
+const orderStatusSteps = [
+  { key: "pending", label: "Order Placed", icon: Clock, color: "bg-blue-500" },
   {
-    key: "pending",
-    label: "Order Received",
-    icon: Clock,
-    color: "blue",
-    description: "Your order has been received and is being reviewed",
+    key: "confirmed",
+    label: "Order Confirmed",
+    icon: CheckCircle,
+    color: "bg-green-500",
   },
   {
     key: "preparing",
     label: "Preparing",
     icon: ChefHat,
-    color: "amber",
-    description: "Our kitchen is preparing your delicious meal",
+    color: "bg-orange-500",
   },
   {
     key: "ready",
-    label: "Ready",
-    icon: CheckCircle,
-    color: "green",
-    description: "Your order is ready for pickup or service",
+    label: "Ready for Pickup",
+    icon: Truck,
+    color: "bg-purple-500",
   },
-  {
-    key: "served",
-    label: "Served",
-    icon: Utensils,
-    color: "purple",
-    description: "Your order has been served to your table",
-  },
-  {
-    key: "completed",
-    label: "Completed",
-    icon: CheckCircle,
-    color: "green",
-    description: "Order completed successfully",
-  },
+  { key: "completed", label: "Completed", icon: Check, color: "bg-green-600" },
+  { key: "cancelled", label: "Cancelled", icon: XCircle, color: "bg-red-500" },
 ];
 
-const getStatusIndex = (status: string) => {
-  return ORDER_STATUSES.findIndex((s) => s.key === status);
-};
-
-const getStatusInfo = (status: string) => {
-  return ORDER_STATUSES.find((s) => s.key === status) || ORDER_STATUSES[0];
-};
-
 export function OrderStatusTracker({
-  orderId,
-  initialStatus = "pending",
+  status,
+  showLabels = true,
+  compact = false,
+  className = "",
 }: OrderStatusTrackerProps) {
-  const [currentStatus, setCurrentStatus] = useState(initialStatus);
-  const [connectionStatus, setConnectionStatus] = useState<
-    "connected" | "disconnected" | "error"
-  >("disconnected");
-  const [error, setError] = useState<string | null>(null);
-  const [orderDetails, setOrderDetails] = useState<any>(null);
-  const [estimatedTime, setEstimatedTime] = useState<number | null>(null);
-
-  const {
-    isConnected,
-    orderStatus,
-    lastUpdate,
-    connectionStatus: wsConnectionStatus,
-  } = useOrderTracking({
-    enabled: true,
-    orderId,
-    onStatusUpdate: (status) => {
-      console.log("Order status updated via WebSocket:", status);
-      const previousStatus = currentStatus;
-      setCurrentStatus(status);
-      setError(null);
-
-      // Show notification for important status changes
-      if (status === "ready" && previousStatus !== "ready") {
-        // Play notification sound for ready status
-        try {
-          const audio = new Audio("/notification-sound.mp3");
-          audio.play().catch(() => console.log("Audio play failed"));
-        } catch (error) {
-          console.log("Audio notification failed:", error);
-        }
-      }
-    },
-    onConnectionChange: (isConnected) => {
-      console.log("WebSocket connection changed:", isConnected);
-      setConnectionStatus(isConnected ? "connected" : "disconnected");
-    },
-    onError: (errorMessage) => {
-      console.error("WebSocket error:", errorMessage);
-      setError(errorMessage);
-      setConnectionStatus("error");
-    },
-  });
-
-  // Update current status when orderStatus changes
-  useEffect(() => {
-    if (orderStatus) {
-      setCurrentStatus(orderStatus);
-      // Fetch updated order details when status changes
-      fetchOrderDetails();
-    }
-  }, [orderStatus]);
-
-  // Fetch order details
-  const fetchOrderDetails = async () => {
-    if (!orderId) return;
-
-    try {
-      const result = await getQROrderDetails(orderId);
-      if (result.order) {
-        setOrderDetails(result.order);
-        // Calculate estimated time based on order items and status
-        calculateEstimatedTime(result.order);
-      } else if (result.error) {
-        console.error("Error fetching order details:", result.error);
-        setError(result.error);
-      }
-    } catch (error) {
-      console.error("Error fetching order details:", error);
-      setError("Failed to fetch order details");
-    }
+  const getCurrentStepIndex = () => {
+    return orderStatusSteps.findIndex((step) => step.key === status);
   };
 
-  // Calculate estimated time based on order complexity and current status
-  const calculateEstimatedTime = (order: any) => {
-    if (!order || !order.order_items) return;
+  const currentStepIndex = getCurrentStepIndex();
 
-    const baseTime = 15; // Base preparation time in minutes
-    const itemCount = order.order_items.length;
-    const complexityMultiplier = Math.min(itemCount * 0.5, 2); // Max 2x for complexity
+  if (compact) {
+    const currentStep = orderStatusSteps.find((step) => step.key === status);
+    const Icon = currentStep?.icon || Clock;
 
-    let estimatedMinutes = baseTime * complexityMultiplier;
-
-    // Adjust based on current status
-    const statusIndex = getStatusIndex(currentStatus);
-    if (statusIndex >= 2) {
-      // ready or beyond
-      estimatedMinutes = 0;
-    } else if (statusIndex >= 1) {
-      // preparing
-      estimatedMinutes = Math.max(estimatedMinutes * 0.6, 5); // 60% remaining
-    }
-
-    setEstimatedTime(Math.round(estimatedMinutes));
-  };
-
-  // Update connection status when WebSocket status changes
-  useEffect(() => {
-    if (wsConnectionStatus === "connecting") {
-      setConnectionStatus("disconnected");
-    } else {
-      setConnectionStatus(
-        wsConnectionStatus as "connected" | "disconnected" | "error"
-      );
-    }
-  }, [wsConnectionStatus]);
-
-  // Fallback polling when WebSocket fails
-  const [pollingStatus, setPollingStatus] = useState<string | null>(null);
-  const [isPolling, setIsPolling] = useState(false);
-
-  const pollOrderStatus = async () => {
-    if (!orderId) return;
-
-    try {
-      setIsPolling(true);
-      const result = await getQROrderDetails(orderId);
-      if (result.order) {
-        const newStatus = result.order.status;
-        setPollingStatus(newStatus);
-        setCurrentStatus(newStatus);
-        setError(null);
-      }
-    } catch (error) {
-      console.error("Error polling order status:", error);
-      setError("Failed to fetch order status");
-    } finally {
-      setIsPolling(false);
-    }
-  };
-
-  // Initial fetch of order details
-  useEffect(() => {
-    fetchOrderDetails();
-  }, [orderId]);
-
-  // Start polling if WebSocket is not connected
-  useEffect(() => {
-    if (connectionStatus === "disconnected" || connectionStatus === "error") {
-      const pollInterval = setInterval(pollOrderStatus, 10000); // Poll every 10 seconds
-      return () => clearInterval(pollInterval);
-    }
-  }, [connectionStatus, orderId]);
-
-  const currentStatusIndex = getStatusIndex(currentStatus);
-  const statusInfo = getStatusInfo(currentStatus);
-
-  const getStatusColor = (color: string) => {
-    switch (color) {
-      case "blue":
-        return "text-blue-600 bg-blue-100 border-blue-200";
-      case "amber":
-        return "text-amber-600 bg-amber-100 border-amber-200";
-      case "green":
-        return "text-green-600 bg-green-100 border-green-200";
-      case "purple":
-        return "text-purple-600 bg-purple-100 border-purple-200";
-      default:
-        return "text-gray-600 bg-gray-100 border-gray-200";
-    }
-  };
-
-  const getProgressColor = (color: string) => {
-    switch (color) {
-      case "blue":
-        return "bg-blue-500";
-      case "amber":
-        return "bg-amber-500";
-      case "green":
-        return "bg-green-500";
-      case "purple":
-        return "bg-purple-500";
-      default:
-        return "bg-gray-500";
-    }
-  };
+    return (
+      <div className={`flex items-center gap-2 ${className}`}>
+        <div
+          className={`w-6 h-6 rounded-full flex items-center justify-center ${currentStep?.color || "bg-gray-500"}`}
+        >
+          <Icon className="w-3 h-3 text-white" />
+        </div>
+        {showLabels && (
+          <span className="text-sm font-medium text-gray-700">
+            {currentStep?.label || status}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Clock className="w-5 h-5 text-gray-600" />
-          <h3 className="font-bold text-gray-900 text-lg">Order Status</h3>
-        </div>
-        <div className="flex items-center gap-2">
-          <div
-            className={cn(
-              "w-2 h-2 rounded-full",
-              connectionStatus === "connected"
-                ? "bg-green-500 animate-pulse"
-                : connectionStatus === "error"
-                  ? "bg-red-500"
-                  : "bg-amber-500"
-            )}
-          />
-          <span className="text-xs text-gray-500">
-            {connectionStatus === "connected"
-              ? "Live"
-              : connectionStatus === "error"
-                ? "Error"
-                : isPolling
-                  ? "Polling"
-                  : "Offline"}
-          </span>
-        </div>
-      </div>
+    <div className={`space-y-3 ${className}`}>
+      {orderStatusSteps.map((step, index) => {
+        const Icon = step.icon;
+        const isCompleted = index <= currentStepIndex;
+        const isCurrent = index === currentStepIndex;
+        const isActive = status === step.key;
 
-      {/* Current Status */}
-      <div className="mb-6">
-        <div
-          className={cn(
-            "inline-flex items-center gap-2 px-3 py-2 rounded-full border text-sm font-medium",
-            getStatusColor(statusInfo.color)
-          )}
-        >
-          <statusInfo.icon className="w-4 h-4" />
-          {statusInfo.label}
-        </div>
-        <p className="text-xs text-gray-600 mt-2">{statusInfo.description}</p>
-        {estimatedTime !== null && estimatedTime > 0 && (
-          <p className="text-xs text-amber-600 mt-1 font-medium">
-            ⏱️ Estimated {estimatedTime} minutes remaining
-          </p>
-        )}
-        {lastUpdate && (
-          <p className="text-xs text-gray-500 mt-2">
-            Last updated: {lastUpdate.toLocaleTimeString()}
-          </p>
-        )}
-      </div>
-
-      {/* Progress Bar */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-700">Progress</span>
-          <span className="text-sm text-gray-500">
-            {Math.round(
-              ((currentStatusIndex + 1) / ORDER_STATUSES.length) * 100
-            )}
-            %
-          </span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
+        return (
           <motion.div
-            className={cn(
-              "h-2 rounded-full",
-              getProgressColor(statusInfo.color)
-            )}
-            initial={{ width: 0 }}
-            animate={{
-              width: `${((currentStatusIndex + 1) / ORDER_STATUSES.length) * 100}%`,
-            }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-          />
-        </div>
-      </div>
-
-      {/* Order Summary (if available) */}
-      {orderDetails && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-medium text-gray-900 mb-2">
-            Order Summary
-          </h4>
-          <div className="space-y-1 text-xs text-gray-600">
-            <div className="flex justify-between">
-              <span>Items:</span>
-              <span>{orderDetails.order_items?.length || 0} items</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Total:</span>
-              <span className="font-medium">
-                CHF {orderDetails.total_amount?.toFixed(2) || "0.00"}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Order Time:</span>
-              <span>
-                {new Date(orderDetails.created_at).toLocaleTimeString()}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Status Steps */}
-      <div className="space-y-3">
-        {ORDER_STATUSES.map((status, index) => {
-          const isCompleted = index <= currentStatusIndex;
-          const isCurrent = index === currentStatusIndex;
-
-          return (
-            <motion.div
-              key={status.key}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className={cn(
-                "flex items-center gap-3 p-3 rounded-lg border transition-all",
-                isCompleted
-                  ? "bg-green-50 border-green-200"
-                  : "bg-gray-50 border-gray-200"
-              )}
+            key={step.key}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.1 }}
+            className={`flex items-center gap-3 p-2 rounded-lg transition-all ${
+              isActive ? "bg-blue-50 border border-blue-200" : ""
+            }`}
+          >
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                isCompleted ? step.color : "bg-gray-200"
+              }`}
             >
-              <div
-                className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center",
-                  isCompleted
-                    ? "bg-green-500 text-white"
-                    : isCurrent
-                      ? "bg-amber-500 text-white"
-                      : "bg-gray-300 text-gray-600"
-                )}
-              >
-                {isCompleted ? (
-                  <CheckCircle className="w-4 h-4" />
-                ) : (
-                  <status.icon className="w-4 h-4" />
-                )}
-              </div>
+              <Icon
+                className={`w-4 h-4 ${
+                  isCompleted ? "text-white" : "text-gray-400"
+                }`}
+              />
+            </div>
+            {showLabels && (
               <div className="flex-1">
                 <p
-                  className={cn(
-                    "font-medium text-sm",
-                    isCompleted
-                      ? "text-green-800"
-                      : isCurrent
-                        ? "text-amber-800"
-                        : "text-gray-600"
-                  )}
+                  className={`font-medium text-sm ${
+                    isCompleted ? "text-gray-900" : "text-gray-500"
+                  }`}
                 >
-                  {status.label}
+                  {step.label}
                 </p>
                 {isCurrent && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    Currently in progress...
-                  </p>
-                )}
-                {status.description && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    {status.description}
+                  <p className="text-xs text-blue-600">
+                    {status === "preparing" && "Chef is preparing your order"}
+                    {status === "ready" && "Your order is ready for pickup"}
+                    {status === "completed" && "Order completed successfully"}
                   </p>
                 )}
               </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* Connection Status */}
-      {!isConnected && (
-        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-          <div className="flex items-center gap-2 text-amber-700">
-            <WifiOff className="w-4 h-4" />
-            <span className="text-sm font-medium">Connection Lost</span>
-          </div>
-          <p className="text-xs text-amber-600 mt-1">
-            Using fallback updates. Status will refresh automatically.
-          </p>
-          <button
-            onClick={pollOrderStatus}
-            disabled={isPolling}
-            className="mt-2 flex items-center gap-2 text-xs text-amber-700 hover:text-amber-800 disabled:opacity-50"
-          >
-            <RefreshCw className={cn("w-3 h-3", isPolling && "animate-spin")} />
-            {isPolling ? "Refreshing..." : "Refresh Now"}
-          </button>
-        </div>
-      )}
+            )}
+            {isCompleted && <CheckCircle className="w-4 h-4 text-green-500" />}
+          </motion.div>
+        );
+      })}
     </div>
+  );
+}
+
+// Badge version for inline use
+export function OrderStatusBadge({ status }: { status: string }) {
+  const step = orderStatusSteps.find((s) => s.key === status);
+  const Icon = step?.icon || Clock;
+
+  return (
+    <Badge
+      variant={status === "cancelled" ? "destructive" : "default"}
+      className="flex items-center gap-1"
+    >
+      <Icon className="w-3 h-3" />
+      {step?.label || status}
+    </Badge>
   );
 }

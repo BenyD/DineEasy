@@ -66,6 +66,9 @@ export function useSidebarData(): SidebarData {
 
   const refreshUserData = () => {
     setRefreshTrigger((prev) => prev + 1);
+    // Also refresh the restaurant data in the store
+    const { refreshRestaurant } = useRestaurantSettings.getState();
+    refreshRestaurant();
   };
 
   useEffect(() => {
@@ -116,7 +119,7 @@ export function useSidebarData(): SidebarData {
           : false;
         const isOpen = manualStatus !== null ? manualStatus : autoStatus;
 
-        // Get subscription plan - only show actual subscription plans, not defaults
+        // Get subscription plan - show plan for active and trialing subscriptions
         let subscriptionPlan = null;
         if (
           storeRestaurant?.subscriptions &&
@@ -144,13 +147,33 @@ export function useSidebarData(): SidebarData {
           }
         }
 
-        // Only show subscription plan if we have a valid subscription
-        // Don't default to "Starter" when there's no actual subscription
+        // For trialing status, ensure we show the plan name
+        if (
+          storeRestaurant?.subscription_status === "trialing" &&
+          !subscriptionPlan &&
+          storeRestaurant?.subscriptions &&
+          storeRestaurant.subscriptions.length > 0
+        ) {
+          // Get the most recent subscription regardless of status for trialing
+          const latestSubscription = storeRestaurant.subscriptions.sort(
+            (a: any, b: any) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime()
+          )[0];
+
+          if (latestSubscription) {
+            subscriptionPlan = latestSubscription.plan;
+          }
+        }
+
+        // Don't show subscription plan for pending/incomplete statuses
         if (
           !subscriptionPlan &&
-          storeRestaurant?.subscription_status === "pending"
+          (storeRestaurant?.subscription_status === "pending" ||
+            storeRestaurant?.subscription_status === "incomplete" ||
+            storeRestaurant?.subscription_status === "incomplete_expired")
         ) {
-          subscriptionPlan = null; // Don't show any plan for pending status
+          subscriptionPlan = null; // Don't show any plan for pending/incomplete status
         }
 
         console.log("✅ Sidebar data fetched successfully:", {

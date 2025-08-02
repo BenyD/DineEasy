@@ -1,9 +1,13 @@
--- Improve order number generation function with advisory locks
-CREATE OR REPLACE FUNCTION generate_order_number(restaurant_id uuid)
+-- Drop the conflicting function and recreate with different parameter name
+DROP FUNCTION IF EXISTS public.generate_order_number(restaurant_id uuid);
+
+-- Create new function with different parameter name
+CREATE OR REPLACE FUNCTION public.generate_order_number(p_restaurant_id uuid)
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
-AS $$
+SET search_path TO 'public'
+AS $function$
 DECLARE
   v_year integer;
   v_sequence integer;
@@ -13,7 +17,7 @@ DECLARE
   v_retry_count integer := 0;
 BEGIN
   -- Use restaurant_id hash as advisory lock key to prevent race conditions
-  v_lock_key := abs(hashtext(restaurant_id::text));
+  v_lock_key := abs(hashtext(p_restaurant_id::text));
   
   -- Try to acquire advisory lock with retry mechanism
   WHILE v_retry_count < v_max_retries LOOP
@@ -26,7 +30,7 @@ BEGIN
         SELECT COALESCE(MAX(CAST(SUBSTRING(order_number FROM 'ORD-' || v_year || '-(\\d+)') AS integer)), 0) + 1
         INTO v_sequence
         FROM orders
-        WHERE restaurant_id = generate_order_number.restaurant_id
+        WHERE restaurant_id = p_restaurant_id
           AND order_number LIKE 'ORD-' || v_year || '-%';
         
         -- Format order number
@@ -53,4 +57,4 @@ BEGIN
   -- If we couldn't acquire the lock after max retries, use timestamp-based fallback
   RETURN 'ORD-' || v_year || '-' || LPAD(EXTRACT(EPOCH FROM NOW())::integer::text, 10, '0');
 END;
-$$; 
+$function$; 

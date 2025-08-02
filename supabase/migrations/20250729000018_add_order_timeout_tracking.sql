@@ -125,14 +125,4 @@ WHERE o.status = 'pending'
 ORDER BY o.created_at ASC;
 
 -- Grant access to the view
-GRANT SELECT ON order_timeout_monitor TO authenticated;
-
--- Add RLS policy for the view
-CREATE POLICY "Users can view timeout monitor for their restaurants" ON order_timeout_monitor
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM restaurants r 
-      WHERE r.id = order_timeout_monitor.restaurant_id 
-      AND r.owner_id = auth.uid()
-    )
-  ); 
+GRANT SELECT ON order_timeout_monitor TO authenticated; 

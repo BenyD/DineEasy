@@ -73,7 +73,7 @@ export async function createMenuItem(formData: FormData) {
       throw new Error("Name, price, and category are required");
     }
 
-    // Create menu item
+    // Create menu item with category information
     const { data: menuItem, error: menuError } = await supabase
       .from("menu_items")
       .insert({
@@ -88,7 +88,14 @@ export async function createMenuItem(formData: FormData) {
         is_popular: popular,
         tags: tags.length > 0 ? tags : null,
       })
-      .select()
+      .select(`
+        *,
+        category:menu_categories (
+          id,
+          name,
+          description
+        )
+      `)
       .single();
 
     if (menuError) {
@@ -108,6 +115,8 @@ export async function createMenuItem(formData: FormData) {
 
       if (allergenError) {
         console.error("Error adding allergens:", allergenError);
+        // Don't throw error for allergen issues, but log them
+        // The menu item was created successfully, allergens can be added later
       }
     }
 
@@ -310,6 +319,8 @@ export async function updateMenuItem(id: string, formData: FormData) {
 
       if (allergenError) {
         console.error("Error updating allergens:", allergenError);
+        // Don't throw error for allergen issues, but log them
+        // The menu item was updated successfully, allergens can be updated later
       }
     }
 
@@ -624,8 +635,8 @@ export async function getMenuItemsPaginated({
           name: item.name,
           description: item.description,
           price: item.price,
-          category: item.category?.name || "Uncategorized",
-          categoryId: item.category?.id,
+          category: item.category?.name || (item.category_id ? "Loading..." : "Uncategorized"),
+          categoryId: item.category?.id || item.category_id,
           image: imageUrl,
           available: item.is_available,
           preparationTime,

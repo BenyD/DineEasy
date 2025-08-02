@@ -2725,78 +2725,115 @@ export async function POST(req: Request) {
             isUpgrade: session.metadata?.isUpgrade === "true",
           });
 
-          // Send invoice receipt email for plan changes and new subscriptions
-          try {
-            // Get Stripe customer email
-            const customer = (await stripe.customers.retrieve(
-              subscription.customer as string
-            )) as Stripe.Customer;
+          // Send invoice receipt email only for paid subscriptions (upgrades and trial upgrades)
+          // New subscriptions with trials don't have payments yet, so no receipt needed
+          if (
+            session.metadata?.isUpgrade === "true" ||
+            session.metadata?.isTrialUpgrade === "true"
+          ) {
+            try {
+              // Get Stripe customer email
+              const customer = (await stripe.customers.retrieve(
+                subscription.customer as string
+              )) as Stripe.Customer;
 
-            if (customer.email && customer.email.length > 0) {
-              // Get restaurant details for name
-              const { data: restaurant } = await adminSupabase
-                .from("restaurants")
-                .select("name")
-                .eq("id", subscription.metadata.restaurantId)
-                .single();
+              if (customer.email && customer.email.length > 0) {
+                // Get restaurant details for name
+                const { data: restaurant } = await adminSupabase
+                  .from("restaurants")
+                  .select("name")
+                  .eq("id", subscription.metadata.restaurantId)
+                  .single();
 
-              // Get the latest invoice for this subscription
-              const invoices = await stripe.invoices.list({
-                subscription: subscription.id,
-                limit: 1,
-              });
+                // Get the latest invoice for this subscription
+                const invoices = await stripe.invoices.list({
+                  subscription: subscription.id,
+                  limit: 1,
+                });
 
-              const latestInvoice = invoices.data[0];
-              const billingPeriodStart = new Date(
-                (subscription as any).current_period_start * 1000
-              );
-              const billingPeriodEnd = new Date(
-                (subscription as any).current_period_end * 1000
-              );
+                const latestInvoice = invoices.data[0];
 
-              // Check if this is a trial upgrade
-              const isTrialUpgrade =
-                session.metadata?.isTrialUpgrade === "true";
-              const trialEndDate = subscription.metadata?.original_trial_end
-                ? new Date(
-                    parseInt(subscription.metadata.original_trial_end) * 1000
-                  ).toLocaleDateString()
-                : undefined;
+                // Only send receipt if there's actually a payment
+                if (latestInvoice && latestInvoice.amount_paid > 0) {
+                  const billingPeriodStart = new Date(
+                    (subscription as any).current_period_start * 1000
+                  );
+                  const billingPeriodEnd = new Date(
+                    (subscription as any).current_period_end * 1000
+                  );
 
-              // Determine the description based on the type of checkout
-              let description = `DineEasy ${subscription.metadata.plan} Plan - ${subscription.metadata.interval}`;
-              if (session.metadata?.isUpgrade === "true") {
-                description = `Plan Upgrade: ${subscription.metadata.plan} Plan - ${subscription.metadata.interval}`;
-              } else if (session.metadata?.isNewSubscription === "true") {
-                description = `New Subscription: ${subscription.metadata.plan} Plan - ${subscription.metadata.interval}`;
+                  // Check if this is a trial upgrade
+                  const isTrialUpgrade =
+                    session.metadata?.isTrialUpgrade === "true";
+                  const trialEndDate = subscription.metadata?.original_trial_end
+                    ? new Date(
+                        parseInt(subscription.metadata.original_trial_end) *
+                          1000
+                      ).toLocaleDateString()
+                    : undefined;
+
+                  // Determine the description based on the type of checkout
+                  let description = `DineEasy ${subscription.metadata.plan} Plan - ${subscription.metadata.interval}`;
+                  if (session.metadata?.isUpgrade === "true") {
+                    description = `Plan Upgrade: ${subscription.metadata.plan} Plan - ${subscription.metadata.interval}`;
+                  } else if (session.metadata?.isTrialUpgrade === "true") {
+                    description = `Trial Upgrade: ${subscription.metadata.plan} Plan - ${subscription.metadata.interval}`;
+                  }
+
+                  await sendInvoiceReceipt(customer.email, {
+                    invoiceId: latestInvoice.id || session.id,
+                    amount: latestInvoice.amount_paid,
+                    currency: subscription.metadata.currency || "USD",
+                    description: description,
+                    date: new Date().toLocaleDateString(),
+                    customerName: customer.name || restaurant?.name,
+                    restaurantName: restaurant?.name,
+                    subscriptionPlan: subscription.metadata.plan,
+                    billingPeriod: `${billingPeriodStart.toLocaleDateString()} - ${billingPeriodEnd.toLocaleDateString()}`,
+                    isTrialUpgrade: isTrialUpgrade,
+                    trialEndDate: trialEndDate,
+                  });
+
+                  console.log(
+                    "Invoice receipt email sent for checkout session:",
+                    {
+                      subscriptionId: subscription.id,
+                      customerEmail: customer.email,
+                      sessionId: session.id,
+                      invoiceId: latestInvoice.id || session.id,
+                      amount: latestInvoice.amount_paid,
+                      isUpgrade: session.metadata?.isUpgrade === "true",
+                      isTrialUpgrade:
+                        session.metadata?.isTrialUpgrade === "true",
+                    }
+                  );
+                } else {
+                  console.log(
+                    "No payment found for checkout session, skipping receipt email:",
+                    {
+                      subscriptionId: subscription.id,
+                      sessionId: session.id,
+                      isUpgrade: session.metadata?.isUpgrade === "true",
+                      isTrialUpgrade:
+                        session.metadata?.isTrialUpgrade === "true",
+                    }
+                  );
+                }
               }
-
-              await sendInvoiceReceipt(customer.email, {
-                invoiceId: latestInvoice?.id || session.id,
-                amount: latestInvoice?.amount_paid || 0,
-                currency: subscription.metadata.currency || "USD",
-                description: description,
-                date: new Date().toLocaleDateString(),
-                customerName: customer.name || restaurant?.name,
-                restaurantName: restaurant?.name,
-                subscriptionPlan: subscription.metadata.plan,
-                billingPeriod: `${billingPeriodStart.toLocaleDateString()} - ${billingPeriodEnd.toLocaleDateString()}`,
-                isTrialUpgrade: isTrialUpgrade,
-                trialEndDate: trialEndDate,
-              });
-
-              console.log("Invoice receipt email sent for checkout session:", {
+            } catch (emailError) {
+              console.error("Error sending invoice receipt email:", emailError);
+              // Don't fail the webhook if email fails
+            }
+          } else {
+            console.log(
+              "Skipping receipt email for new subscription with trial:",
+              {
                 subscriptionId: subscription.id,
-                customerEmail: customer.email,
                 sessionId: session.id,
-                isUpgrade: session.metadata?.isUpgrade === "true",
                 isNewSubscription:
                   session.metadata?.isNewSubscription === "true",
-              });
-            }
-          } catch (emailError) {
-            console.error("Error sending invoice receipt email:", emailError);
-            // Don't fail the webhook if email fails
+              }
+            );
           }
         }
 

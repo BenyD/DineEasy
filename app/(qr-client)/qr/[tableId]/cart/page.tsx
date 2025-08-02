@@ -46,7 +46,16 @@ export default function CartPage({
 }) {
   const resolvedParams = use(params);
   const { cart, updateQuantity, removeFromCart, getTotalPrice, getTotalItems } =
-    useCart();
+    useCart(resolvedParams.tableId);
+
+  // Debug cart state
+  useEffect(() => {
+    console.log("Cart page cart state:", {
+      cartLength: cart.length,
+      totalItems: getTotalItems(),
+      tableId: resolvedParams.tableId,
+    });
+  }, [cart, getTotalItems, resolvedParams.tableId]);
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [restaurant, setRestaurant] = useState<RestaurantData | null>(null);
   const [tableData, setTableData] = useState<TableData | null>(null);
@@ -96,6 +105,16 @@ export default function CartPage({
                 {tableData?.number || resolvedParams.tableId}
               </p>
             </div>
+            <Link href={`/qr/${resolvedParams.tableId}/feedback`}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-2 hover:bg-gray-100 rounded-full"
+                title="Rate your experience"
+              >
+                <span className="text-lg">🙏</span>
+              </Button>
+            </Link>
           </div>
         </div>
 
@@ -103,23 +122,102 @@ export default function CartPage({
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="text-center max-w-sm"
+            className="text-center max-w-md"
           >
-            <div className="w-32 h-32 mx-auto mb-6 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
-              <span className="text-5xl">🛒</span>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Your cart is empty
-            </h2>
-            <p className="text-gray-500 mb-8 leading-relaxed">
-              Discover our delicious menu items and start building your perfect
-              meal
-            </p>
-            <Link href={`/qr/${resolvedParams.tableId}`}>
-              <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-8 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200">
-                Browse Menu
-              </Button>
-            </Link>
+            {/* Enhanced Empty Cart Illustration */}
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", stiffness: 200, damping: 20 }}
+              className="relative mx-auto mb-8"
+            >
+              <div className="w-40 h-40 bg-gradient-to-br from-green-50 to-emerald-100 rounded-full flex items-center justify-center border-4 border-green-200 shadow-lg">
+                <div className="relative">
+                  <span className="text-6xl">🛒</span>
+                  <motion.div
+                    animate={{ 
+                      scale: [1, 1.1, 1],
+                      opacity: [0.7, 1, 0.7]
+                    }}
+                    transition={{ 
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                    className="absolute -top-2 -right-2 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center"
+                  >
+                    <span className="text-white text-sm font-bold">0</span>
+                  </motion.div>
+                </div>
+              </div>
+              
+              {/* Floating elements for visual interest */}
+              <motion.div
+                animate={{ 
+                  y: [0, -10, 0],
+                  rotate: [0, 5, 0]
+                }}
+                transition={{ 
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+                className="absolute -top-4 -left-4 w-6 h-6 bg-yellow-400 rounded-full opacity-80"
+              />
+              <motion.div
+                animate={{ 
+                  y: [0, 10, 0],
+                  rotate: [0, -5, 0]
+                }}
+                transition={{ 
+                  duration: 2.5,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: 0.5
+                }}
+                className="absolute -bottom-2 -right-6 w-4 h-4 bg-blue-400 rounded-full opacity-60"
+              />
+            </motion.div>
+
+            {/* Enhanced Content */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-4">
+                Your cart is empty
+              </h2>
+              <p className="text-gray-600 mb-8 leading-relaxed text-lg">
+                Ready to discover amazing flavors? Browse our menu and start building your perfect meal experience.
+              </p>
+            </motion.div>
+
+            {/* Enhanced Action Buttons */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="space-y-4"
+            >
+              <Link href={`/qr/${resolvedParams.tableId}`}>
+                <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-8 py-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 text-lg font-semibold w-full max-w-xs">
+                  <span className="mr-2">🍽️</span>
+                  Browse Menu
+                </Button>
+              </Link>
+              
+              <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  <span>Fresh ingredients</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                  <span>Quick service</span>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         </div>
       </div>
@@ -148,6 +246,16 @@ export default function CartPage({
               {cart.length === 1 ? "item" : "items"}
             </p>
           </div>
+          <Link href={`/qr/${resolvedParams.tableId}/feedback`}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="p-2 hover:bg-gray-100 rounded-full"
+              title="Rate your experience"
+            >
+              <span className="text-lg">🙏</span>
+            </Button>
+          </Link>
         </div>
       </div>
 

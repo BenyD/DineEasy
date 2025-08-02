@@ -187,17 +187,22 @@ export default function MenuPage() {
 
   // WebSocket integration
   const { isConnected, reconnectAttempts } = useMenuWebSocket({
-    onItemAdded: (item) => {
+    onItemAdded: async (item) => {
       // Handle new menu item added
-      refresh();
+      console.log("🔄 WebSocket: New menu item added, refreshing data...");
+      await refresh();
+      // Also refresh categories to ensure they're up to date
+      await fetchCategories();
     },
-    onItemUpdated: (item, oldItem) => {
+    onItemUpdated: async (item, oldItem) => {
       // Handle menu item updated
-      refresh();
+      console.log("🔄 WebSocket: Menu item updated, refreshing data...");
+      await refresh();
     },
-    onItemDeleted: (item) => {
+    onItemDeleted: async (item) => {
       // Handle menu item deleted
-      refresh();
+      console.log("🔄 WebSocket: Menu item deleted, refreshing data...");
+      await refresh();
     },
   });
 
@@ -943,8 +948,14 @@ export default function MenuPage() {
                     id: loadingToast,
                   });
 
+                  // Small delay to ensure database transaction is complete
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  
                   // Refresh data to show the new item
                   await refresh();
+                  
+                  // Also refresh categories to ensure they're up to date
+                  await fetchCategories();
                 }
               } catch (error: any) {
                 console.error("Add menu item error:", error);

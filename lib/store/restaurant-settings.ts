@@ -22,6 +22,7 @@ interface RestaurantSettings {
 
   // Actions
   fetchRestaurant: () => Promise<void>;
+  refreshRestaurant: () => Promise<void>;
   updateRestaurant: (data: Partial<any>) => Promise<void>;
   toggleRestaurantStatus: () => Promise<void>;
   updateNotifications: (settings: any) => Promise<void>;
@@ -85,7 +86,11 @@ export const useRestaurantSettings = create<RestaurantSettings>((set, get) => ({
             interval,
             status,
             current_period_start,
-            current_period_end
+            current_period_end,
+            trial_start,
+            trial_end,
+            metadata,
+            created_at
           )
         `
         )
@@ -116,6 +121,68 @@ export const useRestaurantSettings = create<RestaurantSettings>((set, get) => ({
       set({
         error: error.message || "Failed to fetch restaurant data",
         isLoading: false,
+      });
+    }
+  },
+
+  // Refresh restaurant data (same as fetch but without loading state)
+  refreshRestaurant: async () => {
+    try {
+      const supabase = createClient();
+
+      // Get current user
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error("Not authenticated");
+      }
+
+      // Fetch restaurant data
+      const { data: restaurant, error } = await supabase
+        .from("restaurants")
+        .select(
+          `
+          *,
+          subscriptions (
+            id,
+            plan,
+            interval,
+            status,
+            current_period_start,
+            current_period_end,
+            trial_start,
+            trial_end,
+            metadata,
+            created_at
+          )
+        `
+        )
+        .eq("owner_id", user.id)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (restaurant) {
+        // Set currency from restaurant data
+        const currency = restaurant.currency as Currency;
+        set({
+          restaurant,
+          currency,
+          currencySymbol: CURRENCY_SYMBOLS[currency],
+        });
+      } else {
+        set({
+          restaurant: null,
+        });
+      }
+    } catch (error: any) {
+      console.error("Error refreshing restaurant:", error);
+      set({
+        error: error.message || "Failed to refresh restaurant data",
       });
     }
   },

@@ -41,11 +41,31 @@ import { createStripePortalSession } from "@/lib/actions/billing";
 import { toast } from "sonner";
 import { cancelSubscription } from "@/lib/actions/subscription";
 import { useSearchParams } from "next/navigation";
+import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 
 function calculateDaysLeft(endDate: Date) {
+  // Ensure we're working with proper Date objects
   const now = new Date();
-  const diff = endDate.getTime() - now.getTime();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  const end = new Date(endDate);
+
+  // Reset time to start of day for both dates to avoid time-of-day issues
+  const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endStart = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+
+  const diff = endStart.getTime() - nowStart.getTime();
+  const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+
+  // Debug logging
+  console.log("calculateDaysLeft debug:", {
+    now: now.toISOString(),
+    endDate: endDate.toISOString(),
+    nowStart: nowStart.toISOString(),
+    endStart: endStart.toISOString(),
+    diffMs: diff,
+    daysLeft: daysLeft,
+  });
+
+  return Math.max(0, daysLeft);
 }
 
 function formatDate(date: Date | null) {
@@ -78,6 +98,7 @@ const cardVariants = {
 export default function BillingPage() {
   const billingData = useBillingData();
   const searchParams = useSearchParams();
+  const { refreshRestaurant } = useRestaurantSettings();
   const [isLoadingPortal, setIsLoadingPortal] = useState(false);
   const [isLoadingCancel, setIsLoadingCancel] = useState(false);
   const [showUpgradeSuccess, setShowUpgradeSuccess] = useState(false);
@@ -86,8 +107,18 @@ export default function BillingPage() {
   const daysLeft = billingData.trialEndsAt
     ? calculateDaysLeft(billingData.trialEndsAt)
     : 0;
+
+  // More accurate trial active logic
   const isTrialActive =
-    daysLeft > 0 || billingData.subscriptionStatus === "trialing";
+    billingData.subscriptionStatus === "trialing" &&
+    (billingData.trialEndsAt ? daysLeft > 0 : true); // If no trial end date but status is trialing, assume active
+
+  console.log("Trial status debug:", {
+    subscriptionStatus: billingData.subscriptionStatus,
+    trialEndsAt: billingData.trialEndsAt?.toISOString(),
+    daysLeft: daysLeft,
+    isTrialActive: isTrialActive,
+  });
 
   // Enhanced subscription status detection
   const getSubscriptionStatus = () => {
@@ -142,6 +173,9 @@ export default function BillingPage() {
 
       // Refresh billing data to show updated plan
       billingData.refresh();
+
+      // Also refresh restaurant data to update sidebar
+      refreshRestaurant();
 
       // Remove the URL parameter
       const url = new URL(window.location.href);
@@ -388,7 +422,11 @@ export default function BillingPage() {
             className="transform transition-all duration-200"
           >
             <Alert>
-              <AlertTitle>{`Trial Status: ${daysLeft} days remaining`}</AlertTitle>
+              <AlertTitle>
+                {billingData.trialEndsAt
+                  ? `Trial Status: ${daysLeft} days remaining`
+                  : "Trial Status: Active trial period"}
+              </AlertTitle>
               <AlertDescription>
                 Set up your payment method before your trial ends to continue
                 using DineEasy without interruption.
@@ -591,17 +629,25 @@ export default function BillingPage() {
                           Trial ends on
                         </p>
                         <p className="text-lg font-bold text-blue-800">
-                          {formatDate(billingData.trialEndsAt)}
+                          {billingData.trialEndsAt
+                            ? formatDate(billingData.trialEndsAt)
+                            : "Active trial"}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {daysLeft} days remaining
+                          {billingData.trialEndsAt
+                            ? `${daysLeft} days remaining`
+                            : "Trial in progress"}
                         </p>
                       </div>
                       <div className="text-right">
                         <div className="text-2xl font-bold text-blue-600">
-                          {daysLeft}
+                          {billingData.trialEndsAt ? daysLeft : "∞"}
                         </div>
-                        <div className="text-xs text-gray-500">days left</div>
+                        <div className="text-xs text-gray-500">
+                          {billingData.trialEndsAt
+                            ? "days left"
+                            : "trial active"}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -648,8 +694,10 @@ export default function BillingPage() {
                             <p className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
                               <strong>Note:</strong> You upgraded during your
                               trial period. Your trial continues until{" "}
-                              {formatDate(billingData.trialEndsAt)}, then
-                              regular billing begins on{" "}
+                              {billingData.trialEndsAt
+                                ? formatDate(billingData.trialEndsAt)
+                                : "trial end"}
+                              , then regular billing begins on{" "}
                               {formatDate(billingData.nextBillingDate)}.
                             </p>
                           )}
@@ -724,7 +772,7 @@ export default function BillingPage() {
                         : isTrialActive
                           ? billingData.trialEndsAt
                           : billingData.nextBillingDate
-                    )}
+                    ) || (isTrialActive ? "Active trial" : "Not available")}
                   </span>
                 </div>
                 {isSubscriptionCancelled && (
@@ -896,6 +944,9 @@ export default function BillingPage() {
                       className="h-2 bg-gray-100 [&>div]:bg-green-600"
                     />
                   )}
+                  <p className="text-xs text-gray-500">
+                    * Includes the owner account
+                  </p>
                 </motion.div>
               </motion.div>
 
@@ -987,7 +1038,10 @@ export default function BillingPage() {
                 <>
                   Are you sure you want to cancel your subscription? You will
                   retain access until the end of your trial period (
-                  {formatDate(billingData.trialEndsAt)}).
+                  {billingData.trialEndsAt
+                    ? formatDate(billingData.trialEndsAt)
+                    : "trial end"}
+                  ).
                 </>
               ) : (
                 <>
