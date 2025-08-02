@@ -247,7 +247,16 @@ export async function getRecentFeedback(
         created_at,
         orders (
           order_number,
-          customer_name
+          customer_name,
+          created_at,
+          tables (
+            number
+          ),
+          order_items (
+            menu_items (
+              name
+            )
+          )
         )
       `
       )
@@ -259,7 +268,33 @@ export async function getRecentFeedback(
       throw error;
     }
 
-    return { success: true, feedback: feedback || [] };
+    // Transform the data to match dashboard expectations
+    const transformedFeedback = (feedback || []).map((item) => {
+      const order = item.orders as any;
+      const orderItems = order?.order_items || [];
+      const items = orderItems.map((oi: any) => oi.menu_items?.name || 'Unknown Item');
+      
+      // Calculate time spent (simplified - could be enhanced with order completion time)
+      const orderDate = new Date(order?.created_at || item.created_at);
+      const feedbackDate = new Date(item.created_at);
+      const timeDiff = Math.round((feedbackDate.getTime() - orderDate.getTime()) / (1000 * 60)); // minutes
+      const timeSpent = timeDiff > 0 ? `${timeDiff} mins` : 'N/A';
+      
+      return {
+        id: item.id,
+        customerName: order?.customer_name || 'Anonymous',
+        rating: item.rating,
+        comment: item.comment || '',
+        date: new Date(item.created_at).toLocaleDateString(),
+        orderNumber: order?.order_number || 'N/A',
+        sentiment: item.sentiment,
+        items: items,
+        tableNumber: order?.tables?.number || 'N/A',
+        timeSpent: timeSpent,
+      };
+    });
+
+    return { success: true, feedback: transformedFeedback };
   } catch (error) {
     console.error("Error fetching recent feedback:", error);
     return { error: "Failed to fetch recent feedback" };

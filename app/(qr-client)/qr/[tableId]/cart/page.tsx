@@ -107,12 +107,13 @@ export default function CartPage({
             </div>
             <Link href={`/qr/${resolvedParams.tableId}/feedback`}>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="p-2 hover:bg-gray-100 rounded-full"
+                className="px-3 py-2 h-10 rounded-xl border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 flex items-center gap-2 text-sm font-medium"
                 title="Rate your experience"
               >
-                <span className="text-lg">🙏</span>
+                <span className="text-lg">⭐</span>
+                <span className="hidden sm:inline">Feedback</span>
               </Button>
             </Link>
           </div>
@@ -248,12 +249,13 @@ export default function CartPage({
           </div>
           <Link href={`/qr/${resolvedParams.tableId}/feedback`}>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              className="p-2 hover:bg-gray-100 rounded-full"
+              className="px-3 py-2 h-10 rounded-xl border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 flex items-center gap-2 text-sm font-medium"
               title="Rate your experience"
             >
-              <span className="text-lg">🙏</span>
+              <span className="text-lg">⭐</span>
+              <span className="hidden sm:inline">Feedback</span>
             </Button>
           </Link>
         </div>

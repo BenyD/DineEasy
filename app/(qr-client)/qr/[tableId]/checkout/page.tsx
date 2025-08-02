@@ -7,6 +7,7 @@ import {
   CreditCard,
   Banknote,
   Check,
+  CheckCircle,
   Loader2,
   Shield,
   Lock,
@@ -311,22 +312,58 @@ export default function CheckoutPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-gray-300 border-t-green-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Loading checkout...</p>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center px-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center max-w-md"
+        >
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"
+          >
+            <Loader2 className="w-8 h-8 text-green-600" />
+          </motion.div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            Loading Checkout
+          </h2>
+          <p className="text-gray-600">
+            Please wait while we prepare your order...
+          </p>
+        </motion.div>
       </div>
     );
   }
 
   if (isPaymentSuccessful) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-gray-300 border-t-green-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Redirecting to order tracking...</p>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center px-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center max-w-md"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 200, damping: 20 }}
+            className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"
+          >
+            <CheckCircle className="w-10 h-10 text-green-600" />
+          </motion.div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            Payment Successful!
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Your order has been confirmed and is being prepared. You&apos;ll be
+            redirected to order tracking shortly.
+          </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-green-600 bg-green-100 px-4 py-2 rounded-full">
+            <Shield className="w-4 h-4" />
+            <span>Payment secured by Stripe</span>
+          </div>
+        </motion.div>
       </div>
     );
   }
@@ -471,12 +508,13 @@ export default function CheckoutPage({
             </div>
             <Link href={`/qr/${resolvedParams.tableId}/feedback`}>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="p-2"
+                className="px-3 py-2 h-10 rounded-xl border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 flex items-center gap-2 text-sm font-medium"
                 title="Rate your experience"
               >
-                <span className="text-lg">🙏</span>
+                <span className="text-lg">⭐</span>
+                <span className="hidden sm:inline">Feedback</span>
               </Button>
             </Link>
           </div>
@@ -790,15 +828,30 @@ export default function CheckoutPage({
         <Button
           onClick={handleConfirmOrder}
           disabled={!selectedPayment || isProcessing}
-          className="w-full bg-green-600 hover:bg-green-700 text-white h-14 text-lg font-medium"
+          className={`w-full h-14 text-lg font-medium transition-all duration-200 ${
+            isProcessing
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl"
+          } text-white`}
         >
           {isProcessing ? (
-            <div className="flex items-center gap-2">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Processing...
+            <div className="flex items-center gap-3">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              >
+                <Loader2 className="w-5 h-5" />
+              </motion.div>
+              <span>Processing Your Order...</span>
             </div>
           ) : (
-            `Confirm Order • ${formatAmountWithCurrency(total, restaurant?.currency || "CHF")}`
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5" />
+              <span>
+                Confirm Order •{" "}
+                {formatAmountWithCurrency(total, restaurant?.currency || "CHF")}
+              </span>
+            </div>
           )}
         </Button>
       </div>

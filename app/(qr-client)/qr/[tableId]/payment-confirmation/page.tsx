@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   CheckCircle,
@@ -35,6 +35,91 @@ export default function PaymentConfirmationPage({
   const [orderId, setOrderId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isNavigatingToMenu, setIsNavigatingToMenu] = useState(false);
+
+  const validateCheckoutSession = useCallback(
+    async (sessionId: string, orderIdParam: string) => {
+      try {
+        setIsProcessing(true);
+        console.log("Validating checkout session:", {
+          sessionId,
+          orderIdParam,
+        });
+
+        const response = await fetch("/api/qr/validate-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            sessionId,
+            orderId: orderIdParam,
+            tableId: resolvedParams.tableId,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          console.error("Session validation failed:", result.error);
+          setPaymentStatus("failed");
+
+          // Provide more specific error messages based on the error type
+          let userFriendlyError =
+            "Payment validation failed. Please try again.";
+
+          if (result.error?.includes("expired")) {
+            userFriendlyError =
+              "The payment session has expired. Please try again with a fresh payment.";
+          } else if (result.error?.includes("not found")) {
+            userFriendlyError =
+              "Order not found. Please return to the menu and place your order again.";
+          } else if (result.error?.includes("not in pending status")) {
+            userFriendlyError =
+              "This order has already been processed. Please check your order status.";
+          } else if (result.error?.includes("timed out")) {
+            userFriendlyError =
+              "The order has timed out. Please place a new order.";
+          } else if (result.error?.includes("Payment not completed")) {
+            userFriendlyError =
+              "The payment was not completed. Please try again or choose a different payment method.";
+          } else if (result.error) {
+            userFriendlyError = result.error;
+          }
+
+          setError(userFriendlyError);
+          return;
+        }
+
+        console.log("Session validation successful:", result);
+
+        // Check payment status
+        if (result.session.paymentStatus === "paid") {
+          setPaymentStatus("success");
+          // Clear cart after successful payment
+          clearCart();
+          // Use the orderId from the validation result
+          const finalOrderId = result.order?.id || orderIdParam;
+          // Redirect to order tracking after a short delay
+          setTimeout(() => {
+            router.push(
+              `/qr/${resolvedParams.tableId}/order-tracking/${finalOrderId}?payment_success=true`
+            );
+          }, 2000);
+        } else {
+          setPaymentStatus("failed");
+          setError("Payment was not completed. Please try again.");
+        }
+      } catch (error: any) {
+        console.error("Session validation error:", error);
+        setPaymentStatus("failed");
+        setError("Payment validation failed. Please try again.");
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [resolvedParams.tableId, clearCart, router]
+  );
 
   // Main payment processing effect
   useEffect(() => {
@@ -59,7 +144,7 @@ export default function PaymentConfirmationPage({
     }
 
     // Validate required parameters
-    if (!sessionId || !orderIdParam) {
+    if (!sessionId) {
       console.error("Missing payment parameters:", {
         hasSessionId: !!sessionId,
         hasOrderId: !!orderIdParam,
@@ -69,87 +154,9 @@ export default function PaymentConfirmationPage({
       return;
     }
 
-    setOrderId(orderIdParam);
-    validateCheckoutSession(sessionId, orderIdParam);
-  }, [searchParams, resolvedParams.tableId]);
-
-  const validateCheckoutSession = async (
-    sessionId: string,
-    orderIdParam: string
-  ) => {
-    try {
-      setIsProcessing(true);
-      console.log("Validating checkout session:", { sessionId, orderIdParam });
-
-      const response = await fetch("/api/qr/validate-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sessionId,
-          orderId: orderIdParam,
-          tableId: resolvedParams.tableId,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!result.success) {
-        console.error("Session validation failed:", result.error);
-        setPaymentStatus("failed");
-
-        // Provide more specific error messages based on the error type
-        let userFriendlyError = "Payment validation failed. Please try again.";
-
-        if (result.error?.includes("expired")) {
-          userFriendlyError =
-            "The payment session has expired. Please try again with a fresh payment.";
-        } else if (result.error?.includes("not found")) {
-          userFriendlyError =
-            "Order not found. Please return to the menu and place your order again.";
-        } else if (result.error?.includes("not in pending status")) {
-          userFriendlyError =
-            "This order has already been processed. Please check your order status.";
-        } else if (result.error?.includes("timed out")) {
-          userFriendlyError =
-            "The order has timed out. Please place a new order.";
-        } else if (result.error?.includes("Payment not completed")) {
-          userFriendlyError =
-            "The payment was not completed. Please try again or choose a different payment method.";
-        } else if (result.error) {
-          userFriendlyError = result.error;
-        }
-
-        setError(userFriendlyError);
-        return;
-      }
-
-      console.log("Session validation successful:", result);
-
-      // Check payment status
-      if (result.session.paymentStatus === "paid") {
-        setPaymentStatus("success");
-        // Clear cart after successful payment
-        clearCart();
-        // Redirect to order tracking after a short delay
-        setTimeout(() => {
-          router.push(
-            `/qr/${resolvedParams.tableId}/order-tracking/${orderIdParam}?payment_success=true`
-          );
-        }, 2000);
-      } else {
-        setPaymentStatus("failed");
-        setError("Payment was not completed. Please try again.");
-      }
-    } catch (error: any) {
-      console.error("Session validation error:", error);
-      setPaymentStatus("failed");
-      setError("Payment validation failed. Please try again.");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+    setOrderId(orderIdParam || null);
+    validateCheckoutSession(sessionId, orderIdParam || "");
+  }, [searchParams, resolvedParams.tableId, validateCheckoutSession]);
 
   const handleRetry = () => {
     if (orderId) {
@@ -158,7 +165,51 @@ export default function PaymentConfirmationPage({
   };
 
   const handleBackToMenu = () => {
-    router.push(`/qr/${resolvedParams.tableId}`);
+    try {
+      setIsNavigatingToMenu(true);
+      console.log("Navigating back to menu for table:", resolvedParams.tableId);
+
+      // Ensure cart data is preserved in localStorage before navigating
+      let cartData = sessionStorage.getItem(`cart_${resolvedParams.tableId}`);
+
+      // Fallback: check if cart data exists in localStorage
+      if (!cartData) {
+        const existingCart = localStorage.getItem("qr-cart");
+        const existingTableId = localStorage.getItem("qr-cart-table-id");
+
+        if (existingCart && existingTableId === resolvedParams.tableId) {
+          console.log(
+            "Cart data already preserved in localStorage for table:",
+            resolvedParams.tableId
+          );
+        } else {
+          console.log(
+            "No cart data found to preserve for table:",
+            resolvedParams.tableId
+          );
+        }
+      } else {
+        try {
+          const cart = JSON.parse(cartData);
+          // Store cart data in localStorage to preserve it across navigation
+          localStorage.setItem("qr-cart", JSON.stringify(cart.items || []));
+          localStorage.setItem("qr-cart-table-id", resolvedParams.tableId);
+          localStorage.setItem("qr-cart-timestamp", Date.now().toString());
+          console.log("Cart data preserved for table:", resolvedParams.tableId);
+          toast.success(
+            "Your cart items have been preserved. You can continue shopping!"
+          );
+        } catch (error) {
+          console.error("Error preserving cart data:", error);
+        }
+      }
+
+      router.push(`/qr/${resolvedParams.tableId}`);
+    } catch (error) {
+      console.error("Error navigating to menu:", error);
+      // Fallback to window.location if router fails
+      window.location.href = `/qr/${resolvedParams.tableId}`;
+    }
   };
 
   const handleCashFallback = async () => {
@@ -166,9 +217,7 @@ export default function PaymentConfirmationPage({
       setIsProcessing(true);
 
       // Get cart data from sessionStorage
-      const cartData = sessionStorage.getItem(
-        `cart_data_${resolvedParams.tableId}`
-      );
+      const cartData = sessionStorage.getItem(`cart_${resolvedParams.tableId}`);
       if (!cartData) {
         setError("Cart data not found. Please return to menu and try again.");
         return;
@@ -276,37 +325,39 @@ export default function PaymentConfirmationPage({
   // Failed state
   if (paymentStatus === "failed") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-50 flex items-center justify-center px-4 py-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="text-center max-w-lg"
+          className="text-center max-w-lg w-full"
         >
-          {/* Enhanced Error Icon */}
+          {/* Enhanced Error Icon - Improved Centering */}
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="relative mx-auto mb-8"
+            className="flex justify-center mb-8"
           >
-            <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center border-4 border-red-200 shadow-lg">
-              <XCircle className="w-12 h-12 text-red-600" />
+            <div className="relative">
+              <div className="w-28 h-28 bg-red-100 rounded-full flex items-center justify-center border-4 border-red-200 shadow-lg">
+                <XCircle className="w-14 h-14 text-red-600" />
+              </div>
+              {/* Floating warning indicator - Better positioned */}
+              <motion.div
+                animate={{
+                  scale: [1, 1.1, 1],
+                  opacity: [0.7, 1, 0.7],
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+                className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center shadow-md"
+              >
+                <span className="text-white text-sm font-bold">!</span>
+              </motion.div>
             </div>
-            {/* Floating warning indicators */}
-            <motion.div
-              animate={{
-                scale: [1, 1.1, 1],
-                opacity: [0.7, 1, 0.7],
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-              className="absolute -top-2 -right-2 w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center"
-            >
-              <span className="text-white text-xs font-bold">!</span>
-            </motion.div>
           </motion.div>
 
           {/* Enhanced Content */}
@@ -371,7 +422,7 @@ export default function PaymentConfirmationPage({
             </div>
 
             {/* Tertiary Action - Back to Menu */}
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-colors">
               <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
                 <ArrowLeft className="w-5 h-5 text-gray-600" />
                 Return to Menu
@@ -383,10 +434,15 @@ export default function PaymentConfirmationPage({
               <Button
                 variant="ghost"
                 onClick={handleBackToMenu}
-                className="w-full text-gray-700 hover:bg-gray-100 font-medium py-3 rounded-lg transition-all duration-200"
+                disabled={isNavigatingToMenu}
+                className="w-full text-gray-700 hover:bg-gray-100 hover:text-gray-900 font-medium py-3 rounded-lg transition-all duration-200 border border-gray-200 hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Menu
+                {isNavigatingToMenu ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                )}
+                {isNavigatingToMenu ? "Navigating..." : "Back to Menu"}
               </Button>
             </div>
           </motion.div>
@@ -396,7 +452,7 @@ export default function PaymentConfirmationPage({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
-            className="mt-8 p-4 bg-blue-50 rounded-xl border border-blue-200"
+            className="mt-8 mb-8 p-4 bg-blue-50 rounded-xl border border-blue-200"
           >
             <div className="flex items-start gap-3">
               <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -422,37 +478,39 @@ export default function PaymentConfirmationPage({
   // Cancelled state
   if (paymentStatus === "cancelled") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center px-4 py-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="text-center max-w-lg"
+          className="text-center max-w-lg w-full"
         >
-          {/* Enhanced Cancelled Icon */}
+          {/* Enhanced Cancelled Icon - Improved Centering */}
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="relative mx-auto mb-8"
+            className="flex justify-center mb-8"
           >
-            <div className="w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center border-4 border-amber-200 shadow-lg">
-              <Clock className="w-12 h-12 text-amber-600" />
+            <div className="relative">
+              <div className="w-28 h-28 bg-amber-100 rounded-full flex items-center justify-center border-4 border-amber-200 shadow-lg">
+                <Clock className="w-14 h-14 text-amber-600" />
+              </div>
+              {/* Floating pause indicator - Better positioned */}
+              <motion.div
+                animate={{
+                  scale: [1, 1.1, 1],
+                  opacity: [0.7, 1, 0.7],
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+                className="absolute -top-3 -right-3 w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center shadow-md"
+              >
+                <span className="text-white text-sm font-bold">⏸</span>
+              </motion.div>
             </div>
-            {/* Floating pause indicator */}
-            <motion.div
-              animate={{
-                scale: [1, 1.1, 1],
-                opacity: [0.7, 1, 0.7],
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-              className="absolute -top-2 -right-2 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center"
-            >
-              <span className="text-white text-xs font-bold">⏸</span>
-            </motion.div>
           </motion.div>
 
           {/* Enhanced Content */}
@@ -517,7 +575,7 @@ export default function PaymentConfirmationPage({
             </div>
 
             {/* Tertiary Action - Back to Menu */}
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-colors">
               <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
                 <ArrowLeft className="w-5 h-5 text-gray-600" />
                 Return to Menu
@@ -529,7 +587,7 @@ export default function PaymentConfirmationPage({
               <Button
                 variant="ghost"
                 onClick={handleBackToMenu}
-                className="w-full text-gray-700 hover:bg-gray-100 font-medium py-3 rounded-lg transition-all duration-200"
+                className="w-full text-gray-700 hover:bg-gray-100 hover:text-gray-900 font-medium py-3 rounded-lg transition-all duration-200 border border-gray-200 hover:border-gray-300"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Menu
@@ -542,7 +600,7 @@ export default function PaymentConfirmationPage({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
-            className="mt-8 p-4 bg-amber-50 rounded-xl border border-amber-200"
+            className="mt-8 mb-8 p-4 bg-amber-50 rounded-xl border border-amber-200"
           >
             <div className="flex items-start gap-3">
               <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">

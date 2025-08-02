@@ -500,7 +500,7 @@ async function createStripeCheckoutSession(
       customer_email: paymentData.email,
       metadata: {
         restaurantId: paymentData.restaurantId,
-        orderId: orderId || "pending",
+        orderId: orderId,
         tableId: paymentData.tableId,
         customerEmail: paymentData.email || "",
         customerName: paymentData.customerName || "",
@@ -518,7 +518,7 @@ async function createStripeCheckoutSession(
         application_fee_amount: platformFee,
         metadata: {
           restaurantId: paymentData.restaurantId,
-          orderId: orderId || "pending",
+          orderId: orderId,
           tableId: paymentData.tableId,
           customerEmail: paymentData.email || "",
           customerName: paymentData.customerName || "",
@@ -688,38 +688,37 @@ export async function createQRPaymentIntent(paymentData: QRPaymentData) {
 
     const restaurant = stripeValidation.restaurant!;
 
-    // Create Stripe checkout session first (before creating order)
-    const sessionResult = await createStripeCheckoutSession(
-      paymentData,
-      restaurant,
-      "", // No orderId yet
-      idempotencyKey
-    );
+    // Create the order FIRST (before checkout session)
+    const unifiedOrderResult = await createOrder(paymentData, "card");
 
-    if (!sessionResult.success) {
-      // Checkout session creation failed - don't create order
-      return { error: sessionResult.error };
-    }
-
-    const session = sessionResult.session!;
-
-    // Now create the order with the successful checkout session
-    const unifiedOrderResult = await createOrder(
-      paymentData,
-      "card",
-      session.payment_intent as string
-    );
     if (!unifiedOrderResult.success) {
-      // Order creation failed - expire the checkout session
-      try {
-        await stripe.checkout.sessions.expire(session.id);
-      } catch (expireError) {
-        console.error("Error expiring checkout session:", expireError);
-      }
       return { error: unifiedOrderResult.error };
     }
 
     const orderId = unifiedOrderResult.orderId!;
+
+    // Now create Stripe checkout session with the real orderId
+    const sessionResult = await createStripeCheckoutSession(
+      paymentData,
+      restaurant,
+      orderId, // Use the real orderId
+      idempotencyKey
+    );
+
+    if (!sessionResult.success) {
+      // Checkout session creation failed - clean up the order
+      try {
+        await supabase.from("orders").delete().eq("id", orderId);
+      } catch (cleanupError) {
+        console.error(
+          "Error cleaning up order after session creation failure:",
+          cleanupError
+        );
+      }
+      return { error: sessionResult.error };
+    }
+
+    const session = sessionResult.session!;
 
     // Update order with checkout session ID and payment intent ID
     const { error: updateError } = await supabase

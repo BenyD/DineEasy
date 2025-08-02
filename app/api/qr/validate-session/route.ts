@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     const { sessionId, orderId, tableId } = await request.json();
 
     // Validate required parameters
-    if (!sessionId || !orderId || !tableId) {
+    if (!sessionId || !tableId) {
       return NextResponse.json(
         { success: false, error: "Missing required parameters" },
         { status: 400 }
@@ -61,30 +61,112 @@ export async function POST(request: NextRequest) {
 
     // Get order details from database
     const supabase = createClient();
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .select(
-        `
-        id,
-        table_id,
-        status,
-        created_at,
-        tables (
+    let order;
+    let orderError;
+
+    if (orderId) {
+      // If orderId is provided, fetch the specific order
+      const result = await supabase
+        .from("orders")
+        .select(
+          `
           id,
-          restaurant_id
+          table_id,
+          status,
+          created_at,
+          tables (
+            id,
+            restaurant_id
+          )
+        `
         )
-      `
-      )
-      .eq("id", orderId)
-      .single();
+        .eq("id", orderId)
+        .single();
+
+      order = result.data;
+      orderError = result.error;
+    } else {
+      // If no orderId provided, try to find the order
+      const sessionOrderId = session.metadata?.orderId;
+      if (sessionOrderId) {
+        // Try to find order by session metadata
+        const result = await supabase
+          .from("orders")
+          .select(
+            `
+            id,
+            table_id,
+            status,
+            created_at,
+            tables (
+              id,
+              restaurant_id
+            )
+          `
+          )
+          .eq("id", sessionOrderId)
+          .single();
+
+        order = result.data;
+        orderError = result.error;
+      } else {
+        // Try to find order by table and recent creation time
+        console.log("Searching for order by table and recent creation:", {
+          tableId,
+          sessionOrderId: sessionOrderId || "not provided",
+        });
+
+        const result = await supabase
+          .from("orders")
+          .select(
+            `
+            id,
+            table_id,
+            status,
+            created_at,
+            tables (
+              id,
+              restaurant_id
+            )
+          `
+          )
+          .eq("table_id", tableId)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        order = result.data;
+        orderError = result.error;
+
+        console.log("Order search result:", {
+          found: !!order,
+          orderId: order?.id,
+          error: orderError,
+        });
+      }
+    }
 
     if (orderError || !order) {
-      console.error("Error fetching order:", orderError);
+      console.error("Error fetching order:", {
+        orderError,
+        orderId,
+        sessionOrderId: session.metadata?.orderId,
+        tableId,
+        searchStrategy: orderId ? "by orderId" : "by table and recent creation",
+      });
       return NextResponse.json(
         { success: false, error: "Order not found" },
         { status: 404 }
       );
     }
+
+    console.log("Order found successfully:", {
+      orderId: order.id,
+      tableId: order.table_id,
+      status: order.status,
+      created_at: order.created_at,
+    });
 
     // Validate order belongs to correct table
     if (order.table_id !== tableId) {
@@ -106,17 +188,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate session metadata matches order
-    const sessionOrderId = session.metadata?.orderId;
-    if (sessionOrderId !== orderId) {
-      console.error("Order ID mismatch:", {
-        sessionOrderId,
-        requestOrderId: orderId,
-      });
-      return NextResponse.json(
-        { success: false, error: "Checkout session does not match order" },
-        { status: 403 }
-      );
+    // Validate session metadata matches order (only if orderId was provided)
+    if (orderId) {
+      const sessionOrderId = session.metadata?.orderId;
+      if (sessionOrderId !== orderId) {
+        console.error("Order ID mismatch:", {
+          sessionOrderId,
+          requestOrderId: orderId,
+        });
+        return NextResponse.json(
+          { success: false, error: "Checkout session does not match order" },
+          { status: 403 }
+        );
+      }
     }
 
     // Check if order has timed out

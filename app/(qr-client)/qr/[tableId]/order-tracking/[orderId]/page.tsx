@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -102,6 +102,9 @@ export default function OrderTrackingPage({
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
 
+  // Capture initial searchParams to avoid dependency issues
+  const initialSearchParams = useRef(searchParams);
+
   // Real-time order tracking
   const {
     isConnected,
@@ -136,7 +139,7 @@ export default function OrderTrackingPage({
 
   // Check if coming from successful payment - only once on mount
   useEffect(() => {
-    const paymentSuccess = searchParams?.get("payment_success");
+    const paymentSuccess = initialSearchParams.current?.get("payment_success");
     if (paymentSuccess === "true") {
       setShowPaymentSuccess(true);
       // Auto-hide success message after 5 seconds
