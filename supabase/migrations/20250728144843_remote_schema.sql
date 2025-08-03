@@ -504,6 +504,7 @@ CREATE OR REPLACE FUNCTION "public"."create_payment_with_fallback"("p_restaurant
     AS $$
 declare
   v_order_exists boolean;
+  v_payment_exists boolean;
   v_payment_id uuid;
 begin
   -- Check if order exists
@@ -534,6 +535,14 @@ begin
     );
     
     raise notice 'Created fallback order with ID: %', p_order_id;
+  end if;
+  
+  -- Check if payment already exists for this order
+  select exists(select 1 from payments where order_id = p_order_id) into v_payment_exists;
+  
+  if v_payment_exists then
+    raise notice 'Payment already exists for order: %, skipping duplicate creation', p_order_id;
+    return;
   end if;
   
   -- Create the payment record for customer payments to restaurants

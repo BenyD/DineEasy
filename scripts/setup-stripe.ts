@@ -10,6 +10,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-06-30.basil", // Default Stripe API version
 });
 
+// Trial period configuration
+const TRIAL_PERIOD_DAYS = 30;
+
 // Pricing configuration with improved .99 pricing format
 const PRICING = {
   starter: {
@@ -116,6 +119,8 @@ async function createPrices() {
                 plan,
                 interval,
                 currency,
+                trial_period_days: TRIAL_PERIOD_DAYS.toString(),
+                type: "subscription",
               },
             },
           });

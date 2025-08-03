@@ -364,7 +364,7 @@ export default function PaymentTransactions({
                           <div className="flex items-center gap-3">
                             <h3 className="text-xl font-semibold text-gray-900">
                               {formatCurrency(
-                                transaction.amount,
+                                Number(transaction.amount) || 0,
                                 transaction.currency
                               )}
                             </h3>
@@ -398,15 +398,26 @@ export default function PaymentTransactions({
                                 </span>
                               </div>
                             )}
-                            {transaction.order_id && (
+                            {transaction.orderNumber && (
                               <div className="flex items-center gap-1">
                                 <Receipt className="h-4 w-4" />
-                                <span className="font-mono">
-                                  #
-                                  {transaction.order_id.slice(-8).toUpperCase()}
+                                <span className="font-mono font-medium">
+                                  {transaction.orderNumber}
                                 </span>
                               </div>
                             )}
+                            {!transaction.orderNumber &&
+                              transaction.order_id && (
+                                <div className="flex items-center gap-1">
+                                  <Receipt className="h-4 w-4" />
+                                  <span className="font-mono">
+                                    #
+                                    {transaction.order_id
+                                      .slice(-8)
+                                      .toUpperCase()}
+                                  </span>
+                                </div>
+                              )}
                           </div>
                         </div>
                       </div>
@@ -428,6 +439,22 @@ export default function PaymentTransactions({
                             </Button>
                           </SheetTrigger>
                         </Sheet>
+                        {transaction.status === "completed" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              window.open(
+                                `/dashboard/orders/history?order=${transaction.orderNumber}`,
+                                "_blank"
+                              )
+                            }
+                            className="flex items-center gap-2"
+                          >
+                            <Receipt className="h-4 w-4" />
+                            View Order
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -527,7 +554,7 @@ export default function PaymentTransactions({
             <p className="text-lg font-semibold text-gray-900">
               {transactionToRefund
                 ? formatCurrency(
-                    transactionToRefund.amount,
+                    Number(transactionToRefund.amount) || 0,
                     transactionToRefund.currency
                   )
                 : "N/A"}
@@ -589,7 +616,7 @@ export default function PaymentTransactions({
                         <div>
                           <h2 className="text-lg font-semibold text-gray-900">
                             {formatCurrency(
-                              selectedTransaction.amount,
+                              Number(selectedTransaction.amount) || 0,
                               selectedTransaction.currency
                             )}
                           </h2>
@@ -675,24 +702,41 @@ export default function PaymentTransactions({
                             </p>
                           </div>
 
-                          {selectedTransaction.order_id && (
+                          {selectedTransaction.orderNumber && (
                             <div>
                               <p className="text-xs text-gray-500 mb-1">
-                                Order ID
+                                Order Number
                               </p>
                               <div className="flex items-center gap-2">
                                 <Receipt className="w-4 h-4 text-gray-400" />
                                 <p className="font-mono text-xs bg-gray-50 p-2 rounded break-all">
-                                  {selectedTransaction.order_id}
+                                  {selectedTransaction.orderNumber}
                                 </p>
                               </div>
                             </div>
                           )}
+                          {!selectedTransaction.orderNumber &&
+                            selectedTransaction.order_id && (
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">
+                                  Order ID
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <Receipt className="w-4 h-4 text-gray-400" />
+                                  <p className="font-mono text-xs bg-gray-50 p-2 rounded break-all">
+                                    #
+                                    {selectedTransaction.order_id
+                                      .slice(-8)
+                                      .toUpperCase()}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
                         </div>
                       </div>
 
                       {/* Stripe Information */}
-                      {selectedTransaction.stripe_payment_id && (
+                      {selectedTransaction.stripe_payment_id ? (
                         <div>
                           <h3 className="text-sm font-medium text-gray-900 mb-3">
                             Stripe Information
@@ -732,7 +776,27 @@ export default function PaymentTransactions({
                             )}
                           </div>
                         </div>
-                      )}
+                      ) : selectedTransaction.method === "card" ? (
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900 mb-3">
+                            Stripe Information
+                          </h3>
+                          <div className="bg-white rounded-lg border p-4">
+                            <div className="flex items-center gap-2 text-amber-600">
+                              <AlertTriangle className="h-4 w-4" />
+                              <p className="text-sm">
+                                Stripe payment ID not available for this
+                                transaction
+                              </p>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">
+                              This may be a legacy payment or the Stripe
+                              integration was not fully configured at the time
+                              of payment.
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
 
                       {/* Actions */}
                       <div>
@@ -760,20 +824,82 @@ export default function PaymentTransactions({
                                   : "Refund Payment"}
                               </Button>
                             )}
-                          <Button
-                            variant="outline"
-                            onClick={() =>
-                              window.open(
-                                `https://dashboard.stripe.com/payments/${selectedTransaction.stripe_payment_id}`,
-                                "_blank"
-                              )
-                            }
-                            disabled={!selectedTransaction.stripe_payment_id}
-                            className="flex items-center gap-2 w-full"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                            View in Stripe
-                          </Button>
+                          {!selectedTransaction.stripe_payment_id &&
+                            selectedTransaction.method === "card" &&
+                            selectedTransaction.status === "completed" && (
+                              <Button
+                                variant="outline"
+                                disabled
+                                className="flex items-center gap-2 w-full text-gray-400"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                                Refund Not Available
+                              </Button>
+                            )}
+                          {selectedTransaction.method === "cash" &&
+                            selectedTransaction.status === "completed" && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  onClick={() =>
+                                    window.open(
+                                      `/dashboard/orders/history?order=${selectedTransaction.orderNumber}`,
+                                      "_blank"
+                                    )
+                                  }
+                                  className="flex items-center gap-2 w-full"
+                                >
+                                  <Receipt className="h-4 w-4" />
+                                  View Order Details
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  onClick={() =>
+                                    window.open(
+                                      `/dashboard/orders/active?order=${selectedTransaction.orderNumber}`,
+                                      "_blank"
+                                    )
+                                  }
+                                  className="flex items-center gap-2 w-full"
+                                >
+                                  <Clock className="h-4 w-4" />
+                                  Check Active Orders
+                                </Button>
+                              </>
+                            )}
+                          {selectedTransaction.stripe_payment_id ? (
+                            <Button
+                              variant="outline"
+                              onClick={() =>
+                                window.open(
+                                  `https://dashboard.stripe.com/payments/${selectedTransaction.stripe_payment_id}`,
+                                  "_blank"
+                                )
+                              }
+                              className="flex items-center gap-2 w-full"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                              View in Stripe
+                            </Button>
+                          ) : selectedTransaction.method === "card" ? (
+                            <Button
+                              variant="outline"
+                              disabled
+                              className="flex items-center gap-2 w-full text-gray-400"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                              Stripe ID Not Available
+                            </Button>
+                          ) : selectedTransaction.method === "cash" ? (
+                            <Button
+                              variant="outline"
+                              disabled
+                              className="flex items-center gap-2 w-full text-gray-400"
+                            >
+                              <Banknote className="h-4 w-4" />
+                              Cash Payment - No External Link
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     </div>

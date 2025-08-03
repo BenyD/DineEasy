@@ -606,7 +606,7 @@ export default function BillingPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-lg font-semibold text-blue-800">
-                        🎉 You&apos;re on your 14-day free trial!
+                        🎉 You&apos;re on your 30-day free trial!
                       </h3>
                       <p className="text-sm text-blue-700 mt-1">
                         You&apos;re currently on the {billingData.plan} plan

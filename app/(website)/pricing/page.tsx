@@ -202,7 +202,7 @@ export default function PricingPage() {
     {
       question: "How is the subscription fee calculated?",
       answer:
-        "Monthly billing starts after the 14-day trial ends. You can upgrade/downgrade anytime.",
+        "Monthly billing starts after the 30-day trial ends. You can upgrade/downgrade anytime.",
     },
     {
       question: "Is the 2% commission charged on all orders?",
@@ -247,7 +247,7 @@ export default function PricingPage() {
         <div className="mt-4 flex flex-col items-center gap-2 text-sm text-gray-600">
           <div className="flex items-center gap-2">
             <Check className="h-4 w-4 text-green-500" />
-            <span>14-day free trial — No credit card required</span>
+            <span>30-day free trial — No credit card required</span>
           </div>
           <div className="flex items-center gap-2">
             <Check className="h-4 w-4 text-green-500" />

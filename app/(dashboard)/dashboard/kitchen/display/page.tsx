@@ -31,6 +31,7 @@ import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 import { useRestaurantWebSocket } from "@/hooks/useRestaurantWebSocket";
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 import { toast } from "sonner";
+import { getDisplayOrderNumber } from "@/lib/utils/order";
 
 interface OrderItem {
   name: string;
@@ -51,6 +52,7 @@ interface Order {
   priority: string;
   total: number;
   orderNumber?: string; // Added for customer-friendly view
+  paymentMethod?: string; // Added for payment method display
 }
 
 const formatTime = (date: Date) => {
@@ -265,12 +267,25 @@ function CustomerOrderCard({ order }: { order: Order }) {
             </div>
           </div>
 
-          {/* Total */}
+          {/* Total and Payment Method */}
           <div className="flex justify-between items-center py-2 border-t border-gray-200">
-            <span className="font-bold text-gray-900">Total:</span>
-            <span className="text-lg font-bold text-green-700">
-              {formatCurrency(order.total)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-900">Total:</span>
+              <span className="text-lg font-bold text-green-700">
+                {formatCurrency(order.total)}
+              </span>
+            </div>
+            {order.paymentMethod && (
+              <div
+                className={`text-xs px-2 py-1 rounded-full ${
+                  order.paymentMethod === "card"
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-green-100 text-green-800"
+                }`}
+              >
+                {order.paymentMethod === "card" ? "💳 Card" : "💰 Cash"}
+              </div>
+            )}
           </div>
 
           {/* Special Instructions - Only if present */}
@@ -290,7 +305,7 @@ export default function KitchenDisplayPage() {
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSoundMuted, setIsSoundMuted] = useState(false);
-  const [previousReadyOrdersCount, setPreviousReadyOrdersCount] = useState(0);
+  const [previousOrdersCount, setPreviousOrdersCount] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [restaurantName, setRestaurantName] = useState<string>("");
@@ -377,14 +392,13 @@ export default function KitchenDisplayPage() {
           notes: order.notes || "",
           priority: order.priority || "normal",
           total: order.total,
-          orderNumber: order.orderNumber || `#${order.id.slice(0, 8)}`, // Add orderNumber for customer view
+          orderNumber: getDisplayOrderNumber(order), // Use centralized utility
+          paymentMethod: order.paymentMethod || "other",
         }));
         setOrders(mappedOrders);
         // Set initial count after first load
-        if (previousReadyOrdersCount === 0) {
-          setPreviousReadyOrdersCount(
-            mappedOrders.filter((order) => order.status === "ready").length
-          );
+        if (previousOrdersCount === 0) {
+          setPreviousOrdersCount(mappedOrders.length);
         }
       }
     } catch (error) {
@@ -393,7 +407,7 @@ export default function KitchenDisplayPage() {
     } finally {
       setLoading(false);
     }
-  }, [restaurant?.id, previousReadyOrdersCount]);
+  }, [restaurant?.id, previousOrdersCount]);
 
   useEffect(() => {
     fetchOrders();
@@ -409,7 +423,7 @@ export default function KitchenDisplayPage() {
   };
 
   // WebSocket for real-time updates
-  useOrdersWebSocket({
+  const { isConnected: isOrdersConnected } = useOrdersWebSocket({
     restaurantId: restaurant?.id,
     onOrderAdded: async (order) => {
       // Fetch the full order from the DB to get customerName and tableNumber
@@ -441,7 +455,8 @@ export default function KitchenDisplayPage() {
           notes: order.notes || "",
           priority: "normal",
           total: order.total_amount,
-          orderNumber: order.order_number || `#${order.id.slice(0, 8)}`, // Add orderNumber for customer view
+          orderNumber: getDisplayOrderNumber(order), // Add orderNumber for customer view
+          paymentMethod: (order as any).paymentMethod || "other",
         },
         ...prev,
       ]);
@@ -466,7 +481,7 @@ export default function KitchenDisplayPage() {
   });
 
   // WebSocket for restaurant updates
-  useRestaurantWebSocket({
+  const { isConnected: isRestaurantConnected } = useRestaurantWebSocket({
     restaurantId: restaurant?.id,
     onRestaurantUpdated: (updatedRestaurant) => {
       if (updatedRestaurant.name) {
@@ -484,22 +499,19 @@ export default function KitchenDisplayPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Play sound for ready orders
+  // Play sound for new orders (only when new orders are received)
   useEffect(() => {
-    if (orders.length === 0 || previousReadyOrdersCount === 0) return;
+    if (orders.length === 0 || previousOrdersCount === 0) return;
 
-    const readyOrders = orders.filter((order) => order.status === "ready");
-    const currentReadyCount = readyOrders.length;
-
-    // Only play sound if we have more ready orders than before and sound is not muted
-    if (currentReadyCount > previousReadyOrdersCount && !isSoundMuted) {
+    // Only play sound if we have more orders than before and sound is not muted
+    if (orders.length > previousOrdersCount && !isSoundMuted) {
       const audio = new Audio("/notification-sound.mp3");
       audio.play().catch((error) => console.log("Audio play failed:", error));
     }
 
     // Update previous count
-    setPreviousReadyOrdersCount(currentReadyCount);
-  }, [orders, previousReadyOrdersCount, isSoundMuted]);
+    setPreviousOrdersCount(orders.length);
+  }, [orders, previousOrdersCount, isSoundMuted]);
 
   const getOrdersByStatus = (status: string) => {
     return orders.filter((order) => order.status === status);
@@ -520,10 +532,86 @@ export default function KitchenDisplayPage() {
 
   if (loading || !currentTime) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-gray-300 border-t-green-600 rounded-full animate-spin mx-auto mb-6" />
-          <p className="text-gray-600 text-xl">Loading kitchen display...</p>
+      <div className="min-h-screen bg-white">
+        {/* Header Skeleton */}
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse" />
+                <div className="space-y-2">
+                  <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+                  <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-lg">
+                  <div className="w-5 h-5 bg-gray-200 rounded animate-pulse" />
+                  <div className="h-6 w-20 bg-gray-200 rounded animate-pulse" />
+                </div>
+                <div className="h-10 w-24 bg-gray-200 rounded animate-pulse" />
+                <div className="h-10 w-20 bg-gray-200 rounded animate-pulse" />
+                <div className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-lg">
+                  <div className="w-3 h-3 bg-gray-200 rounded-full animate-pulse" />
+                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
+                </div>
+                <div className="h-10 w-28 bg-gray-200 rounded animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Content Skeleton */}
+        <div className="p-6 space-y-6">
+          {/* Summary Stats Skeleton */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-white rounded-lg border p-6 space-y-3">
+                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+                <div className="h-8 w-16 bg-gray-200 rounded animate-pulse" />
+                <div className="h-3 w-32 bg-gray-200 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+
+          {/* Orders Sections Skeleton */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-white rounded-lg border">
+                <div className="p-4 border-b">
+                  <div className="flex items-center justify-between">
+                    <div className="h-6 w-32 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-6 w-8 bg-gray-200 rounded-full animate-pulse" />
+                  </div>
+                </div>
+                <div className="p-4 space-y-4">
+                  {[...Array(3)].map((_, j) => (
+                    <div key={j} className="border rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse" />
+                          <div className="space-y-1">
+                            <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+                            <div className="h-3 w-24 bg-gray-200 rounded animate-pulse" />
+                          </div>
+                        </div>
+                        <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="h-4 w-full bg-gray-200 rounded animate-pulse" />
+                        <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="h-6 w-20 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -609,6 +697,24 @@ export default function KitchenDisplayPage() {
                   )}
                   {isSoundMuted ? "Unmute" : "Mute"}
                 </Button>
+              </motion.div>
+
+              {/* WebSocket Status */}
+              <motion.div variants={cardVariants}>
+                <div className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-lg">
+                  <div
+                    className={`w-3 h-3 rounded-full ${
+                      isOrdersConnected && isRestaurantConnected
+                        ? "bg-green-500"
+                        : "bg-red-500"
+                    }`}
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    {isOrdersConnected && isRestaurantConnected
+                      ? "Live Updates"
+                      : "Offline"}
+                  </span>
+                </div>
               </motion.div>
 
               {/* Fullscreen Toggle */}

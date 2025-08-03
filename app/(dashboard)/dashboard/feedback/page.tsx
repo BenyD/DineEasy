@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Star,
@@ -43,48 +43,26 @@ import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 import { toast } from "sonner";
 import React from "react";
 
-// Animation variants
+// Simplified animation variants for better performance
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1,
+      duration: 0.3,
     },
   },
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 10 },
   visible: {
     opacity: 1,
     y: 0,
     transition: {
-      type: "spring",
-      stiffness: 100,
+      duration: 0.2,
     },
   },
-};
-
-const cardHoverVariants = {
-  hover: {
-    scale: 1.02,
-    transition: {
-      type: "spring",
-      stiffness: 400,
-    },
-  },
-};
-
-const progressBarVariants = {
-  hidden: { width: 0 },
-  visible: (width: number) => ({
-    width: `${width}%`,
-    transition: {
-      duration: 0.8,
-      ease: "easeOut",
-    },
-  }),
 };
 
 type FeedbackSentiment = "positive" | "neutral" | "negative";
@@ -101,48 +79,6 @@ interface FeedbackItem {
   tableNumber: string;
   timeSpent: string;
 }
-
-const feedbackItems: FeedbackItem[] = [
-  {
-    id: 1,
-    customerName: "John D.",
-    rating: 5,
-    comment:
-      "Great food and quick service! The new menu items are fantastic. Will definitely come back again.",
-    date: "2024-03-15",
-    orderNumber: "#1234",
-    sentiment: "positive",
-    items: ["Margherita Pizza", "Tiramisu"],
-    tableNumber: "12",
-    timeSpent: "45 mins",
-  },
-  {
-    id: 2,
-    customerName: "Sarah M.",
-    rating: 4,
-    comment:
-      "Food was delicious but took a bit longer than expected. The staff was very apologetic and professional about it though.",
-    date: "2024-03-14",
-    orderNumber: "#1233",
-    sentiment: "neutral",
-    items: ["Pasta Carbonara", "Caesar Salad"],
-    tableNumber: "8",
-    timeSpent: "65 mins",
-  },
-  {
-    id: 3,
-    customerName: "Mike R.",
-    rating: 2,
-    comment:
-      "The food was cold when it arrived. Very disappointing experience.",
-    date: "2024-03-14",
-    orderNumber: "#1232",
-    sentiment: "negative",
-    items: ["Steak", "Fries"],
-    tableNumber: "15",
-    timeSpent: "55 mins",
-  },
-];
 
 const sentimentColors: Record<FeedbackSentiment, string> = {
   positive: "bg-green-100 text-green-800",
@@ -161,14 +97,7 @@ export default function FeedbackPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Load feedback data
-  useEffect(() => {
-    if (restaurant?.id) {
-      loadFeedbackData();
-    }
-  }, [restaurant?.id, timeRange]);
-
-  const loadFeedbackData = async () => {
+  const loadFeedbackData = useCallback(async () => {
     try {
       setLoading(true);
       const days =
@@ -198,7 +127,14 @@ export default function FeedbackPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [restaurant, timeRange]);
+
+  // Load feedback data
+  useEffect(() => {
+    if (restaurant?.id) {
+      loadFeedbackData();
+    }
+  }, [loadFeedbackData, restaurant?.id]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -207,53 +143,120 @@ export default function FeedbackPage() {
     toast.success("Feedback data refreshed");
   };
 
-  const filteredFeedback = recentFeedback.filter((item) => {
-    if (sentiment !== "all" && item.sentiment !== sentiment) return false;
-    if (selectedRating !== "all" && item.rating !== parseInt(selectedRating))
-      return false;
-    if (
-      searchTerm &&
-      !item.comment?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-      return false;
-    return true;
-  });
+  const filteredFeedback = useMemo(() => {
+    return recentFeedback.filter((item) => {
+      if (sentiment !== "all" && item.sentiment !== sentiment) return false;
+      if (selectedRating !== "all" && item.rating !== parseInt(selectedRating))
+        return false;
+      if (
+        searchTerm &&
+        !item.comment?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+        return false;
+      return true;
+    });
+  }, [recentFeedback, sentiment, selectedRating, searchTerm]);
 
-  const stats = analytics
-    ? {
-        averageRating: analytics.averageRating,
-        totalReviews: analytics.totalFeedback,
-        positivePercentage:
-          analytics.sentimentDistribution.positive > 0
-            ? Math.round(
-                (analytics.sentimentDistribution.positive /
-                  analytics.totalFeedback) *
-                  100
-              )
-            : 0,
-        negativePercentage:
-          analytics.sentimentDistribution.negative > 0
-            ? Math.round(
-                (analytics.sentimentDistribution.negative /
-                  analytics.totalFeedback) *
-                  100
-              )
-            : 0,
-      }
-    : {
+  const stats = useMemo(() => {
+    if (!analytics) {
+      return {
         averageRating: 0,
         totalReviews: 0,
         positivePercentage: 0,
         negativePercentage: 0,
       };
+    }
+
+    return {
+      averageRating: analytics.averageRating,
+      totalReviews: analytics.totalFeedback,
+      positivePercentage:
+        analytics.sentimentDistribution.positive > 0
+          ? Math.round(
+              (analytics.sentimentDistribution.positive /
+                analytics.totalFeedback) *
+                100
+            )
+          : 0,
+      negativePercentage:
+        analytics.sentimentDistribution.negative > 0
+          ? Math.round(
+              (analytics.sentimentDistribution.negative /
+                analytics.totalFeedback) *
+                100
+            )
+          : 0,
+    };
+  }, [analytics]);
 
   if (loading) {
     return (
       <div className="p-6 space-y-6">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-center">
-            <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-600">Loading feedback data...</p>
+        {/* Header Skeleton */}
+        <div className="flex justify-between items-start">
+          <div className="space-y-2">
+            <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+            <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
+          </div>
+          <div className="h-9 w-24 bg-gray-200 rounded animate-pulse" />
+        </div>
+
+        {/* Stats Cards Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white rounded-lg border p-6 space-y-3">
+              <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+              <div className="h-8 w-16 bg-gray-200 rounded animate-pulse" />
+              <div className="h-3 w-32 bg-gray-200 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+
+        {/* Filters Card Skeleton */}
+        <div className="bg-white rounded-lg border">
+          <div className="p-6 border-b">
+            <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-2" />
+            <div className="h-4 w-48 bg-gray-200 rounded animate-pulse" />
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="h-10 bg-gray-200 rounded animate-pulse col-span-full lg:col-span-2" />
+              <div className="h-10 bg-gray-200 rounded animate-pulse" />
+              <div className="h-10 bg-gray-200 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        {/* Feedback List Skeleton */}
+        <div className="bg-white rounded-lg border">
+          <div className="p-6 border-b">
+            <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-2" />
+            <div className="h-4 w-48 bg-gray-200 rounded animate-pulse" />
+          </div>
+          <div className="p-6 space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse" />
+                    <div className="space-y-1">
+                      <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+                      <div className="h-3 w-24 bg-gray-200 rounded animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+                </div>
+                <div className="space-y-2">
+                  <div className="h-4 w-full bg-gray-200 rounded animate-pulse" />
+                  <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse" />
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="h-6 w-20 bg-gray-200 rounded animate-pulse" />
+                  <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
+                  <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -263,15 +266,12 @@ export default function FeedbackPage() {
   return (
     <motion.div
       className="p-6 space-y-6"
+      variants={containerVariants}
       initial="hidden"
       animate="visible"
-      variants={containerVariants}
     >
       {/* Header Section */}
-      <motion.div
-        variants={itemVariants}
-        className="flex justify-between items-start"
-      >
+      <div className="flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
             Customer Feedback
@@ -292,7 +292,7 @@ export default function FeedbackPage() {
           />
           Refresh
         </Button>
-      </motion.div>
+      </div>
 
       {/* Filters Card */}
       <motion.div variants={itemVariants}>
@@ -307,15 +307,9 @@ export default function FeedbackPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <motion.div
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-              variants={itemVariants}
-            >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Search Input */}
-              <motion.div
-                className="relative col-span-full lg:col-span-2"
-                whileHover={{ scale: 1.01 }}
-              >
+              <div className="relative col-span-full lg:col-span-2">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
                   placeholder="Search feedback..."
@@ -323,7 +317,7 @@ export default function FeedbackPage() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
-              </motion.div>
+              </div>
 
               {/* Time Range Filter */}
               <motion.div whileHover={{ scale: 1.01 }}>
@@ -341,7 +335,7 @@ export default function FeedbackPage() {
               </motion.div>
 
               {/* Rating Filter */}
-              <motion.div className="flex gap-2" whileHover={{ scale: 1.01 }}>
+              <div className="flex gap-2">
                 <div className="flex-1">
                   <Select
                     value={selectedRating}
@@ -378,8 +372,8 @@ export default function FeedbackPage() {
                     Reset
                   </Button>
                 </motion.div>
-              </motion.div>
-            </motion.div>
+              </div>
+            </div>
 
             <Separator />
 
@@ -421,15 +415,9 @@ export default function FeedbackPage() {
       </motion.div>
 
       {/* Stats Overview */}
-      <motion.div
-        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-        variants={containerVariants}
-      >
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* Average Rating Card */}
-        <motion.div
-          variants={itemVariants}
-          whileHover={cardHoverVariants.hover}
-        >
+        <motion.div variants={itemVariants}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -469,10 +457,7 @@ export default function FeedbackPage() {
         </motion.div>
 
         {/* Total Reviews Card */}
-        <motion.div
-          variants={itemVariants}
-          whileHover={cardHoverVariants.hover}
-        >
+        <motion.div variants={itemVariants}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -481,45 +466,27 @@ export default function FeedbackPage() {
               <MessageSquare className="h-4 w-4 text-gray-400" />
             </CardHeader>
             <CardContent>
-              <motion.div
-                className="text-2xl font-bold"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 200 }}
-              >
-                {stats.totalReviews}
-              </motion.div>
+              <div className="text-2xl font-bold">{stats.totalReviews}</div>
               <p className="text-xs text-muted-foreground">Last 30 days</p>
             </CardContent>
           </Card>
         </motion.div>
 
         {/* Positive Reviews Card */}
-        <motion.div
-          variants={itemVariants}
-          whileHover={cardHoverVariants.hover}
-        >
+        <motion.div variants={itemVariants}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Positive</CardTitle>
               <ThumbsUp className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <motion.div
-                className="text-2xl font-bold"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 200 }}
-              >
+              <div className="text-2xl font-bold">
                 {stats.positivePercentage}%
-              </motion.div>
+              </div>
               <div className="h-2 w-full bg-gray-100 rounded-full mt-2">
-                <motion.div
-                  className="h-2 bg-green-500 rounded-full"
-                  initial="hidden"
-                  animate="visible"
-                  variants={progressBarVariants}
-                  custom={stats.positivePercentage}
+                <div
+                  className="h-2 bg-green-500 rounded-full transition-all duration-300"
+                  style={{ width: `${stats.positivePercentage}%` }}
                 />
               </div>
             </CardContent>
@@ -527,65 +494,44 @@ export default function FeedbackPage() {
         </motion.div>
 
         {/* Negative Reviews Card */}
-        <motion.div
-          variants={itemVariants}
-          whileHover={cardHoverVariants.hover}
-        >
+        <motion.div variants={itemVariants}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Negative</CardTitle>
               <ThumbsDown className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
-              <motion.div
-                className="text-2xl font-bold"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 200 }}
-              >
+              <div className="text-2xl font-bold">
                 {stats.negativePercentage}%
-              </motion.div>
+              </div>
               <div className="h-2 w-full bg-gray-100 rounded-full mt-2">
-                <motion.div
-                  className="h-2 bg-red-500 rounded-full"
-                  initial="hidden"
-                  animate="visible"
-                  variants={progressBarVariants}
-                  custom={stats.negativePercentage}
+                <div
+                  className="h-2 bg-red-500 rounded-full transition-all duration-300"
+                  style={{ width: `${stats.negativePercentage}%` }}
                 />
               </div>
             </CardContent>
           </Card>
         </motion.div>
-      </motion.div>
+      </div>
 
       {/* Feedback List */}
-      <motion.div className="space-y-4" variants={containerVariants}>
-        <AnimatePresence mode="wait">
-          {filteredFeedback.length === 0 ? (
-            <motion.div
-              key="no-feedback"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Card>
-                <CardContent className="p-6 text-center text-gray-500">
-                  No feedback found matching your filters.
-                </CardContent>
-              </Card>
-            </motion.div>
-          ) : (
-            filteredFeedback.map((item, index) => (
+      <motion.div className="space-y-4" variants={itemVariants}>
+        {filteredFeedback.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center text-gray-500">
+              No feedback found matching your filters.
+            </CardContent>
+          </Card>
+        ) : (
+          <AnimatePresence>
+            {filteredFeedback.map((item, index) => (
               <motion.div
                 key={item.id}
-                variants={itemVariants}
-                initial="hidden"
-                animate="visible"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ delay: index * 0.1 }}
-                whileHover={cardHoverVariants.hover}
               >
                 <Card>
                   <CardHeader className="flex flex-row items-start justify-between space-y-0">
@@ -594,19 +540,17 @@ export default function FeedbackPage() {
                         <CardTitle className="text-base">
                           {item.customerName}
                         </CardTitle>
-                        <motion.div whileHover={{ scale: 1.05 }}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 text-muted-foreground hover:text-foreground"
-                            onClick={() =>
-                              (window.location.href = `/dashboard/orders/history?order=${item.orderNumber}`)
-                            }
-                          >
-                            {item.orderNumber}
-                            <ExternalLink className="ml-1 h-3 w-3" />
-                          </Button>
-                        </motion.div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-muted-foreground hover:text-foreground"
+                          onClick={() =>
+                            (window.location.href = `/dashboard/orders/history?order=${item.orderNumber}`)
+                          }
+                        >
+                          {item.orderNumber}
+                          <ExternalLink className="ml-1 h-3 w-3" />
+                        </Button>
                       </div>
                       <CardDescription className="flex items-center gap-2">
                         <Clock className="h-3 w-3" />
@@ -614,16 +558,14 @@ export default function FeedbackPage() {
                         {item.timeSpent}
                       </CardDescription>
                     </div>
-                    <motion.div whileHover={{ scale: 1.1 }}>
-                      <Badge
-                        variant="secondary"
-                        className={
-                          sentimentColors[item.sentiment as FeedbackSentiment]
-                        }
-                      >
-                        {item.rating} ★
-                      </Badge>
-                    </motion.div>
+                    <Badge
+                      variant="secondary"
+                      className={
+                        sentimentColors[item.sentiment as FeedbackSentiment]
+                      }
+                    >
+                      {item.rating} ★
+                    </Badge>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
@@ -634,20 +576,13 @@ export default function FeedbackPage() {
                         </p>
                         <div className="flex flex-wrap gap-2 mt-1">
                           {item.items.map((itemName: string, index: number) => (
-                            <motion.div
+                            <Badge
                               key={index}
-                              initial={{ opacity: 0, scale: 0 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ delay: index * 0.1 }}
-                              whileHover={{ scale: 1.1 }}
+                              variant="secondary"
+                              className="bg-gray-100"
                             >
-                              <Badge
-                                variant="secondary"
-                                className="bg-gray-100"
-                              >
-                                {itemName}
-                              </Badge>
-                            </motion.div>
+                              {itemName}
+                            </Badge>
                           ))}
                         </div>
                       </div>
@@ -655,9 +590,9 @@ export default function FeedbackPage() {
                   </CardContent>
                 </Card>
               </motion.div>
-            ))
-          )}
-        </AnimatePresence>
+            ))}
+          </AnimatePresence>
+        )}
       </motion.div>
     </motion.div>
   );

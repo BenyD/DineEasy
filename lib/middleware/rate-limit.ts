@@ -80,10 +80,10 @@ const DEFAULT_CONFIGS: Record<string, RateLimitConfig> = {
       `auth:${req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown"}`,
   },
 
-  // Webhook endpoints
+  // Webhook endpoints (Note: Webhooks are now excluded from rate limiting in middleware)
   webhook: {
     windowMs: 60 * 1000, // 1 minute
-    maxRequests: 10,
+    maxRequests: 100, // Increased from 10 to 100 to handle Stripe webhook bursts
     keyGenerator: (req) =>
       `webhook:${req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown"}`,
   },

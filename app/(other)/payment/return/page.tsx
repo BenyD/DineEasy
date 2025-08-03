@@ -831,7 +831,7 @@ export default function PaymentReturnPage() {
                       <span className="font-semibold text-blue-800">
                         {paymentStatus.type === "trial_upgrade"
                           ? "Trial Period Continues"
-                          : `${paymentStatus.trialDays || 14}-Day Free Trial`}
+                          : `${paymentStatus.trialDays || 30}-Day Free Trial`}
                       </span>
                     </div>
                     <p className="text-sm text-blue-700 text-center">

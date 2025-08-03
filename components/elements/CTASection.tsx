@@ -21,7 +21,7 @@ export function CTASection({
   secondaryButtonHref = "/pricing",
   features = [
     "No credit card required",
-    "14-day free trial",
+    "30-day free trial",
     "Cancel anytime",
     "24/7 support",
   ],

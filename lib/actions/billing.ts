@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
+import { SUBSCRIPTION } from "@/lib/constants/subscription";
 
 // Utility function to validate currency has all required Stripe price IDs
 function validateCurrency(currency: string): boolean {
@@ -285,7 +286,7 @@ export async function createPlanChangeSession(
           isNewSubscription: "true",
         },
         subscription_data: {
-          trial_period_days: 14,
+          trial_period_days: SUBSCRIPTION.TRIAL_DAYS,
           metadata: {
             restaurantId: restaurant.id,
             plan: planId,

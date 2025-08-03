@@ -298,7 +298,7 @@ export default function AboutPage() {
         buttonText="Start Free Trial"
         buttonHref="/signup"
         features={[
-          "14-day free trial",
+          "30-day free trial",
           "No credit card required",
           "Cancel anytime",
         ]}

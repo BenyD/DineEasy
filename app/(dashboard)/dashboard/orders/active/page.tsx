@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
@@ -75,6 +75,7 @@ import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 import { toast } from "sonner";
 import { completeCashOrder } from "@/lib/actions/qr-payments";
 import { cn } from "@/lib/utils";
+import { getDisplayOrderNumber } from "@/lib/utils/order";
 
 type OrderStatus =
   | "pending"
@@ -160,6 +161,9 @@ export default function ActiveOrdersPage() {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | null>(null);
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<string | null>(
+    null
+  );
   const [timeFilter, setTimeFilter] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set());
@@ -251,38 +255,38 @@ export default function ActiveOrdersPage() {
   });
 
   // Fetch orders data
-  useEffect(() => {
-    const fetchOrders = async () => {
-      if (!restaurant?.id) return;
+  const fetchOrders = useCallback(async () => {
+    if (!restaurant?.id) return;
 
-      setLoading(true);
-      try {
-        const filters: OrderFilters = {};
-        if (statusFilter && statusFilter !== "all") {
-          filters.status = statusFilter;
-        }
-        if (searchQuery) {
-          filters.search = searchQuery;
-        }
-
-        const result = await getRestaurantOrders(restaurant.id, filters);
-
-        if (result.success && result.data) {
-          setOrders(result.data);
-        } else {
-          console.error("Failed to fetch orders:", result.error);
-          toast.error("Failed to load orders");
-        }
-      } catch (error) {
-        console.error("Error fetching orders:", error);
-        toast.error("Failed to load orders");
-      } finally {
-        setLoading(false);
+    setLoading(true);
+    try {
+      const filters: OrderFilters = {};
+      if (statusFilter && statusFilter !== "all") {
+        filters.status = statusFilter;
       }
-    };
+      if (searchQuery) {
+        filters.search = searchQuery;
+      }
 
-    fetchOrders();
+      const result = await getRestaurantOrders(restaurant.id, filters);
+
+      if (result.success && result.data) {
+        setOrders(result.data);
+      } else {
+        console.error("Failed to fetch orders:", result.error);
+        toast.error("Failed to load orders");
+      }
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      toast.error("Failed to load orders");
+    } finally {
+      setLoading(false);
+    }
   }, [restaurant?.id, statusFilter, searchQuery]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   // Update current time every minute
   useEffect(() => {
@@ -360,6 +364,35 @@ export default function ActiveOrdersPage() {
     }
   };
 
+  const getPaymentMethodDisplay = (paymentMethod: string) => {
+    switch (paymentMethod) {
+      case "card":
+        return {
+          text: "Card Payment",
+          icon: <CreditCard className="h-4 w-4 text-blue-500" />,
+          color: "text-blue-600",
+        };
+      case "cash":
+        return {
+          text: "Cash Payment",
+          icon: <DollarSignIcon className="h-4 w-4 text-green-500" />,
+          color: "text-green-600",
+        };
+      case "other":
+        return {
+          text: "Other Payment",
+          icon: <DollarSignIcon className="h-4 w-4 text-gray-500" />,
+          color: "text-gray-600",
+        };
+      default:
+        return {
+          text: "Other Payment",
+          icon: <DollarSignIcon className="h-4 w-4 text-gray-500" />,
+          color: "text-gray-600",
+        };
+    }
+  };
+
   const isOrderPaid = (order: Order) => {
     return order.paymentStatus === "completed";
   };
@@ -367,11 +400,11 @@ export default function ActiveOrdersPage() {
   const canMarkAsPaid = (order: Order) => {
     // Can mark as paid if:
     // 1. Order is not already paid
-    // 2. Order has no stripe payment intent (cash order)
+    // 2. Order is a cash order
     // 3. Order status is not cancelled
     return (
       !isOrderPaid(order) &&
-      !order.stripe_payment_intent_id &&
+      order.paymentMethod === "cash" &&
       order.status !== "cancelled"
     );
   };
@@ -386,6 +419,9 @@ export default function ActiveOrdersPage() {
 
     const matchesStatus = !statusFilter || order.status === statusFilter;
 
+    const matchesPaymentMethod =
+      !paymentMethodFilter || order.paymentMethod === paymentMethodFilter;
+
     const orderTime = new Date(order.time);
     const timeDiff = currentTime.getTime() - orderTime.getTime();
     const matchesTime =
@@ -394,12 +430,15 @@ export default function ActiveOrdersPage() {
       (timeFilter === "30m" && timeDiff <= 30 * 60 * 1000) ||
       (timeFilter === "1h" && timeDiff <= 60 * 60 * 1000);
 
-    return matchesSearch && matchesStatus && matchesTime;
+    return (
+      matchesSearch && matchesStatus && matchesPaymentMethod && matchesTime
+    );
   });
 
   const resetFilters = () => {
     setSearchQuery("");
     setStatusFilter(null);
+    setPaymentMethodFilter(null);
     setTimeFilter("all");
   };
 
@@ -634,7 +673,7 @@ export default function ActiveOrdersPage() {
 
   // Get order number from order object
   const getOrderNumber = (order: Order) => {
-    return order.orderNumber || `#${order.id.slice(-8).toUpperCase()}`;
+    return getDisplayOrderNumber(order);
   };
 
   return (
@@ -924,6 +963,58 @@ export default function ActiveOrdersPage() {
                 Cancelled
               </Button>
             </motion.div>
+
+            <Separator />
+
+            {/* Payment Method Filters */}
+            <motion.div
+              className="flex flex-wrap gap-2"
+              variants={filterVariants}
+            >
+              <Button
+                variant={paymentMethodFilter === null ? "default" : "outline"}
+                onClick={() => setPaymentMethodFilter(null)}
+                className={
+                  paymentMethodFilter === null
+                    ? "bg-blue-600 hover:bg-blue-700 text-white"
+                    : "hover:bg-blue-50 hover:text-blue-600 hover:border-blue-600"
+                }
+              >
+                All Payment Methods
+              </Button>
+              <Button
+                variant={paymentMethodFilter === "card" ? "default" : "outline"}
+                onClick={() =>
+                  setPaymentMethodFilter(
+                    paymentMethodFilter === "card" ? null : "card"
+                  )
+                }
+                className={
+                  paymentMethodFilter === "card"
+                    ? "bg-blue-600 hover:bg-blue-700 text-white"
+                    : "hover:bg-blue-50 hover:text-blue-600 hover:border-blue-600"
+                }
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Card Payments
+              </Button>
+              <Button
+                variant={paymentMethodFilter === "cash" ? "default" : "outline"}
+                onClick={() =>
+                  setPaymentMethodFilter(
+                    paymentMethodFilter === "cash" ? null : "cash"
+                  )
+                }
+                className={
+                  paymentMethodFilter === "cash"
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-600"
+                }
+              >
+                <DollarSignIcon className="h-4 w-4 mr-2" />
+                Cash Payments
+              </Button>
+            </motion.div>
           </CardContent>
         </Card>
       </motion.div>
@@ -940,7 +1031,7 @@ export default function ActiveOrdersPage() {
           <CardContent>
             <AnimatePresence mode="wait">
               <motion.div
-                key={`${statusFilter}-${timeFilter}-${searchQuery}`}
+                key={`${statusFilter}-${paymentMethodFilter}-${timeFilter}-${searchQuery}`}
                 className="space-y-4"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -1050,6 +1141,24 @@ export default function ActiveOrdersPage() {
                               >
                                 {getPaymentStatusText(order.paymentStatus)}
                               </Badge>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-xs",
+                                  order.paymentMethod === "card"
+                                    ? "text-blue-600 border-blue-200 bg-blue-50"
+                                    : "text-green-600 border-green-200 bg-green-50"
+                                )}
+                              >
+                                {order.paymentMethod === "card" ? (
+                                  <CreditCard className="h-3 w-3 mr-1" />
+                                ) : (
+                                  <DollarSignIcon className="h-3 w-3 mr-1" />
+                                )}
+                                {order.paymentMethod === "card"
+                                  ? "Card"
+                                  : "Cash"}
+                              </Badge>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" size="sm">
@@ -1126,21 +1235,22 @@ export default function ActiveOrdersPage() {
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
-                                {order.stripe_payment_intent_id ? (
-                                  <>
-                                    <CreditCard className="h-4 w-4 text-blue-500" />
-                                    <span className="text-sm text-gray-600">
-                                      Card Payment
-                                    </span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <DollarSignIcon className="h-4 w-4 text-green-500" />
-                                    <span className="text-sm text-gray-600">
-                                      Cash Payment
-                                    </span>
-                                  </>
-                                )}
+                                {(() => {
+                                  const paymentDisplay =
+                                    getPaymentMethodDisplay(
+                                      order.paymentMethod || "unknown"
+                                    );
+                                  return (
+                                    <>
+                                      {paymentDisplay.icon}
+                                      <span
+                                        className={`text-sm ${paymentDisplay.color}`}
+                                      >
+                                        {paymentDisplay.text}
+                                      </span>
+                                    </>
+                                  );
+                                })()}
                               </div>
                             </div>
                             <div className="flex items-center gap-3">
@@ -1150,7 +1260,7 @@ export default function ActiveOrdersPage() {
                               {(() => {
                                 // Determine if the action button should be shown and what it should do
                                 const isCashOrder =
-                                  !order.stripe_payment_intent_id;
+                                  order.paymentMethod === "cash";
                                 const isPaid =
                                   order.paymentStatus === "completed";
 
@@ -1182,7 +1292,7 @@ export default function ActiveOrdersPage() {
 
                                 // For card orders: payment is already completed when order is created
                                 // So we should always show status progression for card orders
-                                if (!isCashOrder && !isPaid) {
+                                if (order.paymentMethod === "card" && !isPaid) {
                                   // This should rarely happen for card orders, but handle it gracefully
                                   return (
                                     <Badge

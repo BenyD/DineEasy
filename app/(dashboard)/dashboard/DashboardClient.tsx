@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart3,
@@ -238,262 +238,25 @@ export default function DashboardClient({
 
     try {
       setIsRefreshing(true);
-      const supabase = createClient();
 
-      // Use restaurant from settings store
-      const restaurantId = restaurant.id;
+      // Call API routes for dashboard data
+      const [statsResult, ordersResult, paymentsResult] = await Promise.all([
+        fetch("/api/dashboard/stats").then((res) => res.json()),
+        fetch("/api/dashboard/recent-orders").then((res) => res.json()),
+        fetch("/api/dashboard/recent-payments").then((res) => res.json()),
+      ]);
 
-      // Get current month revenue
-      const currentMonth = new Date();
-      const currentMonthStart = new Date(
-        currentMonth.getFullYear(),
-        currentMonth.getMonth(),
-        1
-      );
+      if (statsResult.success) {
+        setStats(statsResult.data);
+      }
 
-      const { data: currentMonthRevenue } = await supabase
-        .from("orders")
-        .select("total_amount")
-        .eq("restaurant_id", restaurantId)
-        .gte("created_at", currentMonthStart.toISOString())
-        .eq("status", "completed");
+      if (ordersResult.success) {
+        setRecentOrders(ordersResult.data || []);
+      }
 
-      const { data: previousMonthRevenue } = await supabase
-        .from("orders")
-        .select("total_amount")
-        .eq("restaurant_id", restaurantId)
-        .gte(
-          "created_at",
-          new Date(
-            currentMonth.getFullYear(),
-            currentMonth.getMonth() - 1,
-            1
-          ).toISOString()
-        )
-        .lt("created_at", currentMonthStart.toISOString())
-        .eq("status", "completed");
-
-      const currentRevenue =
-        currentMonthRevenue?.reduce(
-          (sum: number, order: { total_amount: number }) =>
-            sum + order.total_amount,
-          0
-        ) || 0;
-      const previousRevenue =
-        previousMonthRevenue?.reduce(
-          (sum: number, order: { total_amount: number }) =>
-            sum + order.total_amount,
-          0
-        ) || 0;
-      const revenueTrend =
-        previousRevenue > 0
-          ? ((currentRevenue - previousRevenue) / previousRevenue) * 100
-          : 0;
-
-      // Get current week orders
-      const currentWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const { data: currentWeekOrders } = await supabase
-        .from("orders")
-        .select("id")
-        .eq("restaurant_id", restaurantId)
-        .gte("created_at", currentWeek.toISOString());
-
-      const { data: previousWeekOrders } = await supabase
-        .from("orders")
-        .select("id")
-        .eq("restaurant_id", restaurantId)
-        .gte(
-          "created_at",
-          new Date(
-            currentWeek.getTime() - 7 * 24 * 60 * 60 * 1000
-          ).toISOString()
-        )
-        .lt("created_at", currentWeek.toISOString());
-
-      const currentOrders = currentWeekOrders?.length || 0;
-      const previousOrders = previousWeekOrders?.length || 0;
-      const ordersTrend =
-        previousOrders > 0
-          ? ((currentOrders - previousOrders) / previousOrders) * 100
-          : 0;
-
-      // Get unique customers
-      const { data: customers } = await supabase
-        .from("orders")
-        .select("customer_email")
-        .eq("restaurant_id", restaurantId)
-        .not("customer_email", "is", null);
-
-      const uniqueCustomers = new Set(
-        customers?.map((c) => c.customer_email).filter(Boolean)
-      ).size;
-
-      // Get average order value
-      const { data: allCompletedOrders } = await supabase
-        .from("orders")
-        .select("total_amount")
-        .eq("restaurant_id", restaurantId)
-        .eq("status", "completed");
-
-      const totalRevenue =
-        allCompletedOrders?.reduce(
-          (sum: number, order: { total_amount: number }) =>
-            sum + order.total_amount,
-          0
-        ) || 0;
-      const totalOrders = allCompletedOrders?.length || 0;
-      const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-      // Set stats in server action format
-      setStats({
-        totalRevenue: {
-          value: currentRevenue,
-          trend: revenueTrend,
-          formatted: formatAmountWithCurrency(currentRevenue, currency),
-        },
-        orders: {
-          value: currentOrders,
-          trend: ordersTrend,
-          formatted: currentOrders.toString(),
-        },
-        customers: {
-          value: uniqueCustomers,
-          trend: 0,
-          formatted: uniqueCustomers.toString(),
-        },
-        avgOrderValue: {
-          value: avgOrderValue,
-          trend: 0,
-          formatted: formatAmountWithCurrency(avgOrderValue, currency),
-        },
-      });
-
-      // Get recent orders
-      const { data: recentOrdersData } = await supabase
-        .from("orders")
-        .select(
-          `
-          id,
-          total_amount,
-          status,
-          created_at,
-          customer_name,
-          notes,
-          payment_status,
-          tables (
-            number
-          )
-        `
-        )
-        .eq("restaurant_id", restaurantId)
-        .order("created_at", { ascending: false })
-        .limit(5);
-
-      // Transform recent orders
-      const transformedOrders = (recentOrdersData || []).map((order) => ({
-        id: order.id,
-        table: order.tables?.[0]?.number
-          ? `Table ${order.tables[0].number}`
-          : "No Table",
-        items: 1, // We'll need to fetch order items separately if needed
-        total: formatAmountWithCurrency(order.total_amount, currency),
-        status: order.status,
-        time: getTimeAgo(new Date(order.created_at)),
-        customer: order.customer_name || "No Customer",
-        notes: order.notes || null,
-        paymentStatus: order.payment_status || "pending",
-      }));
-
-      setRecentOrders(transformedOrders);
-
-      // Get recent payments (both card and cash)
-      const { data: cardPayments } = await supabase
-        .from("payments")
-        .select(
-          `
-          id,
-          amount,
-          method,
-          status,
-          created_at,
-          orders (
-            id,
-            customer_name,
-            tip_amount,
-            table_id,
-            tables (
-              number
-            )
-          )
-        `
-        )
-        .eq("restaurant_id", restaurantId)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      const { data: cashOrders } = await supabase
-        .from("orders")
-        .select(
-          `
-          id,
-          total_amount,
-          created_at,
-          status,
-          customer_name,
-          tip_amount,
-          tables (
-            number
-          )
-        `
-        )
-        .eq("restaurant_id", restaurantId)
-        .is("stripe_payment_intent_id", null)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      // Transform card payments
-      const cardPaymentsData = (cardPayments || []).map((payment) => {
-        const order =
-          payment.orders &&
-          Array.isArray(payment.orders) &&
-          payment.orders.length > 0
-            ? payment.orders[0]
-            : undefined;
-
-        return {
-          id: payment.id,
-          amount: formatAmountWithCurrency(payment.amount, currency),
-          method: payment.method || "card",
-          status: payment.status,
-          time: getTimeAgo(new Date(payment.created_at)),
-          customer: order?.customer_name || "Guest",
-          table: order?.tables?.[0]?.number || null,
-          orderId: order?.id || payment.id,
-          tip: order?.tip_amount || 0,
-          fee: 0, // No fee data in this structure
-        };
-      });
-
-      // Transform cash orders
-      const cashOrdersData = (cashOrders || []).map((order) => ({
-        id: `cash-${order.id}`,
-        amount: formatAmountWithCurrency(order.total_amount, currency),
-        method: "cash",
-        status: order.status === "completed" ? "completed" : "pending",
-        time: getTimeAgo(new Date(order.created_at)),
-        customer: order.customer_name || "Guest",
-        table: order.tables?.[0]?.number || null,
-        orderId: order.id,
-        tip: order.tip_amount || 0,
-        fee: 0, // No fee data in this structure
-      }));
-
-      // Combine and sort by creation date, take top 5
-      const allPayments = [...cardPaymentsData, ...cashOrdersData]
-        .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-        .slice(0, 5);
-
-      setRecentPayments(allPayments);
+      if (paymentsResult.success) {
+        setRecentPayments(paymentsResult.data || []);
+      }
     } catch (error) {
       console.error("Error refreshing dashboard data:", error);
     } finally {
@@ -502,32 +265,32 @@ export default function DashboardClient({
   };
 
   // Check Stripe Connect status
-  useEffect(() => {
-    const checkStripeStatus = async () => {
-      try {
-        if (!restaurant?.id) return;
+  const checkStripeStatus = useCallback(async () => {
+    try {
+      if (!restaurant?.id) return;
 
-        // Check Stripe Connect status
-        const result = await getStripeAccountStatus(restaurant.id);
+      // Check Stripe Connect status
+      const result = await getStripeAccountStatus(restaurant.id);
 
-        if (result.status === "not_connected") {
-          setShowStripeReminder(true);
-          setStripeStatus("not_connected");
-        } else if (result.status === "pending") {
-          setShowStripeReminder(true);
-          setStripeStatus("pending");
-          setStripeAccountDetails(result);
-        } else if (result.status === "active") {
-          setStripeStatus("active");
-          setStripeAccountDetails(result);
-        }
-      } catch (error) {
-        console.error("Error checking Stripe status:", error);
+      if (result.status === "not_connected") {
+        setShowStripeReminder(true);
+        setStripeStatus("not_connected");
+      } else if (result.status === "pending") {
+        setShowStripeReminder(true);
+        setStripeStatus("pending");
+        setStripeAccountDetails(result);
+      } else if (result.status === "active") {
+        setStripeStatus("active");
+        setStripeAccountDetails(result);
       }
-    };
-
-    checkStripeStatus();
+    } catch (error) {
+      console.error("Error checking Stripe status:", error);
+    }
   }, [restaurant?.id]);
+
+  useEffect(() => {
+    checkStripeStatus();
+  }, [checkStripeStatus]);
 
   // Get Stripe status message and actions
   const getStripeStatusInfo = () => {
@@ -1060,7 +823,7 @@ export default function DashboardClient({
                       <div className="space-y-2 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="font-medium">
-                            {payment.customer || "Guest"}
+                            {payment.customer_name || "Guest"}
                           </p>
                           <Badge
                             variant="outline"
@@ -1084,26 +847,28 @@ export default function DashboardClient({
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
-                            {payment.time || "Unknown time"}
+                            {getTimeAgo(new Date(payment.created_at))}
                           </div>
-                          {payment.table && (
+                          {payment.table_number && (
                             <div className="flex items-center gap-1">
                               <Table className="w-3 h-3" />
-                              Table {payment.table}
+                              Table {payment.table_number}
                             </div>
                           )}
-                          {payment.orderId && (
+                          {payment.orderNumber && (
                             <div className="flex items-center gap-1">
-                              <Receipt className="w-3 h-3" />#
-                              {payment.orderId.slice(-6).toUpperCase()}
+                              <Receipt className="w-3 h-3" />
+                              {payment.orderNumber}
                             </div>
                           )}
                         </div>
                       </div>
                       <div className="text-right ml-4">
                         <p className="font-medium text-lg">
-                          {payment.amount ||
-                            formatAmountWithCurrency(0, currency)}
+                          {formatAmountWithCurrency(
+                            Number(payment.amount) || 0,
+                            payment.currency
+                          )}
                         </p>
                       </div>
                     </motion.div>

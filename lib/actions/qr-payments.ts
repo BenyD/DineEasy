@@ -720,11 +720,11 @@ export async function createQRPaymentIntent(paymentData: QRPaymentData) {
 
     const session = sessionResult.session!;
 
-    // Update order with checkout session ID and payment intent ID
+    // Update order with checkout session ID only
     const { error: updateError } = await supabase
       .from("orders")
       .update({
-        stripe_payment_intent_id: session.payment_intent as string,
+        stripe_checkout_session_id: session.id,
         updated_at: new Date().toISOString(),
       })
       .eq("id", orderId);
@@ -737,7 +737,6 @@ export async function createQRPaymentIntent(paymentData: QRPaymentData) {
     console.log("Created QR checkout session successfully:", {
       orderId,
       sessionId: session.id,
-      paymentIntentId: session.payment_intent,
       amount: paymentData.total,
       restaurantId: paymentData.restaurantId,
       restaurantName: restaurant.name,
@@ -748,7 +747,6 @@ export async function createQRPaymentIntent(paymentData: QRPaymentData) {
       checkoutUrl: session.url,
       orderId: orderId,
       sessionId: session.id,
-      paymentIntentId: session.payment_intent as string,
     };
   } catch (error) {
     console.error("Error creating QR payment intent:", error);
@@ -948,7 +946,7 @@ export async function confirmQRPayment(orderId: string) {
     // Get the order to verify it exists and get payment intent ID
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("id, stripe_payment_intent_id, status, restaurant_id")
+      .select("id, stripe_checkout_session_id, status, restaurant_id")
       .eq("id", orderId)
       .single();
 
@@ -1001,11 +999,24 @@ export async function confirmQRPayment(orderId: string) {
       }
     }
 
-    // Verify payment with Stripe if we have a payment intent ID
-    if (order.stripe_payment_intent_id) {
+    // Verify payment with Stripe if we have a checkout session ID
+    if (order.stripe_checkout_session_id) {
       try {
+        // Get the checkout session to retrieve the payment intent ID
+        const session = await stripe.checkout.sessions.retrieve(
+          order.stripe_checkout_session_id
+        );
+
+        if (!session.payment_intent) {
+          console.error(
+            "No payment intent found in checkout session:",
+            order.stripe_checkout_session_id
+          );
+          return { error: "Payment intent not found" };
+        }
+
         const paymentIntent = await stripe.paymentIntents.retrieve(
-          order.stripe_payment_intent_id
+          session.payment_intent as string
         );
 
         if (paymentIntent.status === "succeeded") {
@@ -1220,7 +1231,8 @@ export async function getQROrderDetails(orderId: string) {
             id,
             name,
             description,
-            price
+            price,
+            preparation_time
           )
         ),
         restaurant:restaurants (
@@ -1398,8 +1410,8 @@ async function createOrder(
           }
 
           if (orderResult && orderResult.success) {
-            // Update order with stripe payment intent ID if provided
-            if (stripePaymentIntentId) {
+            // Update order with stripe payment intent ID if provided (but not for card payments using checkout sessions)
+            if (stripePaymentIntentId && paymentMethod !== "card") {
               const { error: updateError } = await supabase
                 .from("orders")
                 .update({ stripe_payment_intent_id: stripePaymentIntentId })
@@ -1415,36 +1427,43 @@ async function createOrder(
             }
 
             // Create payment record for atomic function case
-            const paymentRecord = {
-              restaurant_id: paymentData.restaurantId,
-              order_id: orderId,
-              amount: paymentData.total,
-              status: paymentMethod === "cash" ? "pending" : "completed",
-              method: paymentMethod,
-              stripe_payment_id: stripePaymentIntentId || null,
-            };
+            // For card payments, don't create payment record here - it will be created by the webhook
+            if (paymentMethod === "cash") {
+              const paymentRecord = {
+                restaurant_id: paymentData.restaurantId,
+                order_id: orderId,
+                amount: paymentData.total,
+                status: "pending",
+                method: paymentMethod,
+                stripe_payment_id: stripePaymentIntentId || null,
+              };
 
-            const { error: paymentError } = await supabase
-              .from("payments")
-              .insert(paymentRecord);
+              const { error: paymentError } = await supabase
+                .from("payments")
+                .insert(paymentRecord);
 
-            if (paymentError) {
-              console.error("Error creating payment record:", paymentError);
+              if (paymentError) {
+                console.error("Error creating payment record:", paymentError);
 
-              // Handle unique constraint violation gracefully
-              if (paymentError.code === "23505") {
-                console.log(
-                  "Payment record already exists for this order, continuing..."
-                );
-                // Don't fail the order creation, just log the duplicate
-              } else {
-                // Clean up the order if payment record creation fails for other reasons
-                await supabase.from("orders").delete().eq("id", orderId);
-                return {
-                  success: false,
-                  error: "Failed to create payment record",
-                };
+                // Handle unique constraint violation gracefully
+                if (paymentError.code === "23505") {
+                  console.log(
+                    "Payment record already exists for this order, continuing..."
+                  );
+                  // Don't fail the order creation, just log the duplicate
+                } else {
+                  // Clean up the order if payment record creation fails for other reasons
+                  await supabase.from("orders").delete().eq("id", orderId);
+                  return {
+                    success: false,
+                    error: "Failed to create payment record",
+                  };
+                }
               }
+            } else {
+              console.log(
+                "Skipping payment record creation for card payment - will be created by webhook"
+              );
             }
 
             console.log(
@@ -1453,13 +1472,89 @@ async function createOrder(
                 orderId,
                 orderNumber: orderResult.order_number,
                 paymentMethod,
-                stripePaymentIntentId,
+                stripePaymentIntentId:
+                  paymentMethod !== "card"
+                    ? stripePaymentIntentId
+                    : "using checkout session",
               }
             );
             return { success: true, orderId };
           }
         } catch (atomicError) {
           console.log("Falling back to manual order creation:", atomicError);
+        }
+
+        // Calculate estimated time based on menu items
+        let estimatedTime = 15; // Default fallback
+        try {
+          // Get preparation times for all menu items in the order
+          const menuItemIds = paymentData.items.map((item) => item.id);
+          const { data: menuItems, error: menuError } = await supabase
+            .from("menu_items")
+            .select("id, preparation_time")
+            .in("id", menuItemIds);
+
+          if (!menuError && menuItems && menuItems.length > 0) {
+            let maxPreparationTime = 0;
+            let totalPreparationTime = 0;
+            let itemCount = 0;
+
+            paymentData.items.forEach((orderItem) => {
+              const menuItem = menuItems.find((mi) => mi.id === orderItem.id);
+              if (menuItem?.preparation_time) {
+                let prepTimeMinutes = 0;
+
+                // Parse preparation time from interval format (e.g., "00:15:00")
+                if (typeof menuItem.preparation_time === "string") {
+                  const parts = menuItem.preparation_time.split(":");
+                  if (parts.length === 3) {
+                    prepTimeMinutes =
+                      parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+                  }
+                }
+
+                // If it's already a number (minutes)
+                if (typeof menuItem.preparation_time === "number") {
+                  prepTimeMinutes = menuItem.preparation_time;
+                }
+
+                // Track the longest preparation time (parallel cooking)
+                maxPreparationTime = Math.max(
+                  maxPreparationTime,
+                  prepTimeMinutes
+                );
+
+                // Add to total for sequential items
+                totalPreparationTime += prepTimeMinutes * orderItem.quantity;
+                itemCount += orderItem.quantity;
+              }
+            });
+
+            // ETA Logic:
+            // 1. Base time: Longest preparation time (parallel cooking)
+            // 2. Add buffer for kitchen efficiency (20% of base time)
+            // 3. Add time for order processing and plating (5 minutes)
+            // 4. Consider quantity: If multiple items, add some sequential time
+
+            const baseTime = maxPreparationTime;
+            const efficiencyBuffer = Math.ceil(baseTime * 0.2); // 20% buffer
+            const processingTime = 5; // 5 minutes for order processing, plating, etc.
+
+            // If multiple different items, add some sequential time
+            const sequentialTime =
+              itemCount > 1 ? Math.ceil(totalPreparationTime * 0.1) : 0;
+
+            estimatedTime = Math.max(
+              10,
+              Math.min(
+                60,
+                baseTime + efficiencyBuffer + processingTime + sequentialTime
+              )
+            );
+          }
+        } catch (error) {
+          console.error("Error calculating estimated time:", error);
+          // Use default 15 minutes if calculation fails
         }
 
         // Fallback: Manual order creation
@@ -1471,13 +1566,14 @@ async function createOrder(
           total_amount: paymentData.total,
           tax_amount: paymentData.tax,
           tip_amount: paymentData.tip,
-          status: "pending",
+          status: "preparing",
           customer_name: paymentData.customerName,
           customer_email: paymentData.email,
           notes: paymentData.specialInstructions,
+          estimated_time: estimatedTime,
         };
 
-        if (stripePaymentIntentId) {
+        if (stripePaymentIntentId && paymentMethod !== "card") {
           orderData.stripe_payment_intent_id = stripePaymentIntentId;
         }
 
@@ -1539,40 +1635,47 @@ async function createOrder(
 
         if (!existingPayment) {
           // Create payment record for manual fallback case (only if none exists)
-          const paymentRecord = {
-            restaurant_id: paymentData.restaurantId,
-            order_id: orderId,
-            amount: paymentData.total,
-            status: paymentMethod === "cash" ? "pending" : "completed",
-            method: paymentMethod,
-            stripe_payment_id: stripePaymentIntentId || null,
-          };
+          // For card payments, don't create payment record here - it will be created by the webhook
+          if (paymentMethod === "cash") {
+            const paymentRecord = {
+              restaurant_id: paymentData.restaurantId,
+              order_id: orderId,
+              amount: paymentData.total,
+              status: "pending",
+              method: paymentMethod,
+              stripe_payment_id: stripePaymentIntentId || null,
+            };
 
-          const { error: paymentError } = await supabase
-            .from("payments")
-            .insert(paymentRecord);
+            const { error: paymentError } = await supabase
+              .from("payments")
+              .insert(paymentRecord);
 
-          if (paymentError) {
-            console.error("Error creating payment record:", paymentError);
+            if (paymentError) {
+              console.error("Error creating payment record:", paymentError);
 
-            // Handle unique constraint violation gracefully
-            if (paymentError.code === "23505") {
-              console.log(
-                "Payment record already exists for this order, continuing..."
-              );
-              // Don't fail the order creation, just log the duplicate
-            } else {
-              // Clean up the order and order items if payment record creation fails for other reasons
-              await supabase
-                .from("order_items")
-                .delete()
-                .eq("order_id", orderId);
-              await supabase.from("orders").delete().eq("id", orderId);
-              return {
-                success: false,
-                error: "Failed to create payment record",
-              };
+              // Handle unique constraint violation gracefully
+              if (paymentError.code === "23505") {
+                console.log(
+                  "Payment record already exists for this order, continuing..."
+                );
+                // Don't fail the order creation, just log the duplicate
+              } else {
+                // Clean up the order and order items if payment record creation fails for other reasons
+                await supabase
+                  .from("order_items")
+                  .delete()
+                  .eq("order_id", orderId);
+                await supabase.from("orders").delete().eq("id", orderId);
+                return {
+                  success: false,
+                  error: "Failed to create payment record",
+                };
+              }
             }
+          } else {
+            console.log(
+              "Skipping payment record creation for card payment - will be created by webhook"
+            );
           }
         } else {
           console.log("Payment record already exists, skipping creation:", {
@@ -1585,7 +1688,10 @@ async function createOrder(
           orderId,
           orderNumber,
           paymentMethod,
-          stripePaymentIntentId,
+          stripePaymentIntentId:
+            paymentMethod !== "card"
+              ? stripePaymentIntentId
+              : "using checkout session",
         });
         return { success: true, orderId };
       } catch (error) {

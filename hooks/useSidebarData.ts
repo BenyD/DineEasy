@@ -11,6 +11,7 @@ interface SidebarData {
     logo_url: string | null;
     status: "open" | "closed";
     subscription_plan: string | null;
+    subscription_status: string | null;
     type: string | null;
   } | null;
   user: {
@@ -189,6 +190,7 @@ export function useSidebarData(): SidebarData {
                 logo_url: storeRestaurant.logo_url,
                 status: isOpen ? "open" : "closed",
                 subscription_plan: subscriptionPlan,
+                subscription_status: storeRestaurant.subscription_status,
                 type: storeRestaurant.type,
               }
             : null,

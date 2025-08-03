@@ -37,6 +37,7 @@ import {
   validateEmail,
   validateCustomerName,
 } from "@/lib/utils/validation";
+import { OrderValidator } from "@/lib/constants/order-limits";
 
 interface RestaurantData {
   id: string;
@@ -86,6 +87,7 @@ export default function CheckoutPage({
   const [tableData, setTableData] = useState<TableData | null>(null);
   const [loading, setLoading] = useState(true);
   const [paymentValidation, setPaymentValidation] = useState<any>(null);
+  const orderValidator = new OrderValidator();
 
   const subtotal = getTotalPrice();
   const tax = (subtotal * (restaurant?.tax_rate || 0)) / 100;
@@ -168,14 +170,12 @@ export default function CheckoutPage({
       return;
     }
 
-    // Validate order data
-    const orderValidation = validateOrderData({
-      email: sanitizedEmail,
-      customerName: sanitizedCustomerName,
-      specialInstructions: sanitizedSpecialInstructions,
+    // Validate order data using OrderValidator
+    const orderValidation = orderValidator.validateCompleteOrder({
       items: cart.map((item) => ({
         quantity: item.quantity,
         price: item.price,
+        name: item.name,
       })),
       subtotal,
       tip,
@@ -309,6 +309,17 @@ export default function CheckoutPage({
   const handleMethodToggle = (methodId: string) => {
     setSelectedPayment(methodId);
   };
+
+  // Validate tip amount when it changes
+  useEffect(() => {
+    if (tip > 0) {
+      const tipValidation = orderValidator.validateTipAmount(tip, subtotal);
+      if (!tipValidation.isValid) {
+        toast.error(tipValidation.errors[0]);
+        setTip(0); // Reset tip to 0 if invalid
+      }
+    }
+  }, [tip, subtotal, orderValidator]);
 
   if (loading) {
     return (

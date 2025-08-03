@@ -215,106 +215,97 @@ export async function getRecentPayments() {
   const currency = await getRestaurantCurrency(restaurantId);
 
   try {
-    // Get card payments from payments table
-    const { data: cardPayments, error: cardError } = await supabase
+    // Get all payments from payments table (both card and cash)
+    const { data: allPayments, error: paymentsError } = await supabase
       .from("payments")
       .select(
         `
         id,
         amount,
-        method,
+        currency,
         status,
+        method,
         created_at,
-        orders (
-          table_id,
-          tables (
-            number
-          )
-        )
+        order_id,
+        stripe_payment_id,
+        refund_id
       `
       )
       .eq("restaurant_id", restaurantId)
       .order("created_at", { ascending: false })
       .limit(10);
 
-    if (cardError) throw cardError;
+    if (paymentsError) throw paymentsError;
 
-    // Get cash orders from orders table (where stripe_payment_intent_id is null)
-    const { data: cashOrders, error: cashError } = await supabase
+    // Get all corresponding orders
+    const allOrderIds = (allPayments || [])
+      .map((p) => p.order_id)
+      .filter(Boolean);
+
+    const { data: orders, error: ordersError } = await supabase
       .from("orders")
       .select(
         `
         id,
+        order_number,
         total_amount,
-        created_at,
-        status,
+        table_id,
+        notes,
         customer_name,
         tables (
           number
         )
       `
       )
-      .eq("restaurant_id", restaurantId)
-      .is("stripe_payment_intent_id", null)
-      .order("created_at", { ascending: false })
-      .limit(10);
+      .in("id", allOrderIds);
 
-    if (cashError) throw cashError;
+    if (ordersError) throw ordersError;
 
-    // Transform card payments
-    const cardPaymentsData =
-      cardPayments?.map((payment) => {
-        const timeAgo = getTimeAgo(new Date(payment.created_at));
-        const order = payment.orders?.[0];
+    // Create a map for quick lookup
+    const ordersMap = new Map((orders || []).map((order) => [order.id, order]));
 
-        return {
-          id: payment.id,
-          amount: formatAmountWithCurrency(payment.amount, currency),
-          method: payment.method || "card",
-          status: payment.status,
-          time: timeAgo,
-          customer: order?.tables?.[0]?.number
-            ? `Table ${order.tables[0].number}`
-            : "Guest",
-          table: order?.tables?.[0]?.number || null,
-          orderId: payment.id, // Use payment id since order doesn't have id in this structure
-          tip: 0, // No tip data in this structure
-          fee: 0, // No fee data in this structure
-          created_at: payment.created_at, // Keep for sorting
-        };
-      }) || [];
+    // Transform payments to match the payments page structure
+    const transformedPayments = (allPayments || []).map((payment) => {
+      const order = ordersMap.get(payment.order_id);
 
-    // Transform cash orders
-    const cashOrdersData =
-      cashOrders?.map((order) => {
-        const timeAgo = getTimeAgo(new Date(order.created_at));
+      return {
+        id: payment.id,
+        transactionId: payment.id,
+        orderId: payment.order_id,
+        orderNumber:
+          order?.order_number || `#${payment.order_id?.slice(-8) || "N/A"}`,
+        amount: payment.amount,
+        currency: payment.currency || currency,
+        status: payment.status,
+        method: payment.method,
+        created_at: payment.created_at,
+        order_id: payment.order_id,
+        stripe_payment_id: payment.stripe_payment_id,
+        refund_id: payment.refund_id,
+        customer_name: order?.customer_name || "Guest",
+        table_number: order?.tables?.[0]?.number || null,
+        order: order
+          ? {
+              id: order.id,
+              order_number: order.order_number,
+              total_amount: order.total_amount,
+              table_id: order.table_id,
+              notes: order.notes,
+              customer_name: order.customer_name,
+              tables: order.tables?.[0]
+                ? { number: order.tables[0].number }
+                : undefined,
+            }
+          : undefined,
+      };
+    });
 
-        return {
-          id: `cash-${order.id}`,
-          amount: formatAmountWithCurrency(order.total_amount, currency),
-          method: "cash",
-          status: order.status === "completed" ? "completed" : "pending",
-          time: timeAgo,
-          customer: order.customer_name || "Guest",
-          table: order.tables?.[0]?.number || null,
-          orderId: order.id,
-          tip: 0, // No tip data in this structure
-          fee: 0, // No fee data in this structure
-          created_at: order.created_at, // Keep for sorting
-        };
-      }) || [];
-
-    // Combine and sort by creation date, take top 5
-    const allPayments = [...cardPaymentsData, ...cashOrdersData]
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-      .slice(0, 5);
+    // Take top 5 most recent payments
+    const recentPaymentsData = transformedPayments.slice(0, 5);
 
     return {
       success: true,
-      data: allPayments,
+      data: recentPaymentsData,
     };
   } catch (error) {
     console.error("Error fetching recent payments:", error);

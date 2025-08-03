@@ -85,9 +85,10 @@ export function parseCurrencyAmount(
 
 // Helper function to format amount with currency symbol
 export function formatAmountWithCurrency(
-  amount: number,
+  amount: number | string,
   currency: string = "CHF"
 ): string {
   const symbol = getCurrencySymbol(currency);
-  return `${symbol} ${amount.toFixed(2)}`;
+  const numericAmount = typeof amount === 'number' ? amount : Number(amount) || 0;
+  return `${symbol} ${numericAmount.toFixed(2)}`;
 }

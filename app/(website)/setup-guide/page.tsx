@@ -64,7 +64,7 @@ const setupSteps = [
     tasks: [
       "Compare Starter, Pro, and Elite plans",
       "Choose monthly or annual billing",
-      "Start 14-day free trial",
+      "Start 30-day free trial",
       "Complete secure payment setup",
     ],
   },
@@ -133,12 +133,8 @@ export default function SetupGuidePage() {
       <section className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
         {/* Background gradient effects */}
         <div className="absolute inset-0 overflow-hidden">
-          <GradientBlob
-            className="-top-1/2 -right-1/2 w-full h-full"
-          />
-          <GradientBlob
-            className="-bottom-1/2 -left-1/2 w-full h-full"
-          />
+          <GradientBlob className="-top-1/2 -right-1/2 w-full h-full" />
+          <GradientBlob className="-bottom-1/2 -left-1/2 w-full h-full" />
         </div>
 
         {/* Video container with enhanced styling */}
@@ -172,8 +168,8 @@ export default function SetupGuidePage() {
           {/* Video description */}
           <div className="mt-8 text-center">
             <p className="text-base text-gray-600 dark:text-gray-300">
-              Learn how to set up your restaurant&apos;s complete digital ordering
-              system
+              Learn how to set up your restaurant&apos;s complete digital
+              ordering system
             </p>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
               Complete setup in under 1 hour
@@ -221,7 +217,7 @@ export default function SetupGuidePage() {
               className="bg-white rounded-xl p-6 shadow-sm text-center"
             >
               <Shield className="h-8 w-8 mx-auto mb-4 text-green-600" />
-              <h3 className="text-2xl font-bold mb-2">14 Days</h3>
+              <h3 className="text-2xl font-bold mb-2">30 Days</h3>
               <p className="text-gray-600">Free Trial</p>
             </motion.div>
           </div>
@@ -352,7 +348,7 @@ export default function SetupGuidePage() {
             secondaryButtonText="Contact Support"
             secondaryButtonHref="/contact"
             features={[
-              "14-day free trial",
+              "30-day free trial",
               "No credit card required",
               "Guided setup process",
               "24/7 support available",

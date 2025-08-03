@@ -1334,6 +1334,15 @@ export async function POST(req: Request) {
           break;
         }
 
+        // Skip payment creation for QR payments as they're already handled above
+        if (paymentIntent.metadata.isQRPayment === "true") {
+          console.log(
+            "Skipping duplicate payment creation for QR payment:",
+            paymentIntent.id
+          );
+          break;
+        }
+
         // Use the new function to create payment with fallback
         const { error: createError } = await adminSupabase.rpc(
           "create_payment_with_fallback",
@@ -1501,6 +1510,15 @@ export async function POST(req: Request) {
             paymentIntent.id,
             "metadata:",
             paymentIntent.metadata
+          );
+          break;
+        }
+
+        // Skip payment creation for QR payments as they're already handled above
+        if (paymentIntent.metadata.isQRPayment === "true") {
+          console.log(
+            "Skipping duplicate payment creation for QR payment:",
+            paymentIntent.id
           );
           break;
         }
@@ -1693,7 +1711,6 @@ export async function POST(req: Request) {
         });
 
         // Only process charges that are customer payments to restaurants
-        // Skip subscription-related charges
         if (
           charge.metadata.subscriptionId ||
           charge.metadata.isUpgrade ||
@@ -1721,6 +1738,25 @@ export async function POST(req: Request) {
           break;
         }
 
+        // Check if a payment record already exists for this order
+        if (charge.metadata.orderId) {
+          const { data: existingPayment, error: checkError } =
+            await adminSupabase
+              .from("payments")
+              .select("id")
+              .eq("order_id", charge.metadata.orderId)
+              .single();
+
+          if (existingPayment) {
+            console.log(
+              "Payment record already exists for order:",
+              charge.metadata.orderId,
+              "Skipping charge.succeeded payment creation"
+            );
+            break;
+          }
+        }
+
         // Create payment record for customer payment to restaurant
         const { error: createError } = await adminSupabase.rpc(
           "create_payment_with_fallback",
@@ -1737,7 +1773,11 @@ export async function POST(req: Request) {
 
         if (createError) {
           console.error("Error creating payment from charge:", createError);
-          return new NextResponse("Error creating payment", { status: 500 });
+          // Don't return error response here as the payment was already processed in payment_intent.succeeded
+          console.log(
+            "Continuing despite payment creation error - payment may already exist"
+          );
+          break;
         }
 
         console.log("Successfully created payment from charge:", charge.id);
@@ -2549,7 +2589,93 @@ export async function POST(req: Request) {
           customer: session.customer,
         });
 
-        // Only handle subscription checkouts
+        // Handle QR payment checkouts
+        if (
+          session.mode === "payment" &&
+          session.metadata?.isQRPayment === "true"
+        ) {
+          console.log("Processing QR payment checkout session:", {
+            sessionId: session.id,
+            orderId: session.metadata.orderId,
+            restaurantId: session.metadata.restaurantId,
+            amount: session.amount_total,
+          });
+
+          // Get the payment intent from the session
+          if (!session.payment_intent) {
+            console.error(
+              "No payment intent found in checkout session:",
+              session.id
+            );
+            return new NextResponse("No payment intent in session", {
+              status: 400,
+            });
+          }
+
+          const paymentIntent = await stripe.paymentIntents.retrieve(
+            session.payment_intent as string
+          );
+
+          // Update order status to preparing (not completed) for card payments
+          // Card orders should go to preparing status when paid, and only to completed when served
+          if (session.metadata.orderId) {
+            const { error: orderUpdateError } = await adminSupabase
+              .from("orders")
+              .update({
+                status: "preparing",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", session.metadata.orderId);
+
+            if (orderUpdateError) {
+              console.error("Error updating order status:", orderUpdateError);
+            } else {
+              console.log(
+                "Order status updated to preparing (card payment completed):",
+                session.metadata.orderId
+              );
+            }
+          }
+
+          // Create payment record using the existing function
+          console.log("Creating payment record for QR checkout session:", {
+            restaurantId: session.metadata.restaurantId,
+            orderId: session.metadata.orderId,
+            amount: (session.amount_total || 0) / 100,
+            paymentIntentId: session.payment_intent,
+            currency: session.currency?.toUpperCase() || "CHF",
+          });
+
+          const { error: createError } = await adminSupabase.rpc(
+            "create_payment_with_fallback",
+            [
+              session.metadata.restaurantId,
+              session.metadata.orderId,
+              (session.amount_total || 0) / 100, // Convert from cents
+              "completed",
+              "card",
+              session.payment_intent as string,
+              session.currency?.toUpperCase() || "CHF",
+            ]
+          );
+
+          if (createError) {
+            console.error("Error creating payment record:", createError);
+          } else {
+            console.log(
+              "Payment record created successfully for QR checkout session:",
+              {
+                orderId: session.metadata.orderId,
+                paymentIntentId: session.payment_intent,
+                amount: (session.amount_total || 0) / 100,
+              }
+            );
+          }
+
+          break;
+        }
+
+        // Handle subscription checkouts
         if (session.mode !== "subscription") {
           console.log("Skipping non-subscription checkout:", session.id);
           break;

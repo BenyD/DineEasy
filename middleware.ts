@@ -33,6 +33,10 @@ const healthCheckRoutes = [
   "/api/health/ready",
 ];
 
+// Define webhook routes that should bypass rate limiting
+// Webhooks (especially Stripe) can send multiple events rapidly and should not be rate limited
+const webhookRoutes = ["/api/webhooks"];
+
 export async function middleware(request: NextRequest) {
   const res = NextResponse.next();
 
@@ -64,12 +68,13 @@ export async function middleware(request: NextRequest) {
   );
 
   try {
-    // Apply rate limiting for API routes (except health checks)
+    // Apply rate limiting for API routes (except health checks and webhooks)
     if (
       request.nextUrl.pathname.startsWith("/api/") &&
       !healthCheckRoutes.some((route) =>
         request.nextUrl.pathname.startsWith(route)
-      )
+      ) &&
+      !webhookRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
     ) {
       const rateLimitConfig = getRateLimitConfig(request.nextUrl.pathname);
       const rateLimiter = createRateLimit(rateLimitConfig);

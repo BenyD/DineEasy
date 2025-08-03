@@ -1,6 +1,6 @@
 export const SUBSCRIPTION = {
   YEARLY_DISCOUNT_PERCENTAGE: 20,
-  TRIAL_DAYS: 14,
+  TRIAL_DAYS: 30,
   BILLING_PERIODS: {
     monthly: "monthly",
     yearly: "yearly",

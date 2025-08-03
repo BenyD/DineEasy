@@ -6,6 +6,7 @@ export interface OrderLimits {
   maxOrderAmount: number;
   minOrderAmount: number;
   maxTipPercentage: number;
+  maxTipAmount: number;
   orderTimeoutMinutes: number;
   maxOrdersPerTable: number;
   maxOrdersPerHour: number;
@@ -17,6 +18,7 @@ export const DEFAULT_ORDER_LIMITS: OrderLimits = {
   maxOrderAmount: 1000, // CHF
   minOrderAmount: 5, // CHF
   maxTipPercentage: 50, // 50% of subtotal
+  maxTipAmount: 200, // CHF maximum tip amount
   orderTimeoutMinutes: 30,
   maxOrdersPerTable: 5,
   maxOrdersPerHour: 10,
@@ -110,6 +112,10 @@ export class OrderValidator {
       errors.push(
         `Tip cannot exceed ${this.limits.maxTipPercentage}% of order total`
       );
+    }
+
+    if (tip > this.limits.maxTipAmount) {
+      errors.push(`Tip cannot exceed ${this.limits.maxTipAmount} CHF`);
     }
 
     return {

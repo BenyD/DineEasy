@@ -5,9 +5,10 @@ import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 
 interface OrderCounts {
   active: number;
-  new: number;
+  pending: number;
   preparing: number;
   ready: number;
+  served: number;
   completed: number;
   total: number;
 }
@@ -16,9 +17,10 @@ export function useOrderCounts() {
   const { restaurant } = useRestaurantSettings();
   const [counts, setCounts] = useState<OrderCounts>({
     active: 0,
-    new: 0,
+    pending: 0,
     preparing: 0,
     ready: 0,
+    served: 0,
     completed: 0,
     total: 0,
   });
@@ -37,13 +39,16 @@ export function useOrderCounts() {
 
           switch (newOrder.status) {
             case "pending":
-              newCounts.new += 1;
+              newCounts.pending += 1;
               break;
             case "preparing":
               newCounts.preparing += 1;
               break;
             case "ready":
               newCounts.ready += 1;
+              break;
+            case "served":
+              newCounts.served += 1;
               break;
           }
 
@@ -63,13 +68,16 @@ export function useOrderCounts() {
           ) {
             switch (oldOrder.status) {
               case "pending":
-                newCounts.new = Math.max(0, newCounts.new - 1);
+                newCounts.pending = Math.max(0, newCounts.pending - 1);
                 break;
               case "preparing":
                 newCounts.preparing = Math.max(0, newCounts.preparing - 1);
                 break;
               case "ready":
                 newCounts.ready = Math.max(0, newCounts.ready - 1);
+                break;
+              case "served":
+                newCounts.served = Math.max(0, newCounts.served - 1);
                 break;
             }
           }
@@ -82,13 +90,16 @@ export function useOrderCounts() {
         ) {
           switch (updatedOrder.status) {
             case "pending":
-              newCounts.new += 1;
+              newCounts.pending += 1;
               break;
             case "preparing":
               newCounts.preparing += 1;
               break;
             case "ready":
               newCounts.ready += 1;
+              break;
+            case "served":
+              newCounts.served += 1;
               break;
           }
         } else {
@@ -113,13 +124,16 @@ export function useOrderCounts() {
 
           switch (deletedOrder.status) {
             case "pending":
-              newCounts.new = Math.max(0, newCounts.new - 1);
+              newCounts.pending = Math.max(0, newCounts.pending - 1);
               break;
             case "preparing":
               newCounts.preparing = Math.max(0, newCounts.preparing - 1);
               break;
             case "ready":
               newCounts.ready = Math.max(0, newCounts.ready - 1);
+              break;
+            case "served":
+              newCounts.served = Math.max(0, newCounts.served - 1);
               break;
           }
         } else {
@@ -145,9 +159,10 @@ export function useOrderCounts() {
           const orders = result.data;
           const newCounts: OrderCounts = {
             active: 0,
-            new: 0,
+            pending: 0,
             preparing: 0,
             ready: 0,
+            served: 0,
             completed: 0,
             total: 0,
           };
@@ -159,8 +174,8 @@ export function useOrderCounts() {
               newCounts.total += 1;
 
               switch (order.status) {
-                case "new":
-                  newCounts.new += 1;
+                case "pending":
+                  newCounts.pending += 1;
                   break;
                 case "preparing":
                   newCounts.preparing += 1;
@@ -168,11 +183,15 @@ export function useOrderCounts() {
                 case "ready":
                   newCounts.ready += 1;
                   break;
+                case "served":
+                  newCounts.served += 1;
+                  break;
               }
             }
             // Don't count completed/cancelled orders in active counts
           });
 
+          console.log("Order counts fetched:", newCounts);
           setCounts(newCounts);
         }
       } catch (error) {

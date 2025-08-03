@@ -562,11 +562,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       .slice(0, 2)}
                   </AvatarFallback>
                 </Avatar>
-                {/* Plan Badge - Always show the plan */}
+                {/* Plan Badge - Show with different colors based on status */}
                 {restaurant.subscription_plan && (
                   <Badge
                     variant="outline"
-                    className="absolute -bottom-1 -right-1 h-5 px-1.5 bg-white border-gray-200 text-gray-700 text-xs font-medium shadow-sm"
+                    className={cn(
+                      "absolute -bottom-1 -right-1 h-5 px-1.5 text-xs font-medium shadow-sm",
+                      restaurant.subscription_status === "trialing"
+                        ? "bg-blue-50 border-blue-200 text-blue-700"
+                        : restaurant.subscription_status === "active"
+                        ? "bg-green-50 border-green-200 text-green-700"
+                        : restaurant.subscription_status === "past_due"
+                        ? "bg-red-50 border-red-200 text-red-700"
+                        : "bg-white border-gray-200 text-gray-700"
+                    )}
                   >
                     {restaurant.subscription_plan.charAt(0).toUpperCase() +
                       restaurant.subscription_plan.slice(1).toLowerCase()}
@@ -618,7 +627,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   </span>
                 </div>
                 {/* Trial Status - Show below restaurant status */}
-                {restaurant.subscription_plan && (
+                {restaurant.subscription_status === "trialing" && (
                   <div className="flex items-center gap-1 mt-1">
                     <Badge
                       variant="outline"

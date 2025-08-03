@@ -645,9 +645,13 @@ function TablesPage() {
   const TableForm = ({
     table,
     onClose,
+    addTable,
+    fetchData,
   }: {
     table?: Table | null;
     onClose: () => void;
+    addTable?: (table: Table) => void;
+    fetchData: () => Promise<void>;
   }) => {
     const [formData, setFormData] = useState({
       number: table?.number || "",
@@ -746,24 +750,30 @@ function TablesPage() {
                 : "Table created successfully")
           );
 
-          // Close the dialog first
-          onClose();
+          // For new table creation, add the table optimistically and wait for confirmation
+          if (!table && result.data && addTable) {
+            const newTable = result.data;
 
-          // For new table creation, add a fallback refresh mechanism
-          if (!table && result.data) {
-            const newTableId = result.data.id;
-            const newTableNumber = result.data.number;
+            // Add the table optimistically to the UI immediately
+            addTable(newTable);
 
-            // Check if the table appears in the list after a short delay
+            // Close the dialog after the table is added to the UI
+            onClose();
+
+            // Verify the table was properly added after a short delay
+            // This ensures the UI reflects the change even if WebSocket is delayed
             setTimeout(() => {
-              const tableExists = tables.some((t) => t.id === newTableId);
+              const tableExists = tables.some((t) => t.id === newTable.id);
               if (!tableExists) {
                 console.log("Table not found in list, refreshing data...");
                 fetchData();
               } else {
-                console.log("Table found in list via WebSocket");
+                console.log("Table successfully added to UI");
               }
-            }, 500); // Wait 500ms for WebSocket to update
+            }, 100); // Reduced delay since we're adding optimistically
+          } else {
+            // For table updates, close the dialog immediately
+            onClose();
           }
         } else {
           toast.error(result.error || "Failed to save table");
@@ -1165,7 +1175,11 @@ function TablesPage() {
               <DialogHeader>
                 <DialogTitle>Add New Table</DialogTitle>
               </DialogHeader>
-              <TableForm onClose={() => setIsAddDialogOpen(false)} />
+              <TableForm
+                onClose={() => setIsAddDialogOpen(false)}
+                addTable={addTable}
+                fetchData={fetchData}
+              />
             </DialogContent>
           </Dialog>
 
@@ -1775,6 +1789,8 @@ function TablesPage() {
                                 <TableForm
                                   table={table}
                                   onClose={() => setEditingTable(null)}
+                                  addTable={addTable}
+                                  fetchData={fetchData}
                                 />
                               </DialogContent>
                             </Dialog>

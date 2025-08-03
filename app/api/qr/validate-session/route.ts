@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
           `
           )
           .eq("table_id", tableId)
-          .eq("status", "pending")
+          .in("status", ["pending", "completed"])
           .order("created_at", { ascending: false })
           .limit(1)
           .single();
@@ -180,10 +180,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate order status
-    if (order.status !== "pending") {
+    // Validate order status - accept both pending and completed orders
+    if (order.status !== "pending" && order.status !== "completed") {
       return NextResponse.json(
-        { success: false, error: "Order is not in pending status" },
+        { success: false, error: "Order is not in a valid status" },
         { status: 400 }
       );
     }

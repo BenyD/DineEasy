@@ -55,7 +55,7 @@ export default function LandingPage() {
       "@type": "Offer",
       price: "0",
       priceCurrency: "CHF",
-      description: "14-day free trial",
+      description: "30-day free trial",
     },
     aggregateRating: {
       "@type": "AggregateRating",
@@ -160,7 +160,7 @@ export default function LandingPage() {
                     onClick={() => (window.location.href = "/signup")}
                   >
                     <span className="relative z-10 flex items-center justify-center gap-2">
-                      Start 14-Day Free Trial
+                      Start 30-Day Free Trial
                       <motion.span
                         animate={{ x: [0, 4, 0] }}
                         transition={{
@@ -204,7 +204,7 @@ export default function LandingPage() {
                   className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6"
                 >
                   {[
-                    { text: "14-day free trial", delay: 0, icon: Clock4 },
+                    { text: "30-day free trial", delay: 0, icon: Clock4 },
                     {
                       text: "No credit card required",
                       delay: 0.1,
@@ -962,7 +962,7 @@ export default function LandingPage() {
         <CTASection
           title="Ready to Transform Your Restaurant?"
           subtitle="Join thousands of restaurants already using DineEasy to streamline their operations and delight customers."
-          buttonText="Start 14-Day Free Trial"
+          buttonText="Start 30-Day Free Trial"
           buttonHref="/signup"
         />
       </PageWrapper>

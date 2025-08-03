@@ -28,6 +28,7 @@ import {
 import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 import { useRestaurantSettings } from "@/lib/store/restaurant-settings";
 import { toast } from "sonner";
+import { getDisplayOrderNumber } from "@/lib/utils/order";
 
 interface OrderItem {
   name: string;
@@ -143,7 +144,6 @@ export default function KitchenPage() {
       if (result.success && result.data) {
         const mappedOrders = result.data.map((order: DBOrder) => ({
           id: order.id,
-          orderNumber: order.orderNumber || `#${order.id.slice(0, 8)}`,
           tableNumber: order.tableNumber,
           customerName: order.customerName || "",
           items: order.items.map((item) => ({
@@ -158,6 +158,7 @@ export default function KitchenPage() {
           notes: order.notes || "",
           priority: order.priority || "normal",
           total: order.total,
+          orderNumber: getDisplayOrderNumber(order), // Use centralized utility
         }));
         setOrders(mappedOrders);
         // Set initial count after first load
@@ -186,7 +187,7 @@ export default function KitchenPage() {
   };
 
   // WebSocket for real-time updates
-  useOrdersWebSocket({
+  const { isConnected } = useOrdersWebSocket({
     restaurantId: restaurant?.id,
     onOrderAdded: async (order) => {
       // Fetch the full order from the DB to get customerName and tableNumber
@@ -209,16 +210,21 @@ export default function KitchenPage() {
       setOrders((prev) => [
         {
           id: order.id,
-          orderNumber: order.order_number || `#${order.id.slice(0, 8)}`,
-          tableNumber,
-          customerName,
-          items: [], // Optionally fetch items if needed
+          tableNumber: order.tableNumber,
+          customerName: order.customerName || "",
+          items: order.items.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            modifiers: item.modifiers || [],
+          })),
           status: order.status,
-          time: new Date(order.created_at),
-          estimatedTime: 15,
+          time: new Date(order.time),
+          estimatedTime: order.estimatedTime || 15,
           notes: order.notes || "",
-          priority: "normal",
+          priority: order.priority || "normal",
           total: order.total_amount,
+          orderNumber: getDisplayOrderNumber(order), // Use centralized utility
         },
         ...prev,
       ]);
@@ -285,10 +291,81 @@ export default function KitchenPage() {
 
   if (loading || !currentTime) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-gray-300 border-t-green-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Loading kitchen display...</p>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header Skeleton */}
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="px-4 py-4 lg:px-6 lg:py-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="space-y-2">
+                  <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+                  <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg">
+                  <div className="w-2 h-2 bg-gray-200 rounded-full animate-pulse" />
+                  <div className="h-4 w-12 bg-gray-200 rounded animate-pulse" />
+                </div>
+                <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg">
+                  <div className="w-4 h-4 bg-gray-200 rounded animate-pulse" />
+                  <div className="h-4 w-16 bg-gray-200 rounded animate-pulse" />
+                </div>
+                <div className="h-9 w-20 bg-gray-200 rounded animate-pulse" />
+                <div className="h-9 w-16 bg-gray-200 rounded animate-pulse" />
+                <div className="h-9 w-24 bg-gray-200 rounded animate-pulse" />
+                <div className="h-9 w-20 bg-gray-200 rounded animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Content Skeleton */}
+        <div className="p-6 space-y-6">
+          {/* Orders Grid Skeleton */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-white rounded-lg border">
+                <div className="p-4 border-b">
+                  <div className="flex items-center justify-between">
+                    <div className="h-6 w-32 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-6 w-8 bg-gray-200 rounded-full animate-pulse" />
+                  </div>
+                </div>
+                <div className="p-4 space-y-4">
+                  {[...Array(4)].map((_, j) => (
+                    <div key={j} className="border rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse" />
+                          <div className="space-y-1">
+                            <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+                            <div className="h-3 w-24 bg-gray-200 rounded animate-pulse" />
+                          </div>
+                        </div>
+                        <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="h-4 w-full bg-gray-200 rounded animate-pulse" />
+                        <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="h-6 w-20 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-20 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-8 w-20 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-8 w-20 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -361,6 +438,21 @@ export default function KitchenPage() {
               className="flex items-center gap-3"
               variants={itemVariants}
             >
+              {/* WebSocket Status */}
+              <motion.div
+                className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg"
+                variants={cardVariants}
+              >
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    isConnected ? "bg-green-500" : "bg-red-500"
+                  }`}
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  {isConnected ? "Live" : "Offline"}
+                </span>
+              </motion.div>
+
               {/* Current Time */}
               <motion.div
                 className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg"

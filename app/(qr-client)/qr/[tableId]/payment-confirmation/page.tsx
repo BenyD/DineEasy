@@ -38,12 +38,13 @@ export default function PaymentConfirmationPage({
   const [isNavigatingToMenu, setIsNavigatingToMenu] = useState(false);
 
   const validateCheckoutSession = useCallback(
-    async (sessionId: string, orderIdParam: string) => {
+    async (sessionId: string, orderIdParam: string, retryCount = 0) => {
       try {
         setIsProcessing(true);
         console.log("Validating checkout session:", {
           sessionId,
           orderIdParam,
+          retryCount,
         });
 
         const response = await fetch("/api/qr/validate-session", {
@@ -62,6 +63,30 @@ export default function PaymentConfirmationPage({
 
         if (!result.success) {
           console.error("Session validation failed:", result.error);
+
+          // If the error is about order not being found or not in valid status,
+          // and we haven't retried too many times, retry after a delay
+          if (
+            (result.error?.includes("not found") ||
+              result.error?.includes("not in a valid status")) &&
+            retryCount < 3
+          ) {
+            console.log(
+              `Retrying validation in ${(retryCount + 1) * 2} seconds...`
+            );
+            setTimeout(
+              () => {
+                validateCheckoutSession(
+                  sessionId,
+                  orderIdParam,
+                  retryCount + 1
+                );
+              },
+              (retryCount + 1) * 2000
+            );
+            return;
+          }
+
           setPaymentStatus("failed");
 
           // Provide more specific error messages based on the error type
@@ -74,7 +99,7 @@ export default function PaymentConfirmationPage({
           } else if (result.error?.includes("not found")) {
             userFriendlyError =
               "Order not found. Please return to the menu and place your order again.";
-          } else if (result.error?.includes("not in pending status")) {
+          } else if (result.error?.includes("not in a valid status")) {
             userFriendlyError =
               "This order has already been processed. Please check your order status.";
           } else if (result.error?.includes("timed out")) {
@@ -112,6 +137,21 @@ export default function PaymentConfirmationPage({
         }
       } catch (error: any) {
         console.error("Session validation error:", error);
+
+        // Retry on network errors
+        if (retryCount < 3) {
+          console.log(
+            `Retrying validation due to network error in ${(retryCount + 1) * 2} seconds...`
+          );
+          setTimeout(
+            () => {
+              validateCheckoutSession(sessionId, orderIdParam, retryCount + 1);
+            },
+            (retryCount + 1) * 2000
+          );
+          return;
+        }
+
         setPaymentStatus("failed");
         setError("Payment validation failed. Please try again.");
       } finally {

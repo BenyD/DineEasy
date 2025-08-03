@@ -26,6 +26,65 @@ import { formatAmountWithCurrency } from "@/lib/utils/currency";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
+import { getDisplayOrderNumber } from "@/lib/utils/order";
+
+// Utility function to calculate ETA based on menu item preparation times
+function calculateOrderETA(orderDetails: OrderDetails): number {
+  if (!orderDetails.order_items || orderDetails.order_items.length === 0) {
+    return 15; // Default fallback
+  }
+
+  let maxPreparationTime = 0;
+  let totalPreparationTime = 0;
+  let itemCount = 0;
+
+  orderDetails.order_items.forEach((item) => {
+    if (item.menu_items?.preparation_time) {
+      let prepTimeMinutes = 0;
+
+      // Parse preparation time from interval format (e.g., "00:15:00")
+      if (typeof item.menu_items.preparation_time === "string") {
+        const parts = item.menu_items.preparation_time.split(":");
+        if (parts.length === 3) {
+          prepTimeMinutes =
+            parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+        }
+      }
+
+      // If it's already a number (minutes)
+      if (typeof item.menu_items.preparation_time === "number") {
+        prepTimeMinutes = item.menu_items.preparation_time;
+      }
+
+      // Track the longest preparation time (parallel cooking)
+      maxPreparationTime = Math.max(maxPreparationTime, prepTimeMinutes);
+
+      // Add to total for sequential items
+      totalPreparationTime += prepTimeMinutes * item.quantity;
+      itemCount += item.quantity;
+    }
+  });
+
+  // ETA Logic:
+  // 1. Base time: Longest preparation time (parallel cooking)
+  // 2. Add buffer for kitchen efficiency (20% of base time)
+  // 3. Add time for order processing and plating (5 minutes)
+  // 4. Consider quantity: If multiple items, add some sequential time
+
+  const baseTime = maxPreparationTime;
+  const efficiencyBuffer = Math.ceil(baseTime * 0.2); // 20% buffer
+  const processingTime = 5; // 5 minutes for order processing, plating, etc.
+
+  // If multiple different items, add some sequential time
+  const sequentialTime =
+    itemCount > 1 ? Math.ceil(totalPreparationTime * 0.1) : 0;
+
+  const totalETA =
+    baseTime + efficiencyBuffer + processingTime + sequentialTime;
+
+  // Ensure minimum 10 minutes and maximum 60 minutes
+  return Math.max(10, Math.min(60, totalETA));
+}
 
 interface OrderDetails {
   id: string;
@@ -37,6 +96,7 @@ interface OrderDetails {
   notes?: string;
   created_at: string;
   updated_at: string;
+  estimated_time?: number;
   order_items: Array<{
     id: string;
     menu_item_id: string;
@@ -46,6 +106,7 @@ interface OrderDetails {
     menu_items: {
       name: string;
       description?: string;
+      preparation_time?: string | number;
     };
   }>;
 }
@@ -73,7 +134,7 @@ const orderStatusSteps = [
   },
   {
     key: "ready",
-    label: "Ready for Pickup",
+    label: "Order Ready",
     icon: Truck,
     color: "bg-green-700",
   },
@@ -113,27 +174,35 @@ export default function OrderTrackingPage({
     error: trackingError,
   } = useOrderTracking({
     orderId: orderId,
+    enabled: orderDetails?.status !== "completed", // Disable tracking for completed orders
     onStatusUpdate: (status) => {
       console.log("Order status updated:", status);
       setLastUpdate(new Date());
-      toast.success(`Order status updated: ${status}`, {
-        style: {
-          background: "#10b981",
-          color: "white",
-        },
-      });
+
+      // Don't show toast for completed status to avoid confusion
+      if (status !== "completed") {
+        toast.success(`Order status updated: ${status}`, {
+          style: {
+            background: "#10b981",
+            color: "white",
+          },
+        });
+      }
     },
     onConnectionChange: (connected) => {
       console.log("Order tracking connection changed:", connected);
     },
     onError: (error) => {
       console.error("Order tracking error:", error);
-      toast.error(`Tracking error: ${error}`, {
-        style: {
-          background: "#ef4444",
-          color: "white",
-        },
-      });
+      // Don't show error toast for completed orders as connection is expected to end
+      if (orderDetails?.status !== "completed") {
+        toast.error(`Tracking error: ${error}`, {
+          style: {
+            background: "#ef4444",
+            color: "white",
+          },
+        });
+      }
     },
   });
 
@@ -243,6 +312,11 @@ export default function OrderTrackingPage({
   const currentStatus = orderStatus || orderDetails.status;
   const currentStepIndex = getCurrentStepIndex();
 
+  // Check if this is a card order (has Stripe payment info)
+  const isCardOrder =
+    orderDetails.stripe_payment_intent_id ||
+    orderDetails.stripe_checkout_session_id;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Payment Success Banner */}
@@ -296,19 +370,33 @@ export default function OrderTrackingPage({
             </div>
             <div className="flex items-center gap-2">
               {/* Connection Status */}
-              <div className="flex items-center gap-1">
-                {isConnected ? (
-                  <Wifi className="w-4 h-4 text-green-600" />
-                ) : (
-                  <WifiOff className="w-4 h-4 text-red-600" />
-                )}
-              </div>
-              <Badge
-                variant={isConnected ? "default" : "destructive"}
-                className={isConnected ? "bg-green-600 hover:bg-green-700" : ""}
-              >
-                {isConnected ? "Live" : "Offline"}
-              </Badge>
+              {currentStatus !== "completed" && (
+                <>
+                  <div className="flex items-center gap-1">
+                    {isConnected ? (
+                      <Wifi className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <WifiOff className="w-4 h-4 text-red-600" />
+                    )}
+                  </div>
+                  <Badge
+                    variant={isConnected ? "default" : "destructive"}
+                    className={
+                      isConnected ? "bg-green-600 hover:bg-green-700" : ""
+                    }
+                  >
+                    {isConnected ? "Live" : "Offline"}
+                  </Badge>
+                </>
+              )}
+              {currentStatus === "completed" && (
+                <Badge
+                  variant="default"
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  Complete
+                </Badge>
+              )}
             </div>
           </div>
 
@@ -317,7 +405,7 @@ export default function OrderTrackingPage({
             <div className="flex justify-between items-start mb-2">
               <div>
                 <h2 className="font-semibold text-gray-900">
-                  Order #{orderDetails.order_number}
+                  {getDisplayOrderNumber(orderDetails)}
                 </h2>
                 <p className="text-sm text-gray-600">
                   {new Date(orderDetails.created_at).toLocaleString()}
@@ -335,8 +423,34 @@ export default function OrderTrackingPage({
                 </p>
               </div>
             </div>
+
+            {/* Estimated Time */}
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-800">
+                  Estimated Time: {calculateOrderETA(orderDetails)} minutes
+                </span>
+              </div>
+              <p className="text-xs text-blue-600 mt-1">
+                Calculated based on your order items and kitchen efficiency
+              </p>
+            </div>
+
+            {/* Payment Status Indicator */}
+            {isCardOrder && (
+              <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-800">
+                    Order is paid
+                  </span>
+                </div>
+              </div>
+            )}
+
             {lastUpdate && (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 mt-2">
                 Last updated: {lastUpdate.toLocaleTimeString()}
               </p>
             )}
@@ -347,9 +461,28 @@ export default function OrderTrackingPage({
       {/* Order Status Timeline */}
       <div className="px-4 py-6">
         <div className="bg-white rounded-lg p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Order Status
-          </h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Order Status
+            </h3>
+            {/* Expected Ready Time */}
+            <div className="text-right">
+              <p className="text-sm text-gray-600">Expected Ready</p>
+              <p className="text-lg font-semibold text-green-600">
+                {(() => {
+                  const orderTime = new Date(orderDetails.created_at);
+                  const calculatedETA = calculateOrderETA(orderDetails);
+                  const expectedTime = new Date(
+                    orderTime.getTime() + calculatedETA * 60000
+                  );
+                  return expectedTime.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                })()}
+              </p>
+            </div>
+          </div>
 
           <div className="space-y-4">
             {orderStatusSteps.map((step, index) => {
@@ -394,7 +527,7 @@ export default function OrderTrackingPage({
                         {currentStatus === "ready" &&
                           "Your order is ready for pickup"}
                         {currentStatus === "completed" &&
-                          "Order completed successfully"}
+                          "Thank you for your order!"}
                       </p>
                     )}
                   </div>
@@ -458,9 +591,39 @@ export default function OrderTrackingPage({
 
         {/* Order Items */}
         <div className="bg-white rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Order Items
-          </h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Order Items</h3>
+            {/* ETA Breakdown */}
+            <div className="text-right">
+              <p className="text-xs text-gray-500">Preparation Times</p>
+              <div className="flex items-center gap-1 text-sm text-gray-600">
+                <Clock className="w-3 h-3" />
+                <span>
+                  {orderDetails.order_items
+                    ?.map((item) => {
+                      const prepTime = item.menu_items?.preparation_time;
+                      if (!prepTime) return null;
+
+                      let minutes = 0;
+                      if (typeof prepTime === "string") {
+                        const parts = prepTime.split(":");
+                        if (parts.length === 3) {
+                          minutes =
+                            parseInt(parts[0], 10) * 60 +
+                            parseInt(parts[1], 10);
+                        }
+                      } else if (typeof prepTime === "number") {
+                        minutes = prepTime;
+                      }
+
+                      return `${minutes}m`;
+                    })
+                    .filter(Boolean)
+                    .join(", ")}
+                </span>
+              </div>
+            </div>
+          </div>
           <div className="space-y-3">
             {orderDetails.order_items && orderDetails.order_items.length > 0 ? (
               orderDetails.order_items.map((item) => (
@@ -539,7 +702,7 @@ export default function OrderTrackingPage({
         )}
 
         {/* Connection Status */}
-        {!isConnected && (
+        {!isConnected && currentStatus !== "completed" && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-6">
             <div className="flex items-center gap-2 text-yellow-800">
               <WifiOff className="w-4 h-4" />
@@ -548,6 +711,19 @@ export default function OrderTrackingPage({
             <p className="text-sm text-yellow-700 mt-1">
               Real-time updates are currently unavailable. The page will
               automatically reconnect.
+            </p>
+          </div>
+        )}
+
+        {/* Completed Order Message */}
+        {currentStatus === "completed" && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-6">
+            <div className="flex items-center gap-2 text-green-800">
+              <CheckCircle className="w-4 h-4" />
+              <span className="font-medium">Order Complete</span>
+            </div>
+            <p className="text-sm text-green-700 mt-1">
+              Your order has been completed. Real-time tracking has ended.
             </p>
           </div>
         )}

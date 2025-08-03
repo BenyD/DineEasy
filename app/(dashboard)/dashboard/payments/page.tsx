@@ -186,7 +186,7 @@ export default function PaymentsPage() {
     };
 
     fetchInitialData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refresh stats when page becomes visible
   useEffect(() => {
@@ -239,14 +239,15 @@ export default function PaymentsPage() {
       const { count: cardCount } = await supabase
         .from("payments")
         .select("*", { count: "exact", head: true })
-        .eq("restaurant_id", id);
+        .eq("restaurant_id", id)
+        .eq("method", "card");
 
-      // Get total count for cash orders
+      // Get total count for cash payments (from payments table where method = 'cash')
       const { count: cashCount } = await supabase
-        .from("orders")
+        .from("payments")
         .select("*", { count: "exact", head: true })
         .eq("restaurant_id", id)
-        .is("stripe_payment_intent_id", null);
+        .eq("method", "cash");
 
       const totalTransactionCount = (cardCount || 0) + (cashCount || 0);
       setTotalCount(totalTransactionCount);
@@ -270,62 +271,82 @@ export default function PaymentsPage() {
           created_at,
           order_id,
           stripe_payment_id,
-          refund_id,
-          order:orders (
-            id,
-            total_amount,
-            table_id,
-            notes,
-            customer_name,
-            tables (
-              number
-            )
-          )
+          refund_id
         `
         )
         .eq("restaurant_id", id)
+        .eq("method", "card")
         .order("created_at", { ascending: false });
 
       if (cardError) throw cardError;
 
-      // Get all cash orders from orders table
-      const { data: cashOrders, error: cashError } = await supabase
+      // Get all cash payments from payments table
+      const { data: cashPayments, error: cashError } = await supabase
+        .from("payments")
+        .select(
+          `
+          id,
+          amount,
+          currency,
+          status,
+          method,
+          created_at,
+          order_id,
+          stripe_payment_id,
+          refund_id
+        `
+        )
+        .eq("restaurant_id", id)
+        .eq("method", "cash")
+        .order("created_at", { ascending: false });
+
+      if (cashError) throw cashError;
+
+      // Get all corresponding orders
+      const allOrderIds = [
+        ...(cardPayments || []).map((p) => p.order_id),
+        ...(cashPayments || []).map((p) => p.order_id),
+      ];
+
+      const { data: orders, error: ordersError } = await supabase
         .from("orders")
         .select(
           `
           id,
+          order_number,
           total_amount,
-          created_at,
-          status,
+          table_id,
+          notes,
           customer_name,
           tables (
             number
           )
         `
         )
-        .eq("restaurant_id", id)
-        .is("stripe_payment_intent_id", null)
-        .order("created_at", { ascending: false });
+        .in("id", allOrderIds);
 
-      if (cashError) throw cashError;
+      if (ordersError) throw ordersError;
+
+      // Create a map for quick lookup
+      const ordersMap = new Map(
+        (orders || []).map((order) => [order.id, order])
+      );
 
       // Transform card payments
       const cardPaymentsData = (cardPayments || []).map((payment) => {
-        const order =
-          payment.order &&
-          Array.isArray(payment.order) &&
-          payment.order.length > 0
-            ? payment.order[0]
-            : undefined;
+        const order = ordersMap.get(payment.order_id);
 
         return {
-          id: payment.id,
+          id: payment.id, // Keep payment ID as transaction ID
+          transactionId: payment.id, // Add explicit transaction ID
+          orderId: payment.order_id,
+          orderNumber: order?.order_number || `#${payment.order_id.slice(-8)}`,
           amount: payment.amount,
           currency: payment.currency,
           status: payment.status,
           method: payment.method,
           created_at: payment.created_at,
-          order_id: payment.order_id,
+          order_id: payment.order_id, // Required field for PaymentTransaction interface
           stripe_payment_id: payment.stripe_payment_id,
           refund_id: payment.refund_id,
           customer_name: order?.customer_name,
@@ -333,6 +354,7 @@ export default function PaymentsPage() {
           order: order
             ? {
                 id: order.id,
+                order_number: order.order_number,
                 total_amount: order.total_amount,
                 table_id: order.table_id,
                 notes: order.notes,
@@ -345,33 +367,43 @@ export default function PaymentsPage() {
         };
       });
 
-      // Transform cash orders
-      const cashOrdersData = (cashOrders || []).map((order) => ({
-        id: `cash-${order.id}`,
-        amount: order.total_amount,
-        currency: restaurantCurrency || "CHF", // Use restaurant currency instead of hardcoded USD
-        status: order.status === "completed" ? "completed" : "pending",
-        method: "cash",
-        created_at: order.created_at,
-        order_id: order.id,
-        stripe_payment_id: "",
-        refund_id: undefined,
-        customer_name: order.customer_name,
-        table_number: order.tables?.[0]?.number,
-        order: {
-          id: order.id,
-          total_amount: order.total_amount,
-          table_id: order.id, // Using order id as table_id for cash orders
-          notes: undefined,
-          customer_name: order.customer_name,
-          tables: order.tables?.[0]
-            ? { number: order.tables[0].number }
+      // Transform cash payments
+      const cashPaymentsData = (cashPayments || []).map((payment) => {
+        const order = ordersMap.get(payment.order_id);
+
+        return {
+          id: payment.id, // Keep payment ID as transaction ID
+          transactionId: payment.id, // Add explicit transaction ID
+          orderId: payment.order_id,
+          orderNumber: order?.order_number || `#${payment.order_id.slice(-8)}`,
+          amount: payment.amount,
+          currency: payment.currency,
+          status: payment.status,
+          method: payment.method,
+          created_at: payment.created_at,
+          order_id: payment.order_id, // Required field for PaymentTransaction interface
+          stripe_payment_id: payment.stripe_payment_id,
+          refund_id: payment.refund_id,
+          customer_name: order?.customer_name,
+          table_number: order?.tables?.[0]?.number,
+          order: order
+            ? {
+                id: order.id,
+                order_number: order.order_number,
+                total_amount: order.total_amount,
+                table_id: order.table_id,
+                notes: order.notes,
+                customer_name: order.customer_name,
+                tables: order.tables?.[0]
+                  ? { number: order.tables[0].number }
+                  : undefined,
+              }
             : undefined,
-        },
-      }));
+        };
+      });
 
       // Combine and sort by creation date
-      const allTransactions = [...cardPaymentsData, ...cashOrdersData].sort(
+      const allTransactions = [...cardPaymentsData, ...cashPaymentsData].sort(
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
@@ -957,7 +989,8 @@ export default function PaymentsPage() {
                       )}
                     </Button>
                     <p className="text-xs text-gray-500 text-center mt-3">
-                      You&apos;ll be guided through Stripe&apos;s secure setup process
+                      You&apos;ll be guided through Stripe&apos;s secure setup
+                      process
                     </p>
                   </div>
                 </div>

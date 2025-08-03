@@ -133,7 +133,7 @@ export default function FeaturesPage() {
             onClick={() => (window.location.href = "/signup")}
           >
             <span className="relative z-10 flex items-center justify-center gap-2">
-              Try Free for 14 Days
+              Try Free for 30 Days
               <motion.span
                 animate={{ x: [0, 4, 0] }}
                 transition={{
@@ -163,7 +163,7 @@ export default function FeaturesPage() {
           className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-center sm:gap-6"
         >
           {[
-            { text: "14-day free trial", icon: Clock },
+            { text: "30-day free trial", icon: Clock },
             { text: "No credit card required", icon: Shield },
             { text: "2% commission only", icon: Wallet },
           ].map((item, index) => (
@@ -185,9 +185,7 @@ export default function FeaturesPage() {
 
       {/* Main Features */}
       <section className="relative overflow-hidden bg-white py-16 sm:py-24">
-        <GradientBlob
-          className="absolute left-0 top-0 -z-10 opacity-50"
-        />
+        <GradientBlob className="absolute left-0 top-0 -z-10 opacity-50" />
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {mainFeatures.map((feature, index) => (
             <AnimatedSection
@@ -285,9 +283,7 @@ export default function FeaturesPage() {
 
       {/* Additional Features */}
       <section className="relative bg-gray-50 py-16 sm:py-24">
-        <GradientBlob
-          className="absolute right-0 top-0 -z-10 opacity-50"
-        />
+        <GradientBlob className="absolute right-0 top-0 -z-10 opacity-50" />
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">

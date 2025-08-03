@@ -188,6 +188,7 @@ export interface Order {
   taxAmount: number;
   tipAmount: number;
   notes?: string;
+  orderNumber?: string; // Human-readable order number (e.g., "ORD-2025-001")
   createdAt: Date;
   updatedAt: Date;
 }

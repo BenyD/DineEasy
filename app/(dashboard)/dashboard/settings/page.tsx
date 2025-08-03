@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import {
@@ -231,35 +231,35 @@ export default function SettingsPage() {
   }, [fetchRestaurant]);
 
   // Fetch profile data on component mount
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+  const fetchProfile = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-        if (user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("full_name, avatar_url")
-            .eq("id", user.id)
-            .single();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name, avatar_url")
+          .eq("id", user.id)
+          .single();
 
-          if (profile) {
-            setProfileData({
-              fullName: profile.full_name || "",
-              avatarUrl: profile.avatar_url || "",
-            });
-          }
+        if (profile) {
+          setProfileData({
+            fullName: profile.full_name || "",
+            avatarUrl: profile.avatar_url || "",
+          });
         }
-      } catch (error) {
-        console.error("Error fetching profile:", error);
       }
-    };
-
-    fetchProfile();
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
   // Restaurant WebSocket for real-time status updates
   useRestaurantWebSocket({

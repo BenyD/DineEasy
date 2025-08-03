@@ -158,6 +158,79 @@ export interface Database {
           stripe_account_deleted?: boolean | null;
         };
       };
+      tables: {
+        Row: {
+          id: string;
+          restaurant_id: string;
+          number: string;
+          capacity: number;
+          status: Database["public"]["Enums"]["table_status"];
+          qr_code: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          restaurant_id: string;
+          number: string;
+          capacity: number;
+          status?: Database["public"]["Enums"]["table_status"];
+          qr_code?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          restaurant_id?: string;
+          number?: string;
+          capacity?: number;
+          status?: Database["public"]["Enums"]["table_status"];
+          qr_code?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      payments: {
+        Row: {
+          id: string;
+          restaurant_id: string;
+          order_id: string;
+          amount: number;
+          status: Database["public"]["Enums"]["payment_status"];
+          method: Database["public"]["Enums"]["payment_method"];
+          stripe_payment_id: string | null;
+          refund_id: string | null;
+          created_at: string;
+          updated_at: string;
+          currency: Database["public"]["Enums"]["currency"];
+        };
+        Insert: {
+          id?: string;
+          restaurant_id: string;
+          order_id: string;
+          amount: number;
+          status?: Database["public"]["Enums"]["payment_status"];
+          method: Database["public"]["Enums"]["payment_method"];
+          stripe_payment_id?: string | null;
+          refund_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          currency?: Database["public"]["Enums"]["currency"];
+        };
+        Update: {
+          id?: string;
+          restaurant_id?: string;
+          order_id?: string;
+          amount?: number;
+          status?: Database["public"]["Enums"]["payment_status"];
+          method?: Database["public"]["Enums"]["payment_method"];
+          stripe_payment_id?: string | null;
+          refund_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          currency?: Database["public"]["Enums"]["currency"];
+        };
+      };
       // Add other tables as needed...
     };
     Enums: {
@@ -181,6 +254,9 @@ export interface Database {
         | "HKD"
         | "KRW";
       price_range: "$" | "$$" | "$$$" | "$$$$";
+      table_status: "available" | "occupied" | "reserved" | "unavailable";
+      payment_method: "cash" | "card" | "other";
+      payment_status: "pending" | "completed" | "failed" | "refunded";
       // Add other enums as needed...
     };
   };

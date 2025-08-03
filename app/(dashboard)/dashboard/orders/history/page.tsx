@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Download,
@@ -74,6 +74,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { getDisplayOrderNumber } from "@/lib/utils/order";
 
 // Order Timeline Component
 const OrderTimeline = ({ order }: { order: Order }) => {
@@ -91,7 +92,7 @@ const OrderTimeline = ({ order }: { order: Order }) => {
   });
 
   // Payment processing (if card payment)
-  if (order.stripe_payment_intent_id) {
+  if (order.paymentMethod === "card") {
     timelineEvents.push({
       id: "payment_processing",
       title: "Payment Processing",
@@ -108,12 +109,13 @@ const OrderTimeline = ({ order }: { order: Order }) => {
     timelineEvents.push({
       id: "payment_completed",
       title: "Payment Completed",
-      description: order.stripe_payment_intent_id
-        ? "Card payment successful"
-        : "Cash payment received",
+      description:
+        order.paymentMethod === "card"
+          ? "Card payment successful"
+          : "Cash payment received",
       timestamp: order.time, // For now, using order time
       status: "completed",
-      icon: order.stripe_payment_intent_id ? "✅" : "💰",
+      icon: order.paymentMethod === "card" ? "✅" : "💰",
       color: "green",
     });
   }
@@ -226,10 +228,12 @@ const getStatusColor = (status: string) => {
 // Payment method color mapping
 const getPaymentMethodColor = (method: string) => {
   switch (method) {
-    case "stripe":
+    case "card":
       return "text-blue-600";
     case "cash":
       return "text-green-600";
+    case "other":
+      return "text-gray-600";
     default:
       return "text-gray-600";
   }
@@ -438,6 +442,7 @@ export default function OrderHistoryPage() {
         tip_amount: (newOrder as any).tip_amount || 0,
         created_at: newOrder.created_at,
         updated_at: newOrder.updated_at,
+        paymentMethod: (newOrder as any).paymentMethod || "other",
         stripe_payment_intent_id: (newOrder as any).stripe_payment_intent_id,
       };
 
@@ -475,6 +480,7 @@ export default function OrderHistoryPage() {
           tip_amount: (updatedOrder as any).tip_amount || 0,
           created_at: updatedOrder.created_at,
           updated_at: updatedOrder.updated_at,
+          paymentMethod: (updatedOrder as any).paymentMethod || "other",
           stripe_payment_intent_id: (updatedOrder as any)
             .stripe_payment_intent_id,
         };
@@ -504,7 +510,7 @@ export default function OrderHistoryPage() {
   });
 
   // Fetch orders data
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     if (!restaurant?.id) return;
 
     setLoading(true);
@@ -533,11 +539,11 @@ export default function OrderHistoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [restaurant?.id, statusFilter, searchTerm]);
 
   useEffect(() => {
     fetchOrders();
-  }, [restaurant?.id, statusFilter, searchTerm]);
+  }, [fetchOrders]);
 
   // Get unique table numbers for filter dropdown
   const uniqueTables = Array.from(
@@ -551,7 +557,7 @@ export default function OrderHistoryPage() {
 
   // Generate order number from order ID and index
   const getOrderNumber = (order: Order) => {
-    return order.orderNumber || `#${order.id.slice(-8).toUpperCase()}`;
+    return getDisplayOrderNumber(order);
   };
 
   // Apply filters and sorting
@@ -987,6 +993,7 @@ export default function OrderHistoryPage() {
                     </TableHead>
                     <TableHead className="w-[100px]">Status</TableHead>
                     <TableHead className="w-[100px]">Payment</TableHead>
+                    <TableHead className="w-[100px]">Method</TableHead>
                     <TableHead className="w-[80px] text-right">
                       Actions
                     </TableHead>
@@ -1070,6 +1077,18 @@ export default function OrderHistoryPage() {
                             )}
                           >
                             {getPaymentStatusText(order.paymentStatus)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={getPaymentMethodColor(
+                              order.paymentMethod || "unknown"
+                            )}
+                          >
+                            {order.paymentMethod === "card"
+                              ? "💳 Card"
+                              : "💰 Cash"}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">

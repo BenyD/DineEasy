@@ -15,12 +15,11 @@ type Order = {
   customer_phone: string | null;
   status:
     | "pending"
-    | "confirmed"
     | "preparing"
     | "ready"
-    | "delivered"
-    | "cancelled"
-    | "completed";
+    | "served"
+    | "completed"
+    | "cancelled";
   total_amount: number;
   currency: string;
   order_number: string;
@@ -49,6 +48,7 @@ type Payment = {
   status: "pending" | "completed" | "failed" | "refunded";
   payment_method: string;
   stripe_payment_intent_id: string | null;
+  stripe_checkout_session_id: string | null;
   created_at: string;
   updated_at: string;
 };

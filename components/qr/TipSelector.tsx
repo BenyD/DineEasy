@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Percent, DollarSign } from "lucide-react";
+import { Percent, DollarSign, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OrderValidator } from "@/lib/constants/order-limits";
 
 interface TipSelectorProps {
   subtotal: number;
@@ -16,6 +17,8 @@ const tipPercentages = [15, 18, 20, 25];
 export function TipSelector({ subtotal, onTipChange }: TipSelectorProps) {
   const [selectedTip, setSelectedTip] = useState<number | "custom">(0);
   const [customTip, setCustomTip] = useState("");
+  const [tipError, setTipError] = useState<string | null>(null);
+  const orderValidator = new OrderValidator();
 
   const handleTipSelect = (percentage: number) => {
     const tipAmount = (subtotal * percentage) / 100;
@@ -28,12 +31,22 @@ export function TipSelector({ subtotal, onTipChange }: TipSelectorProps) {
     setCustomTip(value);
     setSelectedTip("custom");
     const tipAmount = Number.parseFloat(value) || 0;
+
+    // Validate tip amount
+    const validation = orderValidator.validateTipAmount(tipAmount, subtotal);
+    if (!validation.isValid) {
+      setTipError(validation.errors[0]);
+    } else {
+      setTipError(null);
+    }
+
     onTipChange(tipAmount);
   };
 
   const handleNoTip = () => {
     setSelectedTip(0);
     setCustomTip("");
+    setTipError(null);
     onTipChange(0);
   };
 
@@ -95,13 +108,25 @@ export function TipSelector({ subtotal, onTipChange }: TipSelectorProps) {
             onChange={(e) => handleCustomTip(e.target.value)}
             className={`pl-10 h-12 ${
               selectedTip === "custom"
-                ? "border-green-500 ring-1 ring-green-200"
+                ? tipError
+                  ? "border-red-500 ring-1 ring-red-200"
+                  : "border-green-500 ring-1 ring-green-200"
                 : "border-gray-200"
             }`}
             step="0.50"
             min="0"
           />
         </div>
+        {tipError && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-2 flex items-center gap-2 text-sm text-red-600"
+          >
+            <AlertCircle className="w-4 h-4" />
+            <span>{tipError}</span>
+          </motion.div>
+        )}
       </div>
 
       {/* No Tip Option */}

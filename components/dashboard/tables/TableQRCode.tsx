@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download, QrCode, Copy, Check, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,12 +43,7 @@ export function TableQRCode({
 
   const config = sizeConfig[size];
 
-  // Generate QR code on mount and when tableData changes
-  useEffect(() => {
-    generateQRCode();
-  }, [tableData]);
-
-  const generateQRCode = async () => {
+  const generateQRCode = useCallback(async () => {
     try {
       setIsLoading(true);
       const qrDataUrl = await generateStyledTableQR(tableData, {
@@ -67,7 +62,12 @@ export function TableQRCode({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [tableData, config.qrSize]);
+
+  // Generate QR code on mount and when tableData changes
+  useEffect(() => {
+    generateQRCode();
+  }, [generateQRCode]);
 
   const handleDownloadPNG = async () => {
     try {
