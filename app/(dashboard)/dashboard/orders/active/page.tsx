@@ -1198,29 +1198,116 @@ export default function ActiveOrdersPage() {
                           </div>
 
                           {/* Order Items */}
-                          <div className="space-y-2 mb-4">
+                          <div className="space-y-3 mb-4">
                             {order.items.map((item, index) => (
                               <div
                                 key={index}
-                                className="flex items-start justify-between"
+                                className="bg-gray-50 rounded-lg p-3 border border-gray-200"
                               >
-                                <div className="flex-1">
-                                  <div className="flex items-center">
-                                    <span className="font-medium">
-                                      {item.quantity}x
-                                    </span>
-                                    <span className="ml-2">{item.name}</span>
-                                  </div>
-                                  {item.modifiers &&
-                                    item.modifiers.length > 0 && (
-                                      <p className="text-sm text-gray-500 mt-0.5">
-                                        {item.modifiers.join(", ")}
-                                      </p>
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="font-bold text-gray-900">
+                                        {item.quantity}x
+                                      </span>
+                                      <span className="font-semibold text-gray-900">
+                                        {item.name}
+                                      </span>
+                                      {/* Show combo meal indicator */}
+                                      {item.comboMealName && (
+                                        <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs font-medium">
+                                          🍽️ {item.comboMealName}
+                                        </Badge>
+                                      )}
+                                    </div>
+
+                                    {/* Show advanced options with better styling */}
+                                    {(item.selectedSize ||
+                                      (item.selectedModifiers &&
+                                        item.selectedModifiers.length > 0)) && (
+                                      <div className="ml-6 space-y-1 mt-2">
+                                        {item.selectedSize && (
+                                          <div className="flex items-center gap-2">
+                                            <Badge
+                                              variant="outline"
+                                              className="bg-green-50 text-green-700 border-green-200 text-xs"
+                                            >
+                                              📏 Size
+                                            </Badge>
+                                            <span className="text-sm text-gray-700 font-medium">
+                                              {item.selectedSize
+                                                .charAt(0)
+                                                .toUpperCase() +
+                                                item.selectedSize
+                                                  .slice(1)
+                                                  .toLowerCase()}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {item.selectedModifiers &&
+                                          item.selectedModifiers.length > 0 && (
+                                            <div className="flex items-start gap-2">
+                                              <Badge
+                                                variant="outline"
+                                                className="bg-purple-50 text-purple-700 border-purple-200 text-xs mt-0.5"
+                                              >
+                                                ⚙️ Modifiers
+                                              </Badge>
+                                              <div className="flex flex-wrap gap-1">
+                                                {item.selectedModifiers.map(
+                                                  (modifier, modIndex) => (
+                                                    <Badge
+                                                      key={modIndex}
+                                                      variant="outline"
+                                                      className="bg-gray-100 text-gray-700 border-gray-300 text-xs"
+                                                    >
+                                                      {modifier.name}
+                                                      {modifier.priceModifier >
+                                                        0 && (
+                                                        <span className="text-green-600 ml-1">
+                                                          (+
+                                                          {modifier.priceModifier.toFixed(
+                                                            2
+                                                          )}
+                                                          )
+                                                        </span>
+                                                      )}
+                                                    </Badge>
+                                                  )
+                                                )}
+                                              </div>
+                                            </div>
+                                          )}
+                                      </div>
                                     )}
+
+                                    {/* Legacy modifiers support */}
+                                    {!item.selectedModifiers &&
+                                      item.modifiers &&
+                                      item.modifiers.length > 0 && (
+                                        <div className="ml-6 mt-2">
+                                          <div className="flex items-center gap-2">
+                                            <Badge
+                                              variant="outline"
+                                              className="bg-orange-50 text-orange-700 border-orange-200 text-xs"
+                                            >
+                                              📝 Modifiers
+                                            </Badge>
+                                            <span className="text-sm text-gray-600">
+                                              {item.modifiers.join(", ")}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      )}
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="font-bold text-gray-900">
+                                      {formatCurrency(
+                                        item.quantity * item.price
+                                      )}
+                                    </span>
+                                  </div>
                                 </div>
-                                <span className="text-gray-600">
-                                  {formatCurrency(item.quantity * item.price)}
-                                </span>
                               </div>
                             ))}
                           </div>
@@ -1489,26 +1576,112 @@ export default function ActiveOrdersPage() {
                       {selectedOrder.items.map((item: any, index: number) => (
                         <div
                           key={index}
-                          className="flex justify-between items-start py-3 border-b border-gray-100 last:border-b-0"
+                          className="bg-gray-50 rounded-lg p-4 border border-gray-200"
                         >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <span className="font-bold text-gray-900 text-lg">
+                                  {item.quantity}x
+                                </span>
+                                <span className="font-semibold text-gray-900 text-lg">
+                                  {item.name}
+                                </span>
+                                {/* Show combo meal indicator */}
+                                {item.comboMealName && (
+                                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-sm font-medium">
+                                    🍽️ {item.comboMealName}
+                                  </Badge>
+                                )}
+                              </div>
+
+                              {/* Show advanced options with better styling */}
+                              {(item.selectedSize ||
+                                (item.selectedModifiers &&
+                                  item.selectedModifiers.length > 0)) && (
+                                <div className="ml-8 space-y-2 mt-3">
+                                  {item.selectedSize && (
+                                    <div className="flex items-center gap-2">
+                                      <Badge
+                                        variant="outline"
+                                        className="bg-green-50 text-green-700 border-green-200 text-xs"
+                                      >
+                                        📏 Size
+                                      </Badge>
+                                      <span className="text-sm text-gray-700 font-medium">
+                                        {item.selectedSize
+                                          .charAt(0)
+                                          .toUpperCase() +
+                                          item.selectedSize
+                                            .slice(1)
+                                            .toLowerCase()}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {item.selectedModifiers &&
+                                    item.selectedModifiers.length > 0 && (
+                                      <div className="flex items-start gap-2">
+                                        <Badge
+                                          variant="outline"
+                                          className="bg-purple-50 text-purple-700 border-purple-200 text-xs mt-0.5"
+                                        >
+                                          ⚙️ Modifiers
+                                        </Badge>
+                                        <div className="flex flex-wrap gap-1">
+                                          {item.selectedModifiers.map(
+                                            (
+                                              modifier: any,
+                                              modIndex: number
+                                            ) => (
+                                              <Badge
+                                                key={modIndex}
+                                                variant="outline"
+                                                className="bg-gray-100 text-gray-700 border-gray-300 text-xs"
+                                              >
+                                                {modifier.name}
+                                                {modifier.priceModifier > 0 && (
+                                                  <span className="text-green-600 ml-1">
+                                                    (+
+                                                    {modifier.priceModifier.toFixed(
+                                                      2
+                                                    )}
+                                                    )
+                                                  </span>
+                                                )}
+                                              </Badge>
+                                            )
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                </div>
+                              )}
+
+                              {/* Legacy modifiers support */}
+                              {!item.selectedModifiers &&
+                                item.modifiers &&
+                                item.modifiers.length > 0 && (
+                                  <div className="ml-8 mt-3">
+                                    <div className="flex items-center gap-2">
+                                      <Badge
+                                        variant="outline"
+                                        className="bg-orange-50 text-orange-700 border-orange-200 text-xs"
+                                      >
+                                        📝 Modifiers
+                                      </Badge>
+                                      <span className="text-sm text-gray-600">
+                                        {item.modifiers.join(", ")}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                            </div>
+                            <div className="text-right">
                               <span className="font-bold text-gray-900 text-lg">
-                                {item.quantity}x
-                              </span>
-                              <span className="font-semibold text-gray-900 text-lg">
-                                {item.name}
+                                {formatCurrency(item.quantity * item.price)}
                               </span>
                             </div>
-                            {item.modifiers && item.modifiers.length > 0 && (
-                              <p className="text-sm text-gray-600 mt-2 ml-8">
-                                Modifiers: {item.modifiers.join(", ")}
-                              </p>
-                            )}
                           </div>
-                          <span className="font-bold text-gray-900 text-lg">
-                            {formatCurrency(item.quantity * item.price)}
-                          </span>
                         </div>
                       ))}
                     </div>

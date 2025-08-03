@@ -209,6 +209,13 @@ export default function CheckoutPage({
             name: item.name,
             price: item.price,
             quantity: item.quantity,
+            // Advanced options
+            comboMealId: item.isComboMeal ? item.id : undefined,
+            comboMealName: item.isComboMeal ? item.name : undefined,
+            selectedSize: item.selectedSize,
+            sizePriceModifier: item.sizePriceModifier,
+            selectedModifiers: item.selectedModifiers,
+            modifiersTotalPrice: item.modifiersTotalPrice,
           })),
           subtotal,
           tax,
@@ -266,6 +273,13 @@ export default function CheckoutPage({
             name: item.name,
             price: item.price,
             quantity: item.quantity,
+            // Advanced options
+            comboMealId: item.isComboMeal ? item.id : undefined,
+            comboMealName: item.isComboMeal ? item.name : undefined,
+            selectedSize: item.selectedSize,
+            sizePriceModifier: item.sizePriceModifier,
+            selectedModifiers: item.selectedModifiers,
+            modifiersTotalPrice: item.modifiersTotalPrice,
           })),
           subtotal,
           tax,
@@ -539,20 +553,63 @@ export default function CheckoutPage({
             Order Summary
           </h2>
           <div className="space-y-3">
-            {cart.map((item) => (
-              <div key={item.id} className="flex justify-between items-center">
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">{item.name}</p>
-                  <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
+            {cart.map((item) => {
+              // Calculate item price with advanced options
+              const itemPrice = item.price + 
+                (item.sizePriceModifier || 0) + 
+                (item.modifiersTotalPrice || 0);
+              
+              return (
+                <div key={item.id} className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{item.name}</p>
+                    <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
+                    
+                    {/* Show advanced options if present */}
+                    {(item.selectedSize || item.selectedModifiers?.length) && (
+                      <div className="mt-1 space-y-1">
+                        {item.selectedSize && (
+                          <p className="text-xs text-gray-500">
+                            Size: {item.selectedSize}
+                            {item.sizePriceModifier && item.sizePriceModifier > 0 && (
+                              <span className="text-green-600 ml-1">
+                                (+{formatAmountWithCurrency(item.sizePriceModifier, restaurant?.currency || "CHF")})
+                              </span>
+                            )}
+                          </p>
+                        )}
+                        {item.selectedModifiers?.length > 0 && (
+                          <div className="text-xs text-gray-500">
+                            <p>Modifiers:</p>
+                            {item.selectedModifiers.map((modifier, index) => (
+                              <p key={modifier.id} className="ml-2">
+                                • {modifier.name}
+                                {modifier.priceModifier > 0 && (
+                                  <span className="text-green-600 ml-1">
+                                    (+{formatAmountWithCurrency(modifier.priceModifier, restaurant?.currency || "CHF")})
+                                  </span>
+                                )}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Show combo meal indicator */}
+                    {item.isComboMeal && (
+                      <p className="text-xs text-blue-600 mt-1">🍽️ Combo Meal</p>
+                    )}
+                  </div>
+                  <p className="font-semibold text-gray-900">
+                    {formatAmountWithCurrency(
+                      itemPrice * item.quantity,
+                      restaurant?.currency || "CHF"
+                    )}
+                  </p>
                 </div>
-                <p className="font-semibold text-gray-900">
-                  {formatAmountWithCurrency(
-                    item.price * item.quantity,
-                    restaurant?.currency || "CHF"
-                  )}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <Separator className="my-4" />
           <div className="space-y-2">

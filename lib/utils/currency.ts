@@ -89,6 +89,7 @@ export function formatAmountWithCurrency(
   currency: string = "CHF"
 ): string {
   const symbol = getCurrencySymbol(currency);
-  const numericAmount = typeof amount === 'number' ? amount : Number(amount) || 0;
+  const numericAmount =
+    typeof amount === "number" ? amount : Number(amount) || 0;
   return `${symbol} ${numericAmount.toFixed(2)}`;
 }

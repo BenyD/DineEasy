@@ -68,6 +68,12 @@ export async function createMenuItem(formData: FormData) {
     const tagsJson = formData.get("tags") as string;
     const tags = tagsJson ? JSON.parse(tagsJson) : [];
 
+    // Advanced options
+    const sizesJson = formData.get("sizes") as string;
+    const modifiersJson = formData.get("modifiers") as string;
+    const sizes = sizesJson ? JSON.parse(sizesJson) : [];
+    const modifiers = modifiersJson ? JSON.parse(modifiersJson) : [];
+
     // Validate required fields
     if (!name || !price || !categoryId) {
       throw new Error("Name, price, and category are required");
@@ -88,14 +94,16 @@ export async function createMenuItem(formData: FormData) {
         is_popular: popular,
         tags: tags.length > 0 ? tags : null,
       })
-      .select(`
+      .select(
+        `
         *,
         category:menu_categories (
           id,
           name,
           description
         )
-      `)
+      `
+      )
       .single();
 
     if (menuError) {
@@ -117,6 +125,50 @@ export async function createMenuItem(formData: FormData) {
         console.error("Error adding allergens:", allergenError);
         // Don't throw error for allergen issues, but log them
         // The menu item was created successfully, allergens can be added later
+      }
+    }
+
+    // Add size variations if any
+    if (sizes.length > 0) {
+      const sizeData = sizes.map((size: any) => ({
+        menu_item_id: menuItem.id,
+        name: size.name,
+        price_modifier: size.priceModifier,
+        is_default: size.isDefault,
+        sort_order: size.sortOrder,
+      }));
+
+      const { error: sizeError } = await supabase
+        .from("menu_item_sizes")
+        .insert(sizeData);
+
+      if (sizeError) {
+        console.error("Error adding size variations:", sizeError);
+        // Don't throw error for size issues, but log them
+      }
+    }
+
+    // Add modifiers if any
+    if (modifiers.length > 0) {
+      const modifierData = modifiers.map((modifier: any) => ({
+        menu_item_id: menuItem.id,
+        name: modifier.name,
+        description: modifier.description,
+        type: modifier.type,
+        price_modifier: modifier.priceModifier,
+        is_required: modifier.isRequired,
+        max_selections: modifier.maxSelections,
+        sort_order: modifier.sortOrder,
+        is_available: modifier.isAvailable,
+      }));
+
+      const { error: modifierError } = await supabase
+        .from("menu_item_modifiers")
+        .insert(modifierData);
+
+      if (modifierError) {
+        console.error("Error adding modifiers:", modifierError);
+        // Don't throw error for modifier issues, but log them
       }
     }
 
@@ -146,6 +198,12 @@ export async function updateMenuItem(id: string, formData: FormData) {
     const imageUrl = formData.get("imageUrl") as string;
     const tagsJson = formData.get("tags") as string;
     const tags = tagsJson ? JSON.parse(tagsJson) : [];
+
+    // Advanced options
+    const sizesJson = formData.get("sizes") as string;
+    const modifiersJson = formData.get("modifiers") as string;
+    const sizes = sizesJson ? JSON.parse(sizesJson) : [];
+    const modifiers = modifiersJson ? JSON.parse(modifiersJson) : [];
 
     // Get current menu item to check existing values and image
     const { data: currentMenuItem, error: fetchError } = await supabase
@@ -321,6 +379,64 @@ export async function updateMenuItem(id: string, formData: FormData) {
         console.error("Error updating allergens:", allergenError);
         // Don't throw error for allergen issues, but log them
         // The menu item was updated successfully, allergens can be updated later
+      }
+    }
+
+    // Update size variations if any
+    if (sizes.length > 0) {
+      // First, remove all existing size variations
+      await supabase
+        .from("menu_item_sizes")
+        .delete()
+        .eq("menu_item_id", id);
+
+      // Then add new size variations
+      const sizeData = sizes.map((size: any) => ({
+        menu_item_id: id,
+        name: size.name,
+        price_modifier: size.priceModifier,
+        is_default: size.isDefault,
+        sort_order: size.sortOrder,
+      }));
+
+      const { error: sizeError } = await supabase
+        .from("menu_item_sizes")
+        .insert(sizeData);
+
+      if (sizeError) {
+        console.error("Error updating size variations:", sizeError);
+        // Don't throw error for size issues, but log them
+      }
+    }
+
+    // Update modifiers if any
+    if (modifiers.length > 0) {
+      // First, remove all existing modifiers
+      await supabase
+        .from("menu_item_modifiers")
+        .delete()
+        .eq("menu_item_id", id);
+
+      // Then add new modifiers
+      const modifierData = modifiers.map((modifier: any) => ({
+        menu_item_id: id,
+        name: modifier.name,
+        description: modifier.description,
+        type: modifier.type,
+        price_modifier: modifier.priceModifier,
+        is_required: modifier.isRequired,
+        max_selections: modifier.maxSelections,
+        sort_order: modifier.sortOrder,
+        is_available: modifier.isAvailable,
+      }));
+
+      const { error: modifierError } = await supabase
+        .from("menu_item_modifiers")
+        .insert(modifierData);
+
+      if (modifierError) {
+        console.error("Error updating modifiers:", modifierError);
+        // Don't throw error for modifier issues, but log them
       }
     }
 
@@ -549,6 +665,24 @@ export async function getMenuItemsPaginated({
             name,
             icon
           )
+        ),
+        sizes:menu_item_sizes (
+          id,
+          name,
+          price_modifier,
+          is_default,
+          sort_order
+        ),
+        modifiers:menu_item_modifiers (
+          id,
+          name,
+          description,
+          type,
+          price_modifier,
+          is_required,
+          max_selections,
+          sort_order,
+          is_available
         )
       `,
         { count: "exact" }
@@ -635,7 +769,9 @@ export async function getMenuItemsPaginated({
           name: item.name,
           description: item.description,
           price: item.price,
-          category: item.category?.name || (item.category_id ? "Loading..." : "Uncategorized"),
+          category:
+            item.category?.name ||
+            (item.category_id ? "Loading..." : "Uncategorized"),
           categoryId: item.category?.id || item.category_id,
           image: imageUrl,
           available: item.is_available,
@@ -652,6 +788,12 @@ export async function getMenuItemsPaginated({
           restaurantId: item.restaurant_id,
           createdAt: item.created_at,
           updatedAt: item.updated_at,
+          // Advanced options
+          sizes: item.sizes || [],
+          modifiers: item.modifiers || [],
+          hasAdvancedOptions:
+            (item.sizes && item.sizes.length > 0) ||
+            (item.modifiers && item.modifiers.length > 0),
         };
       }) || [];
 

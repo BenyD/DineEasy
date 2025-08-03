@@ -39,6 +39,7 @@ import {
   Table2,
   Wallet,
   Loader2,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -141,9 +142,21 @@ const navigationData = {
     },
     {
       name: "Menu",
-      href: "/dashboard/menu",
+      href: "/dashboard/menu/manage",
       icon: FileText,
       description: "Manage your menu items",
+      subItems: [
+        {
+          name: "Menu Items",
+          href: "/dashboard/menu/manage",
+          description: "Manage individual menu items",
+        },
+        {
+          name: "Combo Meals",
+          href: "/dashboard/menu/combo-meals",
+          description: "Create and manage meal combinations",
+        },
+      ],
     },
     {
       name: "Tables & QR",
@@ -571,10 +584,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       restaurant.subscription_status === "trialing"
                         ? "bg-blue-50 border-blue-200 text-blue-700"
                         : restaurant.subscription_status === "active"
-                        ? "bg-green-50 border-green-200 text-green-700"
-                        : restaurant.subscription_status === "past_due"
-                        ? "bg-red-50 border-red-200 text-red-700"
-                        : "bg-white border-gray-200 text-gray-700"
+                          ? "bg-green-50 border-green-200 text-green-700"
+                          : restaurant.subscription_status === "past_due"
+                            ? "bg-red-50 border-red-200 text-red-700"
+                            : "bg-white border-gray-200 text-gray-700"
                     )}
                   >
                     {restaurant.subscription_plan.charAt(0).toUpperCase() +

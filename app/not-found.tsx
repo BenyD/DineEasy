@@ -56,7 +56,7 @@ const navigationItems = [
   },
   {
     title: "Menu Management",
-    href: "/dashboard/menu",
+    href: "/dashboard/menu/manage",
     description: "Manage your menu items and categories",
     icon: FileText,
     shortcut: "⌘ M",
@@ -155,7 +155,7 @@ const dashboardPages = {
   management: [
     {
       title: "Menu Management",
-      href: "/dashboard/menu",
+      href: "/dashboard/menu/manage",
       description: "Create and manage menu items",
       icon: FileText,
     },

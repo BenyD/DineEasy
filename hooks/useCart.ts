@@ -6,6 +6,19 @@ import { toast } from "sonner";
 
 interface CartItem extends MenuItem {
   quantity: number;
+  // Advanced options
+  selectedSize?: string;
+  sizePriceModifier?: number;
+  selectedModifiers?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    priceModifier: number;
+  }>;
+  modifiersTotalPrice?: number;
+  // Combo meal support
+  isComboMeal?: boolean;
+  comboData?: any;
 }
 
 interface CartState {
@@ -92,6 +105,23 @@ const clearCartStorage = () => {
     localStorage.removeItem("qr-cart-state");
     localStorage.removeItem("qr-cart-timestamp");
   }
+};
+
+// Helper function to calculate item price with advanced options
+const calculateItemPrice = (item: CartItem): number => {
+  let price = item.price;
+
+  // Add size price modifier if selected
+  if (item.selectedSize && item.sizePriceModifier) {
+    price += item.sizePriceModifier;
+  }
+
+  // Add modifiers total price if available
+  if (item.modifiersTotalPrice) {
+    price += item.modifiersTotalPrice;
+  }
+
+  return price;
 };
 
 // Load cart on module initialization
@@ -248,14 +278,31 @@ export function useCart(tableId?: string) {
 
       setCart((currentCart) => {
         console.log("Current cart before adding:", currentCart);
+
+        // For items with advanced options, we need to create a unique identifier
+        // that includes the selected options to allow multiple variants of the same item
+        const createItemKey = (item: MenuItem) => {
+          if (item.selectedSize || item.selectedModifiers?.length) {
+            const sizeKey = item.selectedSize || "default";
+            const modifiersKey =
+              item.selectedModifiers
+                ?.map((m) => m.id)
+                .sort()
+                .join(",") || "none";
+            return `${item.id}-${sizeKey}-${modifiersKey}`;
+          }
+          return item.id;
+        };
+
+        const itemKey = createItemKey(item);
         const existingItem = currentCart.find(
-          (cartItem) => cartItem.id === item.id
+          (cartItem) => createItemKey(cartItem) === itemKey
         );
 
         let newCart;
         if (existingItem) {
           newCart = currentCart.map((cartItem) =>
-            cartItem.id === item.id
+            createItemKey(cartItem) === itemKey
               ? { ...cartItem, quantity: cartItem.quantity + 1 }
               : cartItem
           );
@@ -354,9 +401,12 @@ export function useCart(tableId?: string) {
     return cart.reduce((total, item) => total + item.quantity, 0);
   }, [cart]);
 
-  // Get total price
+  // Get total price with advanced options
   const getTotalPrice = useCallback(() => {
-    return cart.reduce((total, item) => total + item.price * item.quantity, 0);
+    return cart.reduce((total, item) => {
+      const itemPrice = calculateItemPrice(item);
+      return total + itemPrice * item.quantity;
+    }, 0);
   }, [cart]);
 
   // Check if cart is empty

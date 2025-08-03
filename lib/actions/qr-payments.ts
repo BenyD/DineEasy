@@ -24,6 +24,18 @@ export interface QRPaymentData {
     name: string;
     price: number;
     quantity: number;
+    // Advanced options support
+    comboMealId?: string;
+    comboMealName?: string;
+    selectedSize?: string;
+    sizePriceModifier?: number;
+    selectedModifiers?: Array<{
+      id: string;
+      name: string;
+      type: string;
+      priceModifier: number;
+    }>;
+    modifiersTotalPrice?: number;
   }>;
   subtotal: number;
   tax: number;
@@ -1398,6 +1410,15 @@ async function createOrder(
                 unit_price: item.price,
                 total_price: item.price * item.quantity,
                 notes: null,
+                // Advanced options
+                combo_meal_id: item.comboMealId || null,
+                combo_meal_name: item.comboMealName || null,
+                selected_size: item.selectedSize || null,
+                size_price_modifier: item.sizePriceModifier || 0,
+                selected_modifiers: item.selectedModifiers
+                  ? JSON.stringify(item.selectedModifiers)
+                  : "[]",
+                modifiers_total_price: item.modifiersTotalPrice || 0,
               })),
             });
 
@@ -1604,6 +1625,15 @@ async function createOrder(
           quantity: item.quantity,
           unit_price: item.price,
           total_price: item.price * item.quantity,
+          // Advanced options
+          combo_meal_id: item.comboMealId || null,
+          combo_meal_name: item.comboMealName || null,
+          selected_size: item.selectedSize || null,
+          size_price_modifier: item.sizePriceModifier || 0,
+          selected_modifiers: item.selectedModifiers
+            ? JSON.stringify(item.selectedModifiers)
+            : "[]",
+          modifiers_total_price: item.modifiersTotalPrice || 0,
         }));
 
         const { error: orderItemsError } = await supabase

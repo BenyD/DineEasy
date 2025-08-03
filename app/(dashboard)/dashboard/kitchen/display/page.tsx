@@ -38,6 +38,15 @@ interface OrderItem {
   quantity: number;
   price: number;
   modifiers: string[];
+  // Advanced options
+  selectedSize?: string;
+  selectedModifiers?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    priceModifier: number;
+  }>;
+  comboMealName?: string;
 }
 
 interface Order {
@@ -245,18 +254,88 @@ function CustomerOrderCard({ order }: { order: Order }) {
           {/* Order Summary - Key Items Only */}
           <div className="mb-3">
             <div className="text-sm text-gray-600 mb-2">Order Summary:</div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               {order.items.slice(0, 3).map((item, index) => (
                 <div
                   key={index}
-                  className="flex justify-between items-center text-sm"
+                  className="bg-white/50 rounded-lg p-2 border border-gray-200"
                 >
-                  <span className="text-gray-800">
-                    {item.quantity}x {item.name}
-                  </span>
-                  <span className="text-gray-600 font-medium">
-                    {formatCurrency(item.quantity * item.price)}
-                  </span>
+                  <div className="flex justify-between items-start text-sm">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-gray-900">
+                          {item.quantity}x
+                        </span>
+                        <span className="font-semibold text-gray-900">
+                          {item.name}
+                        </span>
+                        {/* Show combo meal indicator */}
+                        {item.comboMealName && (
+                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-medium">
+                            🍽️ {item.comboMealName}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Show advanced options with better styling */}
+                      {(item.selectedSize ||
+                        (item.selectedModifiers &&
+                          item.selectedModifiers.length > 0)) && (
+                        <div className="ml-6 space-y-1">
+                          {item.selectedSize && (
+                            <div className="flex items-center gap-1">
+                              <span className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded">
+                                📏{" "}
+                                {item.selectedSize.charAt(0).toUpperCase() +
+                                  item.selectedSize.slice(1).toLowerCase()}
+                              </span>
+                            </div>
+                          )}
+                          {item.selectedModifiers &&
+                            item.selectedModifiers.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {item.selectedModifiers.map(
+                                  (modifier, modIndex) => (
+                                    <span
+                                      key={modIndex}
+                                      className="bg-purple-100 text-purple-800 text-xs px-1.5 py-0.5 rounded"
+                                    >
+                                      ⚙️ {modifier.name}
+                                      {modifier.priceModifier > 0 && (
+                                        <span className="text-green-600 ml-1">
+                                          (+{modifier.priceModifier.toFixed(2)})
+                                        </span>
+                                      )}
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                            )}
+                        </div>
+                      )}
+
+                      {/* Legacy modifiers support */}
+                      {!item.selectedModifiers &&
+                        item.modifiers &&
+                        item.modifiers.length > 0 && (
+                          <div className="ml-6 mt-1">
+                            <div className="flex flex-wrap gap-1">
+                              {item.modifiers.map((modifier, modIndex) => (
+                                <span
+                                  key={modIndex}
+                                  className="bg-orange-100 text-orange-800 text-xs px-1.5 py-0.5 rounded"
+                                >
+                                  📝 {modifier}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                    <span className="text-gray-700 font-bold text-sm">
+                      {formatCurrency(item.quantity * item.price)}
+                    </span>
+                  </div>
                 </div>
               ))}
               {order.items.length > 3 && (
@@ -385,6 +464,10 @@ export default function KitchenDisplayPage() {
             quantity: item.quantity,
             price: item.price,
             modifiers: item.modifiers || [],
+            // Advanced options
+            selectedSize: item.selectedSize,
+            selectedModifiers: item.selectedModifiers,
+            comboMealName: item.comboMealName,
           })),
           status: order.status,
           time: new Date(order.time),

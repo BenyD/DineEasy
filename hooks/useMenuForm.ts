@@ -2,7 +2,12 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
-import { type MenuItem, type MenuItemAllergen } from "@/types";
+import {
+  type MenuItem,
+  type MenuItemAllergen,
+  type MenuItemSize,
+  type MenuItemModifier,
+} from "@/types";
 
 interface FormData {
   name: string;
@@ -15,11 +20,14 @@ interface FormData {
   tags: string[]; // Add tags field
   popular: boolean;
   image: string;
+  // Advanced options
+  sizes: MenuItemSize[];
+  modifiers: MenuItemModifier[];
 }
 
 interface FormState {
   formData: FormData;
-  activeTab: "basic" | "details" | "image";
+  activeTab: "basic" | "details" | "advanced" | "image";
   isSubmitting: boolean;
   isUploading: boolean;
   isImageUploading: boolean;
@@ -104,6 +112,9 @@ export function useMenuForm({
         tags: [],
         popular: false,
         image: "",
+        // Advanced options
+        sizes: [],
+        modifiers: [],
       },
       activeTab: "basic",
       isSubmitting: false,
@@ -145,6 +156,9 @@ export function useMenuForm({
           tags: savedProgress.formData.tags || [],
           popular: savedProgress.formData.popular || false,
           image: "",
+          // Advanced options
+          sizes: savedProgress.formData.sizes || [],
+          modifiers: savedProgress.formData.modifiers || [],
         },
         activeTab: savedProgress.activeTab || "basic",
         hasUnsavedChanges: true,
@@ -253,6 +267,9 @@ export function useMenuForm({
           tags: item.tags || [],
           popular: item.popular || false,
           image: item.image || "",
+          // Advanced options
+          sizes: item.sizes || [],
+          modifiers: item.modifiers || [],
         },
         activeTab: activeTabRef.current as "basic" | "details" | "image",
         isFormInitialized: true,
@@ -324,7 +341,7 @@ export function useMenuForm({
 
   // Handle tab change
   const handleTabChange = useCallback(
-    (tab: "basic" | "details" | "image") => {
+    (tab: "basic" | "details" | "advanced" | "image") => {
       if (tab === formState.activeTab) return;
 
       // Only validate when adding new items, not when editing
@@ -367,10 +384,18 @@ export function useMenuForm({
 
         // Clear the loading toast and show success
         toast.dismiss(processingToast);
+        // Show success message with advanced options info if applicable
+        const hasAdvancedOptions =
+          formState.formData.sizes?.length > 0 ||
+          formState.formData.modifiers?.length > 0;
+        const advancedOptionsText = hasAdvancedOptions
+          ? " including advanced options"
+          : "";
+
         toast.success(
           item
-            ? "Menu item updated successfully!"
-            : "Menu item added successfully!",
+            ? `Menu item updated successfully!${advancedOptionsText}`
+            : `Menu item added successfully!${advancedOptionsText}`,
           {
             description: "Your changes have been saved",
           }

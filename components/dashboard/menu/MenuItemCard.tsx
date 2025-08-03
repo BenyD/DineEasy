@@ -35,10 +35,14 @@ import {
   Sparkles,
   Image as ImageIcon,
   Utensils,
+  Ruler,
+  Layers,
+  Plus,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type MenuItemAllergen } from "@/types";
-import { getTagInfo } from "@/lib/constants/menu-tags";
+import { getTagInfo, MENU_TAGS } from "@/lib/constants/menu-tags";
 
 interface MenuItemCardProps {
   item: {
@@ -53,6 +57,21 @@ interface MenuItemCardProps {
     categoryId: string;
     allergens: MenuItemAllergen[];
     tags?: string[];
+    // Advanced options
+    sizes?: Array<{
+      id: string;
+      name: string;
+      priceModifier: number;
+      isDefault: boolean;
+    }>;
+    modifiers?: Array<{
+      id: string;
+      name: string;
+      type: string;
+      priceModifier: number;
+      isRequired: boolean;
+    }>;
+    hasAdvancedOptions?: boolean;
   };
   category?: {
     id: string;
@@ -145,6 +164,71 @@ export function MenuItemCard({
     setImageLoading(false);
     setImageError(true);
   };
+
+  // Determine vegetarian status
+  const getVegetarianStatus = () => {
+    if (!item.tags || item.tags.length === 0) {
+      return {
+        status: "unknown",
+        label: "Unknown",
+        color: "bg-gray-100 text-gray-700 border-gray-200",
+        icon: "❓",
+      };
+    }
+
+    if (item.tags.includes(MENU_TAGS.VEGETARIAN_STATUS.VEGAN)) {
+      return {
+        status: "vegan",
+        label: "Vegan",
+        color: "bg-emerald-100 text-emerald-700 border-emerald-200",
+        icon: "🌱",
+      };
+    }
+
+    if (item.tags.includes(MENU_TAGS.VEGETARIAN_STATUS.VEGETARIAN)) {
+      return {
+        status: "vegetarian",
+        label: "Vegetarian",
+        color: "bg-green-100 text-green-700 border-green-200",
+        icon: "🥬",
+      };
+    }
+
+    if (item.tags.includes(MENU_TAGS.VEGETARIAN_STATUS.NON_VEGETARIAN)) {
+      return {
+        status: "non-vegetarian",
+        label: "Non-Vegetarian",
+        color: "bg-red-100 text-red-700 border-red-200",
+        icon: "🥩",
+      };
+    }
+
+    // Default to non-vegetarian if no specific tag is found
+    return {
+      status: "non-vegetarian",
+      label: "Non-Vegetarian",
+      color: "bg-red-100 text-red-700 border-red-200",
+      icon: "🥩",
+    };
+  };
+
+  const vegetarianStatus = getVegetarianStatus();
+
+  // Filter tags for display (exclude vegetarian status tags)
+  const getDisplayTags = () => {
+    if (!item.tags || item.tags.length === 0) return [];
+
+    const vegetarianStatusTags = [
+      MENU_TAGS.VEGETARIAN_STATUS.VEGAN,
+      MENU_TAGS.VEGETARIAN_STATUS.VEGETARIAN,
+      MENU_TAGS.VEGETARIAN_STATUS.NON_VEGETARIAN,
+    ];
+    return item.tags.filter(
+      (tag) => !vegetarianStatusTags.includes(tag as any)
+    );
+  };
+
+  const displayTags = getDisplayTags();
 
   // Common dropdown items for both grid and list views
   const commonDropdownItems = (
@@ -263,6 +347,17 @@ export function MenuItemCard({
 
           {/* Status badges */}
           <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
+            {/* Mandatory Vegetarian Status */}
+            <Badge
+              className={cn(
+                "px-2 py-1 text-xs font-semibold border-none shadow-md",
+                vegetarianStatus.color
+              )}
+            >
+              <span className="text-sm mr-1">{vegetarianStatus.icon}</span>
+              {vegetarianStatus.label}
+            </Badge>
+
             {item.popular && (
               <Badge className="bg-gradient-to-r from-green-500 to-green-600 text-white border-none shadow-md px-2 py-1 text-xs font-semibold">
                 <Sparkles className="w-3 h-3 mr-1" /> Popular
@@ -351,33 +446,6 @@ export function MenuItemCard({
             {item.description || "No description provided"}
           </p>
 
-          {/* Tags Display */}
-          {item.tags && item.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {item.tags.slice(0, 3).map((tag) => {
-                const tagInfo = getTagInfo(tag);
-                return (
-                  <Badge
-                    key={tag}
-                    variant="outline"
-                    className={cn("text-xs px-2 py-1 border", tagInfo.color)}
-                  >
-                    <span className="text-sm mr-1">{tagInfo.icon}</span>
-                    {tagInfo.label}
-                  </Badge>
-                );
-              })}
-              {item.tags.length > 3 && (
-                <Badge
-                  variant="outline"
-                  className="text-xs bg-gray-100 text-gray-700 border-gray-200 backdrop-blur-sm"
-                >
-                  +{item.tags.length - 3}
-                </Badge>
-              )}
-            </div>
-          )}
-
           {/* Big Price */}
           <div className="text-2xl font-bold text-green-600">
             {currencySymbol}
@@ -451,6 +519,123 @@ export function MenuItemCard({
               <span>{formatPreparationTime(item.preparationTime)}</span>
             </div>
           </div>
+
+          {/* Tags Row */}
+          {displayTags.length > 0 && (
+            <div className="flex items-center gap-2 pt-2">
+              <Tag className="w-4 h-4 text-gray-400" />
+              <div className="flex flex-wrap gap-1">
+                {displayTags.slice(0, 4).map((tag) => {
+                  const tagInfo = getTagInfo(tag);
+                  return (
+                    <Badge
+                      key={tag}
+                      variant="outline"
+                      className={cn(
+                        "text-xs px-1.5 py-0.5 border opacity-75",
+                        tagInfo.color
+                      )}
+                    >
+                      <span className="text-xs mr-1">{tagInfo.icon}</span>
+                      {tagInfo.label}
+                    </Badge>
+                  );
+                })}
+                {displayTags.length > 4 && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs px-1.5 py-0.5 bg-gray-50 text-gray-500 border-gray-200 opacity-75"
+                  >
+                    +{displayTags.length - 4}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Advanced Options */}
+          {(item.sizes && item.sizes.length > 0) ||
+          (item.modifiers && item.modifiers.length > 0) ||
+          item.hasAdvancedOptions ? (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="flex items-center gap-2 mb-2">
+                <Settings className="w-4 h-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">
+                  Advanced Options
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {/* Size Variations */}
+                {item.sizes && item.sizes.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Ruler className="w-3 h-3 text-blue-500" />
+                    <span className="text-xs text-gray-600">Sizes:</span>
+                    <div className="flex gap-1">
+                      {item.sizes.slice(0, 3).map((size) => (
+                        <Badge
+                          key={size.id}
+                          variant="outline"
+                          className={cn(
+                            "text-xs px-2 py-0.5",
+                            size.isDefault
+                              ? "bg-blue-50 border-blue-200 text-blue-700"
+                              : "bg-gray-50 border-gray-200 text-gray-600"
+                          )}
+                        >
+                          {size.name}
+                          {size.priceModifier > 0 &&
+                            ` +${currencySymbol}${size.priceModifier}`}
+                        </Badge>
+                      ))}
+                      {item.sizes.length > 3 && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs px-2 py-0.5 bg-gray-50 border-gray-200 text-gray-600"
+                        >
+                          +{item.sizes.length - 3} more
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Modifiers */}
+                {item.modifiers && item.modifiers.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-3 h-3 text-purple-500" />
+                    <span className="text-xs text-gray-600">Modifiers:</span>
+                    <div className="flex gap-1">
+                      {item.modifiers.slice(0, 3).map((modifier) => (
+                        <Badge
+                          key={modifier.id}
+                          variant="outline"
+                          className={cn(
+                            "text-xs px-2 py-0.5",
+                            modifier.isRequired
+                              ? "bg-red-50 border-red-200 text-red-700"
+                              : "bg-purple-50 border-purple-200 text-purple-700"
+                          )}
+                        >
+                          {modifier.name}
+                          {modifier.priceModifier > 0 &&
+                            ` +${currencySymbol}${modifier.priceModifier}`}
+                        </Badge>
+                      ))}
+                      {item.modifiers.length > 3 && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs px-2 py-0.5 bg-gray-50 border-gray-200 text-gray-600"
+                        >
+                          +{item.modifiers.length - 3} more
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
       </motion.div>
     );
@@ -527,6 +712,19 @@ export function MenuItemCard({
                       {item.name}
                     </h3>
                     <div className="flex gap-2">
+                      {/* Mandatory Vegetarian Status */}
+                      <Badge
+                        className={cn(
+                          "border-none shadow-lg font-semibold",
+                          vegetarianStatus.color
+                        )}
+                      >
+                        <span className="text-sm mr-1">
+                          {vegetarianStatus.icon}
+                        </span>
+                        {vegetarianStatus.label}
+                      </Badge>
+
                       {item.popular && (
                         <Badge className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white border-none shadow-lg">
                           <Sparkles className="w-3 h-3 mr-1" />
@@ -576,31 +774,42 @@ export function MenuItemCard({
                           {formatPreparationTime(item.preparationTime)}
                         </span>
                       </div>
-                    </div>
 
-                    {/* Tags Display */}
-                    {item.tags && item.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {item.tags.map((tag) => {
-                          const tagInfo = getTagInfo(tag);
-                          return (
-                            <Badge
-                              key={tag}
-                              variant="outline"
-                              className={cn(
-                                "text-xs px-2 py-1 border",
-                                tagInfo.color
-                              )}
-                            >
-                              <span className="text-sm mr-1">
-                                {tagInfo.icon}
-                              </span>
-                              {tagInfo.label}
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    )}
+                      {/* Tags (Subtle) */}
+                      {displayTags.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <Tag className="w-3 h-3 text-gray-400" />
+                          <div className="flex gap-0.5">
+                            {displayTags.slice(0, 3).map((tag) => {
+                              const tagInfo = getTagInfo(tag);
+                              return (
+                                <Badge
+                                  key={tag}
+                                  variant="outline"
+                                  className={cn(
+                                    "text-xs px-1 py-0.5 border opacity-60",
+                                    tagInfo.color
+                                  )}
+                                >
+                                  <span className="text-xs mr-0.5">
+                                    {tagInfo.icon}
+                                  </span>
+                                  {tagInfo.label}
+                                </Badge>
+                              );
+                            })}
+                            {displayTags.length > 3 && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs px-1 py-0.5 bg-gray-50 text-gray-500 border-gray-200 opacity-60"
+                              >
+                                +{displayTags.length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     {item.allergens.length > 0 ? (
                       <HoverCard openDelay={200} closeDelay={100}>

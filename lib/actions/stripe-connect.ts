@@ -509,27 +509,32 @@ export async function refreshAccountStatus(restaurantId: string) {
 export async function deleteStripeAccount(accountId: string) {
   try {
     console.log("Deleting Stripe Connect account:", accountId);
-    
+
     // Delete the Stripe account
     const deletedAccount = await stripe.accounts.del(accountId);
-    
+
     console.log("Successfully deleted Stripe account:", {
       accountId: deletedAccount.id,
-      deleted: deletedAccount.deleted
+      deleted: deletedAccount.deleted,
     });
-    
+
     // Find and update any restaurants using this account
     const supabase = createClient();
     const { data: restaurants, error: fetchError } = await supabase
       .from("restaurants")
       .select("id, name, email")
       .eq("stripe_account_id", accountId);
-    
+
     if (fetchError) {
-      console.error("Error fetching restaurants for deleted account:", fetchError);
+      console.error(
+        "Error fetching restaurants for deleted account:",
+        fetchError
+      );
     } else if (restaurants && restaurants.length > 0) {
-      console.log(`Found ${restaurants.length} restaurants using deleted account`);
-      
+      console.log(
+        `Found ${restaurants.length} restaurants using deleted account`
+      );
+
       // Update all restaurants that were using this account
       for (const restaurant of restaurants) {
         const { error: updateError } = await supabase.rpc(
@@ -541,55 +546,58 @@ export async function deleteStripeAccount(accountId: string) {
             p_requirements: null,
           }
         );
-        
+
         if (updateError) {
           console.error("Error updating restaurant after account deletion:", {
             restaurantId: restaurant.id,
-            error: updateError
+            error: updateError,
           });
         } else {
-          console.log("Updated restaurant after account deletion:", restaurant.id);
+          console.log(
+            "Updated restaurant after account deletion:",
+            restaurant.id
+          );
         }
       }
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       accountId: deletedAccount.id,
-      deleted: deletedAccount.deleted 
+      deleted: deletedAccount.deleted,
     };
   } catch (error: any) {
     console.error("Error deleting Stripe account:", error);
-    
+
     // Handle specific Stripe errors
     if (error.type === "StripeInvalidRequestError") {
       if (error.code === "resource_missing") {
         return { error: "Account not found or already deleted" };
       }
     }
-    
+
     if (error.type === "StripePermissionError") {
       return { error: "Permission denied. Cannot delete this account." };
     }
-    
+
     return { error: "Failed to delete Stripe account" };
   }
 }
 
 export async function deleteMultipleStripeAccounts(accountIds: string[]) {
   const results = [];
-  
+
   for (const accountId of accountIds) {
     try {
       const result = await deleteStripeAccount(accountId);
       results.push({ accountId, ...result });
     } catch (error) {
-      results.push({ 
-        accountId, 
-        error: error instanceof Error ? error.message : "Unknown error" 
+      results.push({
+        accountId,
+        error: error instanceof Error ? error.message : "Unknown error",
       });
     }
   }
-  
+
   return results;
 }

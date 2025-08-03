@@ -197,16 +197,37 @@ export const useRestaurantSettings = create<RestaurantSettings>((set, get) => ({
         throw new Error("No restaurant found");
       }
 
+      // Log the data being sent for debugging
+      console.log("Updating restaurant with data:", data);
+      console.log("Restaurant ID:", restaurant.id);
+
+      // Validate data before sending
+      const updateData = {
+        ...data,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Remove any undefined or null values that might cause issues
+      Object.keys(updateData).forEach((key) => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+
+      console.log("Final update data:", updateData);
+
       // Update in database
       const { error } = await supabase
         .from("restaurants")
-        .update({
-          ...data,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("id", restaurant.id);
 
       if (error) {
+        console.error("Supabase error details:", error);
+        console.error("Error code:", error.code);
+        console.error("Error message:", error.message);
+        console.error("Error details:", error.details);
+        console.error("Error hint:", error.hint);
         throw error;
       }
 

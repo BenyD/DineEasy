@@ -2,12 +2,21 @@
 
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Minus, Clock, AlertCircle, Star, Zap, Leaf } from "lucide-react";
+import {
+  Plus,
+  Minus,
+  Clock,
+  AlertCircle,
+  Star,
+  Zap,
+  Leaf,
+  Settings,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ImageWithFallback } from "@/components/ui/image-with-fallback";
 import type { MenuItem } from "@/types";
-import { getTagInfo } from "@/lib/constants/menu-tags";
+import { getTagInfo, MENU_TAGS } from "@/lib/constants/menu-tags";
 import { formatAmountWithCurrency } from "@/lib/utils/currency";
 
 interface MenuItemCardProps {
@@ -58,11 +67,73 @@ export function MenuItemCard({
     setIsImageLoaded(true);
   };
 
-  // Get tags to display (combine item tags with popular if applicable)
-  const displayTags = [
-    ...(item.tags || []),
-    ...(item.popular ? ["popular"] : []),
-  ];
+  // Determine vegetarian status
+  const getVegetarianStatus = () => {
+    if (!item.tags || item.tags.length === 0) {
+      return {
+        status: "unknown",
+        label: "Unknown",
+        color: "bg-gray-100 text-gray-700 border-gray-200",
+        icon: "❓",
+      };
+    }
+
+    if (item.tags.includes(MENU_TAGS.VEGETARIAN_STATUS.VEGAN)) {
+      return {
+        status: "vegan",
+        label: "Vegan",
+        color: "bg-emerald-100 text-emerald-700 border-emerald-200",
+        icon: "🌱",
+      };
+    }
+
+    if (item.tags.includes(MENU_TAGS.VEGETARIAN_STATUS.VEGETARIAN)) {
+      return {
+        status: "vegetarian",
+        label: "Vegetarian",
+        color: "bg-green-100 text-green-700 border-green-200",
+        icon: "🥬",
+      };
+    }
+
+    if (item.tags.includes(MENU_TAGS.VEGETARIAN_STATUS.NON_VEGETARIAN)) {
+      return {
+        status: "non-vegetarian",
+        label: "Non-Vegetarian",
+        color: "bg-red-100 text-red-700 border-red-200",
+        icon: "🥩",
+      };
+    }
+
+    // Default to non-vegetarian if no specific tag is found
+    return {
+      status: "non-vegetarian",
+      label: "Non-Vegetarian",
+      color: "bg-red-100 text-red-700 border-red-200",
+      icon: "🥩",
+    };
+  };
+
+  // Filter tags for display (exclude vegetarian status tags)
+  const getDisplayTags = () => {
+    if (!item.tags || item.tags.length === 0) return [];
+
+    const vegetarianStatusTags = [
+      MENU_TAGS.VEGETARIAN_STATUS.VEGAN,
+      MENU_TAGS.VEGETARIAN_STATUS.VEGETARIAN,
+      MENU_TAGS.VEGETARIAN_STATUS.NON_VEGETARIAN,
+    ];
+    return item.tags.filter(
+      (tag) => !vegetarianStatusTags.includes(tag as any)
+    );
+  };
+
+  const displayTags = getDisplayTags();
+
+  const vegetarianStatus = getVegetarianStatus();
+
+  // Get tags to display (combine filtered tags with popular if applicable)
+  const allDisplayTags = [...displayTags, ...(item.popular ? ["popular"] : [])];
 
   return (
     <motion.div
@@ -104,29 +175,38 @@ export function MenuItemCard({
             />
 
             {/* Tags overlay */}
-            {displayTags.length > 0 && (
-              <div className="absolute top-3 left-3 flex flex-wrap gap-1">
-                {displayTags.map((tag) => {
+            <div className="absolute top-3 left-3 flex flex-wrap gap-1">
+              {/* Mandatory Vegetarian Status */}
+              <Badge
+                variant="secondary"
+                className={`text-xs px-2 py-1 font-semibold ${vegetarianStatus.color}`}
+              >
+                <span className="mr-1">{vegetarianStatus.icon}</span>
+                {vegetarianStatus.label}
+              </Badge>
+
+              {/* Subtle Tags */}
+              {allDisplayTags.length > 0 &&
+                allDisplayTags.map((tag) => {
                   const tagInfo = getTagInfo(tag);
                   return (
                     <Badge
                       key={tag}
                       variant="secondary"
-                      className={`text-xs px-2 py-1 ${
+                      className={`text-xs px-1.5 py-0.5 opacity-75 ${
                         tag === "popular"
                           ? "bg-orange-100 text-orange-700 border-orange-200"
                           : "bg-gray-100 text-gray-700 border-gray-200"
                       }`}
                     >
                       {tagInfo.icon && (
-                        <span className="mr-1">{tagInfo.icon}</span>
+                        <span className="text-xs mr-1">{tagInfo.icon}</span>
                       )}
                       {tagInfo.label}
                     </Badge>
                   );
                 })}
-              </div>
-            )}
+            </div>
 
             {/* Popular badge */}
             {item.popular && (
@@ -134,6 +214,16 @@ export function MenuItemCard({
                 <Badge className="bg-orange-500 text-white text-xs px-2 py-1">
                   <Star className="w-3 h-3 mr-1" />
                   Popular
+                </Badge>
+              </div>
+            )}
+
+            {/* Advanced Options badge */}
+            {(item.hasAdvancedOptions || item.isComboMeal) && (
+              <div className="absolute bottom-3 right-3">
+                <Badge className="bg-blue-500 text-white text-xs px-2 py-1">
+                  <Settings className="w-3 h-3 mr-1" />
+                  Customizable
                 </Badge>
               </div>
             )}

@@ -229,6 +229,8 @@ export async function createRestaurant(formData: FormData) {
       email,
       currency,
       tax_rate: parseFloat(formData.get("tax_rate") as string) || 7.7,
+      vat_number: (formData.get("vat_number") as string) || null,
+      price_range: (formData.get("price_range") as any) || null,
       description: (formData.get("description") as string) || null,
       cuisine: (formData.get("cuisine") as string) || null,
       phone: (formData.get("phone") as string) || null,
@@ -625,6 +627,8 @@ export async function updateRestaurant(formData: FormData) {
       address: (formData.get("address") as string) || null,
       city: (formData.get("city") as string) || null,
       postal_code: (formData.get("postal_code") as string) || null,
+      vat_number: (formData.get("vat_number") as string) || null,
+      price_range: (formData.get("price_range") as any) || null,
       seating_capacity:
         parseInt(formData.get("seating_capacity") as string) || null,
       accepts_reservations: formData.get("accepts_reservations") === "on",

@@ -9,6 +9,15 @@ export interface OrderItem {
   quantity: number;
   price: number;
   modifiers?: string[];
+  // Advanced options
+  selectedSize?: string;
+  selectedModifiers?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    priceModifier: number;
+  }>;
+  comboMealName?: string;
 }
 
 export interface Order {
@@ -121,6 +130,12 @@ export async function getRestaurantOrders(
             quantity: item.quantity,
             price: item.unit_price,
             modifiers: [], // We can add modifiers later if needed
+            // Advanced options
+            selectedSize: item.selected_size,
+            selectedModifiers: item.selected_modifiers
+              ? JSON.parse(item.selected_modifiers)
+              : undefined,
+            comboMealName: item.combo_meal_name,
           })) || [];
 
         const paymentStatus = order.payments?.[0]?.status || "pending";

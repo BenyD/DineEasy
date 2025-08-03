@@ -49,6 +49,61 @@ export class MenuWebSocket {
             this.handleMenuUpdate(payload, "allergens");
           }
         )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "menu_item_sizes",
+          },
+          (payload) => {
+            this.handleMenuUpdate(payload, "menu_item_sizes");
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "menu_item_modifiers",
+          },
+          (payload) => {
+            this.handleMenuUpdate(payload, "menu_item_modifiers");
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "combo_meals",
+          },
+          (payload) => {
+            this.handleMenuUpdate(payload, "combo_meals");
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "combo_meal_items",
+          },
+          (payload) => {
+            this.handleMenuUpdate(payload, "combo_meal_items");
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "combo_meal_options",
+          },
+          (payload) => {
+            this.handleMenuUpdate(payload, "combo_meal_options");
+          }
+        )
         .on("presence", { event: "sync" }, () => {
           console.log("Menu WebSocket presence sync");
         })
@@ -157,6 +212,26 @@ export class MenuWebSocket {
   // Subscribe to allergens only
   subscribeToAllergens(callback: Function) {
     return this.subscribe("allergens", callback);
+  }
+
+  subscribeToMenuItemSizes(callback: Function) {
+    return this.subscribe("menu_item_sizes", callback);
+  }
+
+  subscribeToMenuItemModifiers(callback: Function) {
+    return this.subscribe("menu_item_modifiers", callback);
+  }
+
+  subscribeToComboMeals(callback: Function) {
+    return this.subscribe("combo_meals", callback);
+  }
+
+  subscribeToComboMealItems(callback: Function) {
+    return this.subscribe("combo_meal_items", callback);
+  }
+
+  subscribeToComboMealOptions(callback: Function) {
+    return this.subscribe("combo_meal_options", callback);
   }
 
   // Send presence update

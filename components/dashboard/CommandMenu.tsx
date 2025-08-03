@@ -134,7 +134,7 @@ export function CommandMenu() {
               <CommandShortcut>⌘2</CommandShortcut>
             </CommandItem>
             <CommandItem
-              onSelect={() => runCommand(() => router.push("/dashboard/menu"))}
+              onSelect={() => runCommand(() => router.push("/dashboard/menu/manage"))}
             >
               <ChefHat className="mr-2 h-4 w-4" />
               Menu Management

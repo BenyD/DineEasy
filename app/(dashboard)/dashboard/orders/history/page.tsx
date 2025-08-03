@@ -1210,29 +1210,117 @@ export default function OrderHistoryPage() {
                         <h3 className="text-sm font-medium text-gray-900 mb-3">
                           Order Items
                         </h3>
-                        <div className="bg-white rounded-lg border divide-y">
+                        <div className="space-y-3">
                           {selectedOrder.items.map((item: any) => (
                             <div
                               key={item.id}
-                              className="p-3 flex items-start justify-between"
+                              className="bg-white rounded-lg border border-gray-200 p-4"
                             >
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-sm">
-                                    {item.quantity}x
-                                  </span>
-                                  <span className="text-sm">{item.name}</span>
-                                </div>
-                                {item.modifiers &&
-                                  item.modifiers.length > 0 && (
-                                    <p className="text-xs text-gray-500">
-                                      Modifiers: {item.modifiers.join(", ")}
-                                    </p>
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="font-bold text-gray-900">
+                                      {item.quantity}x
+                                    </span>
+                                    <span className="font-semibold text-gray-900">
+                                      {item.name}
+                                    </span>
+                                    {/* Show combo meal indicator */}
+                                    {item.comboMealName && (
+                                      <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs font-medium">
+                                        🍽️ {item.comboMealName}
+                                      </Badge>
+                                    )}
+                                  </div>
+
+                                  {/* Show advanced options with better styling */}
+                                  {(item.selectedSize ||
+                                    (item.selectedModifiers &&
+                                      item.selectedModifiers.length > 0)) && (
+                                    <div className="ml-6 space-y-1 mt-2">
+                                      {item.selectedSize && (
+                                        <div className="flex items-center gap-2">
+                                          <Badge
+                                            variant="outline"
+                                            className="bg-green-50 text-green-700 border-green-200 text-xs"
+                                          >
+                                            📏 Size
+                                          </Badge>
+                                          <span className="text-sm text-gray-700 font-medium">
+                                            {item.selectedSize
+                                              .charAt(0)
+                                              .toUpperCase() +
+                                              item.selectedSize
+                                                .slice(1)
+                                                .toLowerCase()}
+                                          </span>
+                                        </div>
+                                      )}
+                                      {item.selectedModifiers &&
+                                        item.selectedModifiers.length > 0 && (
+                                          <div className="flex items-start gap-2">
+                                            <Badge
+                                              variant="outline"
+                                              className="bg-purple-50 text-purple-700 border-purple-200 text-xs mt-0.5"
+                                            >
+                                              ⚙️ Modifiers
+                                            </Badge>
+                                            <div className="flex flex-wrap gap-1">
+                                              {item.selectedModifiers.map(
+                                                (
+                                                  modifier: any,
+                                                  modIndex: number
+                                                ) => (
+                                                  <Badge
+                                                    key={modIndex}
+                                                    variant="outline"
+                                                    className="bg-gray-100 text-gray-700 border-gray-300 text-xs"
+                                                  >
+                                                    {modifier.name}
+                                                    {modifier.priceModifier >
+                                                      0 && (
+                                                      <span className="text-green-600 ml-1">
+                                                        (+
+                                                        {modifier.priceModifier.toFixed(
+                                                          2
+                                                        )}
+                                                        )
+                                                      </span>
+                                                    )}
+                                                  </Badge>
+                                                )
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+                                    </div>
                                   )}
+
+                                  {/* Legacy modifiers support */}
+                                  {!item.selectedModifiers &&
+                                    item.modifiers &&
+                                    item.modifiers.length > 0 && (
+                                      <div className="ml-6 mt-2">
+                                        <div className="flex items-center gap-2">
+                                          <Badge
+                                            variant="outline"
+                                            className="bg-orange-50 text-orange-700 border-orange-200 text-xs"
+                                          >
+                                            📝 Modifiers
+                                          </Badge>
+                                          <span className="text-sm text-gray-600">
+                                            {item.modifiers.join(", ")}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-bold text-gray-900">
+                                    {formatCurrency(item.price * item.quantity)}
+                                  </span>
+                                </div>
                               </div>
-                              <span className="text-sm font-medium">
-                                {formatCurrency(item.price * item.quantity)}
-                              </span>
                             </div>
                           ))}
                           <div className="p-3 flex items-center justify-between bg-gray-50">

@@ -154,6 +154,77 @@ export interface MenuItem {
   restaurantId: string;
   createdAt: string;
   updatedAt: string;
+  // Advanced options
+  sizes?: MenuItemSize[];
+  modifiers?: MenuItemModifier[];
+  hasAdvancedOptions?: boolean;
+}
+
+export interface MenuItemSize {
+  id: string;
+  menuItemId: string;
+  name: string;
+  priceModifier: number;
+  isDefault: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MenuItemModifier {
+  id: string;
+  menuItemId: string;
+  name: string;
+  description?: string;
+  type: "addon" | "substitution" | "preparation" | "sauce" | "topping";
+  priceModifier: number;
+  isRequired: boolean;
+  maxSelections: number;
+  sortOrder: number;
+  isAvailable: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComboMeal {
+  id: string;
+  restaurantId: string;
+  name: string;
+  description?: string;
+  basePrice: number;
+  discountPercentage: number;
+  isAvailable: boolean;
+  imageUrl?: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  items?: ComboMealItem[];
+}
+
+export interface ComboMealItem {
+  id: string;
+  comboMealId: string;
+  menuItemId: string;
+  itemType: "main" | "side" | "drink" | "dessert";
+  isRequired: boolean;
+  isCustomizable: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  menuItem?: MenuItem;
+  options?: ComboMealOption[];
+}
+
+export interface ComboMealOption {
+  id: string;
+  comboMealItemId: string;
+  menuItemId: string;
+  priceModifier: number;
+  isDefault: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  menuItem?: MenuItem;
 }
 
 export interface MenuCategory {
@@ -201,6 +272,19 @@ export interface OrderItem {
   unitPrice: number;
   notes?: string;
   createdAt: Date;
+  // Advanced options support
+  comboMealId?: string;
+  comboMealName?: string;
+  selectedSize?: string;
+  sizePriceModifier?: number;
+  selectedModifiers?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    priceModifier: number;
+  }>;
+  modifiersTotalPrice?: number;
+  totalPrice?: number;
 }
 
 export interface Payment {

@@ -1124,8 +1124,8 @@ export default function SetupPage() {
                     <p className="text-blue-700 text-xs mt-1">
                       When you select a country, the currency will automatically
                       update to match. Similarly, changing the currency will
-                      update the country. You'll see a notification when this
-                      happens.
+                      update the country. You&apos;ll see a notification when
+                      this happens.
                     </p>
                   </div>
                 </div>
@@ -1578,7 +1578,7 @@ export default function SetupPage() {
               <div className="text-center">
                 <h2 className="text-2xl font-bold">Location & Services</h2>
                 <p className="text-gray-500 mt-2">
-                  Enter your restaurant's location and available services
+                  Enter your restaurant&apos;s location and available services
                 </p>
               </div>
 

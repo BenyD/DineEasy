@@ -12,6 +12,10 @@ import {
   Phone,
   Mail,
   Info,
+  Settings,
+  Ruler,
+  Layers,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +27,12 @@ import { getTableInfo, getRestaurantMenu } from "@/lib/actions/qr-client";
 import { checkRestaurantOpenStatus } from "@/lib/actions/restaurant";
 import { useRestaurantWebSocket } from "@/hooks/useRestaurantWebSocket";
 import type { MenuItem } from "@/types";
+
+// Extend MenuItem interface for QR client specific needs
+interface QRMenuItem extends MenuItem {
+  isComboMeal?: boolean;
+  comboData?: any;
+}
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -37,7 +47,7 @@ import {
 interface Category {
   id: string;
   name: string;
-  items: MenuItem[];
+  items: QRMenuItem[];
 }
 
 export default function QRClientPage({
@@ -48,6 +58,7 @@ export default function QRClientPage({
   const [tableData, setTableData] = useState<any>(null);
   const [restaurantData, setRestaurantData] = useState<any>(null);
   const [menuData, setMenuData] = useState<any>(null);
+  const [comboMeals, setComboMeals] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -64,6 +75,10 @@ export default function QRClientPage({
     nextClose?: string;
   } | null>(null);
   const [urlTableId, setUrlTableId] = useState<string>("");
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<QRMenuItem | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string>("");
+  const [selectedModifiers, setSelectedModifiers] = useState<string[]>([]);
   const maxRetries = 3;
 
   const {
@@ -195,8 +210,9 @@ export default function QRClientPage({
           return;
         }
 
-        const menuByCategory = menuResult.data;
+        const { menuByCategory, comboMeals: comboMealsData } = menuResult.data;
         setMenuData(menuByCategory);
+        setComboMeals(comboMealsData || []);
 
         console.log("QR Client - Menu data structure:", {
           type: typeof menuByCategory,
@@ -206,6 +222,7 @@ export default function QRClientPage({
           sampleCategory: Object.keys(menuByCategory)[0],
           sampleItems:
             menuByCategory[Object.keys(menuByCategory)[0]]?.length || 0,
+          comboMealsCount: comboMealsData?.length || 0,
         });
 
         // Process menu data into categories
@@ -216,6 +233,34 @@ export default function QRClientPage({
             items: items as MenuItem[],
           })
         );
+
+        // Add combo meals as a special category if available
+        if (comboMealsData && comboMealsData.length > 0) {
+          processedCategories.unshift({
+            id: "combo-meals",
+            name: "Combo Meals",
+            items: comboMealsData.map((combo: any) => ({
+              id: combo.id,
+              name: combo.name,
+              description: combo.description,
+              price: combo.basePrice * (1 - combo.discountPercentage / 100),
+              image: combo.imageUrl || "/placeholder.svg",
+              category: "combo-meals",
+              available: combo.isAvailable,
+              tags: ["combo"],
+              allergens: [],
+              preparationTime: 20, // Default combo preparation time
+              isComboMeal: true,
+              comboData: combo,
+              // Add missing MenuItem properties
+              popular: false,
+              categoryId: "combo-meals",
+              restaurantId: restaurantData.id,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            })),
+          });
+        }
 
         setCategories(processedCategories);
         if (processedCategories.length > 0) {
@@ -323,7 +368,7 @@ export default function QRClientPage({
   );
 
   // Handle adding items to cart with restaurant status check
-  const handleAddToCart = (item: MenuItem) => {
+  const handleAddToCart = (item: QRMenuItem) => {
     // Check if restaurant is closed
     if (restaurantOpenStatus && !restaurantOpenStatus.isOpen) {
       toast.error(
@@ -338,6 +383,15 @@ export default function QRClientPage({
       return;
     }
 
+    // Check if item has advanced options
+    if (item.hasAdvancedOptions || item.isComboMeal) {
+      setSelectedItem(item);
+      setSelectedSize("");
+      setSelectedModifiers([]);
+      setShowAdvancedOptions(true);
+      return;
+    }
+
     console.log(
       "Adding item to cart from main page:",
       item,
@@ -346,6 +400,79 @@ export default function QRClientPage({
     );
     addToCart(item);
     toast.success(`${item.name} added to cart`);
+  };
+
+  // Handle advanced options confirmation
+  const handleAdvancedOptionsConfirm = () => {
+    if (!selectedItem) return;
+
+    // For combo meals, validate that required items are selected
+    if (selectedItem.isComboMeal && selectedItem.comboData) {
+      const requiredItems = selectedItem.comboData.items?.filter(
+        (item: any) => item.isRequired
+      );
+      if (requiredItems && requiredItems.length > 0) {
+        // Check if all required items have selections
+        const hasAllRequired = requiredItems.every((item: any) => {
+          if (item.isCustomizable && item.options) {
+            // For customizable items, check if an option is selected
+            return true; // For now, assume at least one option is available
+          }
+          return true; // Non-customizable required items are always included
+        });
+
+        if (!hasAllRequired) {
+          toast.error("Please select options for all required combo items");
+          return;
+        }
+      }
+    }
+
+    // Calculate total price including all modifications
+    let totalPrice = selectedItem.price;
+    let sizePriceModifier = 0;
+    let modifiersTotalPrice = 0;
+    let selectedModifiersData: any[] = [];
+
+    // Add size price modifier
+    if (selectedSize && selectedItem.sizes) {
+      const selectedSizeData = selectedItem.sizes.find(
+        (s) => s.name === selectedSize
+      );
+      if (selectedSizeData) {
+        sizePriceModifier = selectedSizeData.priceModifier;
+        totalPrice += sizePriceModifier;
+      }
+    }
+
+    // Add modifiers price
+    if (selectedModifiers.length > 0 && selectedItem.modifiers) {
+      selectedModifiersData = selectedItem.modifiers.filter((m) =>
+        selectedModifiers.includes(m.id)
+      );
+      modifiersTotalPrice = selectedModifiersData.reduce(
+        (total, modifier) => total + modifier.priceModifier,
+        0
+      );
+      totalPrice += modifiersTotalPrice;
+    }
+
+    // Create item with advanced options
+    const itemWithOptions = {
+      ...selectedItem,
+      selectedSize,
+      sizePriceModifier,
+      selectedModifiers: selectedModifiersData,
+      modifiersTotalPrice,
+      price: totalPrice, // Update price to include all modifications
+    };
+
+    addToCart(itemWithOptions);
+    toast.success(`${selectedItem.name} added to cart`);
+    setShowAdvancedOptions(false);
+    setSelectedItem(null);
+    setSelectedSize("");
+    setSelectedModifiers([]);
   };
 
   // Handle quantity updates with restaurant status check
@@ -804,6 +931,425 @@ export default function QRClientPage({
           </div>
         )}
       </div>
+
+      {/* Advanced Options Dialog */}
+      <Dialog open={showAdvancedOptions} onOpenChange={setShowAdvancedOptions}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Customize {selectedItem?.name}</DialogTitle>
+            <DialogDescription>
+              Select your preferred options for this item.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-6">
+            {/* Size Selection */}
+            {selectedItem?.sizes && selectedItem.sizes.length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-900 mb-3">Size</h4>
+                <div className="space-y-2">
+                  {selectedItem.sizes.map((size) => (
+                    <label
+                      key={size.id}
+                      className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+                    >
+                      <input
+                        type="radio"
+                        name="size"
+                        value={size.name}
+                        checked={selectedSize === size.name}
+                        onChange={(e) => setSelectedSize(e.target.value)}
+                        className="text-green-600"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">{size.name}</div>
+                        {size.priceModifier > 0 && (
+                          <div className="text-sm text-gray-600">
+                            +{size.priceModifier.toFixed(2)} CHF
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Modifiers Selection */}
+            {selectedItem?.modifiers && selectedItem.modifiers.length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-900 mb-3">
+                  Add-ons & Modifiers
+                </h4>
+                <div className="space-y-2">
+                  {selectedItem.modifiers.map((modifier) => (
+                    <label
+                      key={modifier.id}
+                      className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedModifiers.includes(modifier.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedModifiers([
+                              ...selectedModifiers,
+                              modifier.id,
+                            ]);
+                          } else {
+                            setSelectedModifiers(
+                              selectedModifiers.filter(
+                                (id) => id !== modifier.id
+                              )
+                            );
+                          }
+                        }}
+                        className="text-green-600"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">{modifier.name}</div>
+                        {modifier.description && (
+                          <div className="text-sm text-gray-600">
+                            {modifier.description}
+                          </div>
+                        )}
+                        {modifier.priceModifier > 0 && (
+                          <div className="text-sm text-gray-600">
+                            +{modifier.priceModifier.toFixed(2)} CHF
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Combo Meal Options */}
+            {selectedItem?.isComboMeal && selectedItem.comboData && (
+              <div>
+                <h4 className="font-medium text-gray-900 mb-3">
+                  Combo Options
+                </h4>
+                <div className="space-y-3">
+                  {selectedItem.comboData.items?.map((comboItem: any) => (
+                    <div key={comboItem.id} className="p-3 border rounded-lg">
+                      <div className="font-medium mb-2">
+                        {comboItem.menuItem?.name}
+                      </div>
+                      {comboItem.isCustomizable && comboItem.options && (
+                        <div className="space-y-2">
+                          {comboItem.options.map((option: any) => (
+                            <label
+                              key={option.id}
+                              className="flex items-center gap-2 text-sm"
+                            >
+                              <input
+                                type="radio"
+                                name={`combo-${comboItem.id}`}
+                                value={option.id}
+                                className="text-green-600"
+                              />
+                              <span>{option.menuItem?.name}</span>
+                              {option.priceModifier > 0 && (
+                                <span className="text-gray-600">
+                                  (+{option.priceModifier.toFixed(2)} CHF)
+                                </span>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowAdvancedOptions(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAdvancedOptionsConfirm}>Add to Cart</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Advanced Options Dialog */}
+      <Dialog open={showAdvancedOptions} onOpenChange={setShowAdvancedOptions}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="w-5 h-5 text-green-600" />
+              Customize {selectedItem?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Select your preferred options for this item.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-6">
+            {/* Price Summary */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Base Price:</span>
+                <span className="font-medium">
+                  {selectedItem?.price.toFixed(2)} CHF
+                </span>
+              </div>
+              {selectedSize && selectedItem?.sizes && (
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-sm text-gray-600">
+                    Size ({selectedSize}):
+                  </span>
+                  <span className="font-medium text-green-700">
+                    +
+                    {selectedItem.sizes
+                      .find((s) => s.name === selectedSize)
+                      ?.priceModifier.toFixed(2) || "0.00"}{" "}
+                    CHF
+                  </span>
+                </div>
+              )}
+              {selectedModifiers.length > 0 && selectedItem?.modifiers && (
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-sm text-gray-600">Modifiers:</span>
+                  <span className="font-medium text-green-700">
+                    +
+                    {selectedModifiers
+                      .reduce((total, id) => {
+                        const modifier = selectedItem.modifiers?.find(
+                          (m) => m.id === id
+                        );
+                        return total + (modifier?.priceModifier || 0);
+                      }, 0)
+                      .toFixed(2)}{" "}
+                    CHF
+                  </span>
+                </div>
+              )}
+              <div className="border-t border-gray-200 mt-2 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-gray-900">Total:</span>
+                  <span className="font-bold text-lg text-green-700">
+                    {(() => {
+                      let total = selectedItem?.price || 0;
+                      if (selectedSize && selectedItem?.sizes) {
+                        total +=
+                          selectedItem.sizes.find(
+                            (s) => s.name === selectedSize
+                          )?.priceModifier || 0;
+                      }
+                      if (
+                        selectedModifiers.length > 0 &&
+                        selectedItem?.modifiers
+                      ) {
+                        total += selectedModifiers.reduce((sum, id) => {
+                          const modifier = selectedItem.modifiers?.find(
+                            (m) => m.id === id
+                          );
+                          return sum + (modifier?.priceModifier || 0);
+                        }, 0);
+                      }
+                      return total.toFixed(2);
+                    })()}{" "}
+                    CHF
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Size Selection */}
+            {selectedItem?.sizes && selectedItem.sizes.length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                  <Ruler className="w-4 h-4 text-blue-600" />
+                  Choose Size
+                </h4>
+                <div className="grid grid-cols-1 gap-2">
+                  {selectedItem.sizes.map((size) => (
+                    <label
+                      key={size.id}
+                      className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all duration-200 ${
+                        selectedSize === size.name
+                          ? "border-green-500 bg-green-50"
+                          : "border-gray-200 hover:border-green-300 hover:bg-green-50/30"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="size"
+                        value={size.name}
+                        checked={selectedSize === size.name}
+                        onChange={(e) => setSelectedSize(e.target.value)}
+                        className="text-green-600"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">
+                          {size.name.charAt(0).toUpperCase() +
+                            size.name.slice(1).toLowerCase()}
+                        </div>
+                        {size.priceModifier > 0 && (
+                          <div className="text-sm text-green-700 font-medium">
+                            +{size.priceModifier.toFixed(2)} CHF
+                          </div>
+                        )}
+                        {size.priceModifier === 0 && (
+                          <div className="text-sm text-gray-500">
+                            No extra cost
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Modifiers Selection */}
+            {selectedItem?.modifiers && selectedItem.modifiers.length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-purple-600" />
+                  Add-ons & Modifiers
+                </h4>
+                <div className="grid grid-cols-1 gap-2">
+                  {selectedItem.modifiers.map((modifier) => (
+                    <label
+                      key={modifier.id}
+                      className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all duration-200 ${
+                        selectedModifiers.includes(modifier.id)
+                          ? "border-green-500 bg-green-50"
+                          : "border-gray-200 hover:border-green-300 hover:bg-green-50/30"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedModifiers.includes(modifier.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedModifiers([
+                              ...selectedModifiers,
+                              modifier.id,
+                            ]);
+                          } else {
+                            setSelectedModifiers(
+                              selectedModifiers.filter(
+                                (id) => id !== modifier.id
+                              )
+                            );
+                          }
+                        }}
+                        className="text-green-600"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">
+                          {modifier.name.charAt(0).toUpperCase() +
+                            modifier.name.slice(1).toLowerCase()}
+                        </div>
+                        {modifier.description && (
+                          <div className="text-sm text-gray-600 mt-1">
+                            {modifier.description}
+                          </div>
+                        )}
+                        {modifier.priceModifier > 0 && (
+                          <div className="text-sm text-green-700 font-medium mt-1">
+                            +{modifier.priceModifier.toFixed(2)} CHF
+                          </div>
+                        )}
+                        {modifier.priceModifier === 0 && (
+                          <div className="text-sm text-green-600 font-medium mt-1">
+                            Free
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Combo Meal Options */}
+            {selectedItem?.isComboMeal && selectedItem.comboData && (
+              <div>
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                  <Package className="w-4 h-4 text-orange-600" />
+                  Combo Options
+                </h4>
+                <div className="space-y-3">
+                  {selectedItem.comboData.items?.map((comboItem: any) => (
+                    <div
+                      key={comboItem.id}
+                      className="p-3 border border-gray-200 rounded-lg bg-gray-50"
+                    >
+                      <div className="font-medium mb-2 text-gray-900">
+                        {comboItem.menuItem?.name}
+                        {comboItem.isRequired && (
+                          <Badge className="ml-2 bg-red-100 text-red-700 text-xs">
+                            Required
+                          </Badge>
+                        )}
+                      </div>
+                      {comboItem.isCustomizable && comboItem.options && (
+                        <div className="space-y-2">
+                          {comboItem.options.map((option: any) => (
+                            <label
+                              key={option.id}
+                              className="flex items-center gap-2 text-sm p-2 rounded hover:bg-white cursor-pointer"
+                            >
+                              <input
+                                type="radio"
+                                name={`combo-${comboItem.id}`}
+                                value={option.id}
+                                className="text-green-600"
+                              />
+                              <span className="flex-1">
+                                {option.menuItem?.name}
+                              </span>
+                              {option.priceModifier > 0 && (
+                                <span className="text-green-700 font-medium">
+                                  +{option.priceModifier.toFixed(2)} CHF
+                                </span>
+                              )}
+                              {option.priceModifier === 0 && (
+                                <span className="text-green-600 font-medium">
+                                  Free
+                                </span>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      {!comboItem.isCustomizable && (
+                        <div className="text-sm text-gray-600">
+                          {comboItem.menuItem?.name} (included)
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowAdvancedOptions(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAdvancedOptionsConfirm}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Add to Cart
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Table Change Warning Dialog */}
       <Dialog open={showTableChangeWarning} onOpenChange={cancelTableChange}>

@@ -2,77 +2,38 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { toast } from "sonner";
 import { getMenuWebSocket, disconnectMenuWebSocket } from "@/lib/websocket";
 
-// Define MenuItem type based on database schema
-type MenuItem = {
-  id: string;
-  restaurant_id: string;
-  category_id: string | null;
-  name: string;
-  description: string | null;
-  price: number;
-  currency: string;
-  image_url: string | null;
-  is_available: boolean;
-  is_featured: boolean;
-  allergens: string[] | null;
-  tags: string[] | null;
-  preparation_time: number | null;
-  calories: number | null;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-  // Advanced options
-  sizes?: Array<{
-    id: string;
-    name: string;
-    price_modifier: number;
-    is_default: boolean;
-    sort_order: number;
-  }>;
-  modifiers?: Array<{
-    id: string;
-    name: string;
-    description: string | null;
-    type: string;
-    price_modifier: number;
-    is_required: boolean;
-    max_selections: number;
-    sort_order: number;
-    is_available: boolean;
-  }>;
-  hasAdvancedOptions?: boolean;
-};
+import { type ComboMeal } from "@/types";
 
 interface WebSocketPayload {
   eventType: "INSERT" | "UPDATE" | "DELETE";
-  newRecord?: MenuItem;
-  oldRecord?: MenuItem;
+  newRecord?: ComboMeal;
+  oldRecord?: ComboMeal;
 }
 
-interface UseMenuWebSocketOptions {
-  onItemAdded?: (item: MenuItem) => void;
-  onItemUpdated?: (item: MenuItem, oldItem?: MenuItem) => void;
-  onItemDeleted?: (item: MenuItem) => void;
+interface UseComboMealsWebSocketOptions {
+  onComboAdded?: (combo: ComboMeal) => void;
+  onComboUpdated?: (combo: ComboMeal, oldCombo?: ComboMeal) => void;
+  onComboDeleted?: (combo: ComboMeal) => void;
   enabled?: boolean;
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
 }
 
-interface UseMenuWebSocketReturn {
+interface UseComboMealsWebSocketReturn {
   isConnected: boolean;
   reconnectAttempts: number;
   connect: () => void;
   disconnect: () => void;
 }
 
-export function useMenuWebSocket({
-  onItemAdded,
-  onItemUpdated,
-  onItemDeleted,
+export function useComboMealsWebSocket({
+  onComboAdded,
+  onComboUpdated,
+  onComboDeleted,
   enabled = true,
   reconnectInterval = 5000,
   maxReconnectAttempts = 5,
-}: UseMenuWebSocketOptions = {}): UseMenuWebSocketReturn {
+}: UseComboMealsWebSocketOptions = {}): UseComboMealsWebSocketReturn {
   const isConnectedRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
@@ -103,8 +64,8 @@ export function useMenuWebSocket({
     try {
       const webSocket = getMenuWebSocket();
 
-      // Subscribe to all menu item updates
-      const unsubscribe = webSocket.subscribeToAll(
+      // Subscribe to combo meals updates
+      const unsubscribe = webSocket.subscribeToComboMeals(
         (payload: WebSocketPayload) => {
           const { eventType, newRecord, oldRecord } = payload;
 
@@ -114,14 +75,14 @@ export function useMenuWebSocket({
           switch (eventType) {
             case "INSERT":
               if (newRecord) {
-                onItemAdded?.(newRecord);
-                toast.success(`Menu item ${newRecord.name} added`);
+                onComboAdded?.(newRecord);
+                toast.success(`Combo meal ${newRecord.name} added`);
               }
               break;
 
             case "UPDATE":
               if (newRecord) {
-                onItemUpdated?.(newRecord, oldRecord);
+                onComboUpdated?.(newRecord, oldRecord);
 
                 // Show toast for availability changes
                 if (
@@ -129,7 +90,7 @@ export function useMenuWebSocket({
                   oldRecord.is_available !== newRecord.is_available
                 ) {
                   toast.success(
-                    `Menu item ${newRecord.name} ${newRecord.is_available ? "made available" : "made unavailable"}`
+                    `Combo meal ${newRecord.name} ${newRecord.is_available ? "made available" : "made unavailable"}`
                   );
                 }
               }
@@ -137,8 +98,8 @@ export function useMenuWebSocket({
 
             case "DELETE":
               if (oldRecord) {
-                onItemDeleted?.(oldRecord);
-                toast.success(`Menu item ${oldRecord.name} deleted`);
+                onComboDeleted?.(oldRecord);
+                toast.success(`Combo meal ${oldRecord.name} deleted`);
               }
               break;
           }
@@ -153,20 +114,20 @@ export function useMenuWebSocket({
       // Update presence
       webSocket.updatePresence({
         user_id: "current_user",
-        page: "menu",
+        page: "combo-meals",
         timestamp: new Date().toISOString(),
       });
 
-      console.log("Menu WebSocket connected");
+      console.log("Combo Meals WebSocket connected");
     } catch (error) {
-      console.error("Failed to connect to Menu WebSocket:", error);
+      console.error("Failed to connect to Combo Meals WebSocket:", error);
       handleReconnect();
     }
   }, [
     enabled,
-    onItemAdded,
-    onItemUpdated,
-    onItemDeleted,
+    onComboAdded,
+    onComboUpdated,
+    onComboDeleted,
     reconnectInterval,
     maxReconnectAttempts,
   ]);
@@ -184,7 +145,7 @@ export function useMenuWebSocket({
 
     isConnectedRef.current = false;
     setIsConnected(false);
-    console.log("Menu WebSocket disconnected");
+    console.log("Combo Meals WebSocket disconnected");
   }, []);
 
   // Handle enabled state changes

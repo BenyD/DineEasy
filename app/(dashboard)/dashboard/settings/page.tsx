@@ -359,7 +359,19 @@ export default function SettingsPage() {
         taxRate: restaurant.tax_rate || 0,
         vatNumber: restaurant.vat_number || "",
         priceRange: restaurant.price_range || "$",
-        seatingCapacity: restaurant.seating_capacity || "",
+        seatingCapacity: restaurant.seating_capacity
+          ? (() => {
+              const capacity = restaurant.seating_capacity;
+              // Convert integer back to range string
+              if (capacity <= 10) return "1-10";
+              if (capacity <= 25) return "11-25";
+              if (capacity <= 50) return "26-50";
+              if (capacity <= 100) return "51-100";
+              if (capacity <= 200) return "101-200";
+              if (capacity <= 500) return "201-500";
+              return "500+";
+            })()
+          : "",
         acceptsReservations: restaurant.accepts_reservations || false,
         deliveryAvailable: restaurant.delivery_available || false,
         takeoutAvailable: restaurant.takeout_available || false,
@@ -379,6 +391,13 @@ export default function SettingsPage() {
       if (restaurant.notification_settings) {
         setNotifications(restaurant.notification_settings);
       }
+
+      // Debug: Log restaurant data
+      console.log("Restaurant data loaded:", {
+        price_range: restaurant.price_range,
+        seating_capacity: restaurant.seating_capacity,
+        vat_number: restaurant.vat_number,
+      });
     }
   }, [restaurant]);
 
@@ -412,29 +431,71 @@ export default function SettingsPage() {
         setCoverPreview(null);
       }
 
-      // Update restaurant data (email is locked and cannot be changed)
-      await updateRestaurant({
-        name: formData.name,
-        phone: formData.phone,
-        address: formData.address,
-        city: formData.city,
-        postalCode: formData.postalCode,
-        country: formData.country,
-        description: formData.description,
-        website: formData.website,
-        cuisine: formData.cuisine,
+      // Validate required fields
+      if (!formData.name || formData.name.trim() === "") {
+        toast.error("Restaurant name is required");
+        return;
+      }
+
+      // Validate price range
+      const validPriceRanges = ["$", "$$", "$$$", "$$$$"];
+      if (!validPriceRanges.includes(formData.priceRange)) {
+        toast.error("Invalid price range selected");
+        return;
+      }
+
+      // Debug: Log the data being sent
+      const updateData = {
+        name: formData.name.trim(),
+        phone: formData.phone || null,
+        address: formData.address || null,
+        city: formData.city || null,
+        postal_code: formData.postalCode || null,
+        country: formData.country || null,
+        description: formData.description || null,
+        website: formData.website || null,
+        cuisine: formData.cuisine || null,
         type: formData.type,
         currency: formData.currency,
-        tax_rate: formData.taxRate,
-        vat_number: formData.vatNumber,
+        tax_rate: parseFloat(formData.taxRate.toString()) || 0,
+        vat_number: formData.vatNumber || null,
         price_range: formData.priceRange,
-        seating_capacity: formData.seatingCapacity || null,
+        seating_capacity:
+          formData.seatingCapacity && formData.seatingCapacity.trim() !== ""
+            ? (() => {
+                const capacity = formData.seatingCapacity.toString();
+                // Handle range strings like "1-10", "11-25", etc.
+                if (capacity.includes("-")) {
+                  const parts = capacity.split("-");
+                  return parseInt(parts[parts.length - 1]); // Get the last number (max)
+                } else if (capacity.includes("+")) {
+                  const parts = capacity.split("+");
+                  return parseInt(parts[0]); // Get the number before "+"
+                } else {
+                  return parseInt(capacity);
+                }
+              })()
+            : null,
         accepts_reservations: formData.acceptsReservations,
         delivery_available: formData.deliveryAvailable,
         takeout_available: formData.takeoutAvailable,
         auto_open_close: formData.autoOpenClose,
         opening_hours: formData.openingHours,
+      };
+
+      console.log("Sending update data:", updateData);
+      console.log("Seating capacity conversion:", {
+        original: formData.seatingCapacity,
+        converted: updateData.seating_capacity,
       });
+      console.log("Price range data:", {
+        formValue: formData.priceRange,
+        databaseValue: updateData.price_range,
+        type: typeof formData.priceRange,
+      });
+
+      // Update restaurant data (email is locked and cannot be changed)
+      await updateRestaurant(updateData);
 
       // Update notification settings
       await updateNotifications(notifications);
