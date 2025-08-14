@@ -72,28 +72,6 @@ import { useSidebarData } from "@/hooks/useSidebarData";
 import { setSidebarRefreshCallback } from "@/lib/actions/profile-client";
 import { useOrderCounts } from "@/hooks/useOrderCounts";
 
-// Mock data for notifications (can be replaced with real data later)
-const notifications = [
-  {
-    id: 1,
-    message: "New order from Table 5",
-    time: "2 mins ago",
-    unread: true,
-  },
-  {
-    id: 2,
-    message: "Kitchen completed order #123",
-    time: "5 mins ago",
-    unread: true,
-  },
-  {
-    id: 3,
-    message: "Daily report is ready",
-    time: "1 hour ago",
-    unread: false,
-  },
-];
-
 // Navigation data structure with improved organization
 const navigationData = {
   main: [
